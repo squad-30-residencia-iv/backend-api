@@ -1,0 +1,44 @@
+#!/bin/sh
+
+set -e
+
+echo "🔍 [SDD Backend Hook] Iniciando validações obrigatórias antes do push..."
+
+# -------------------------------------------------------------
+# 1. Determinismo Técnico (.NET)
+# -------------------------------------------------------------
+echo "⚙️ Executando dotnet test..."
+
+# Verifica se existe ficheiro de solução ou projeto antes de executar
+if ls *.sln 1> /dev/null 2>&1 || ls */*.*proj 1> /dev/null 2>&1; then
+  if ! dotnet test --verbosity normal; then
+    echo ""
+    echo "❌ [ERRO] Falha na compilação ou nos testes do backend."
+    echo "👉 Corrija os erros reportados antes de enviar o código."
+    exit 1
+  fi
+else
+  echo "⚠️ [AVISO] Nenhuma Solution (.sln) ou projeto .NET encontrado ainda. Pulando dotnet test provisoriamente."
+fi
+
+# -------------------------------------------------------------
+# 2. Verificação de Memória (docs/PROJECT_STATE.md)
+# -------------------------------------------------------------
+echo "🧠 Verificando integridade da memória do projeto..."
+TARGET_BRANCH="origin/main"
+git rev-parse --verify "$TARGET_BRANCH" >/dev/null 2>&1 || TARGET_BRANCH="HEAD~1"
+
+STATE_CHANGED=$(git diff --name-only "$TARGET_BRANCH"...HEAD | grep -E "^docs/PROJECT_STATE.md$" || true)
+
+if [ -z "$STATE_CHANGED" ]; then
+  echo ""
+  echo "⚠️ [ALERTA SDD] O ficheiro 'docs/PROJECT_STATE.md' não foi modificado nesta ramificação!"
+  echo "👉 Isso indica que o comando de encerramento (@save-session.md) não foi executado."
+  echo "👉 Atualize o status e as tarefas no PROJECT_STATE.md antes de enviar as suas alterações."
+  echo ""
+  echo "Dica: Se foi apenas um ajuste cosmético sem impacto em tarefas, use 'git push --no-verify' com cautela."
+  exit 1
+fi
+
+echo "✅ [SDD Backend Hook] Todas as validações passaram com sucesso!"
+exit 0

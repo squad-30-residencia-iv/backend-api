@@ -1,0 +1,5 @@
+# Garante terminações de linha em LF (evitando quebra de scripts bash no Linux/Mac/Docker)
+
+* text=auto eol=lf
+scripts/hooks/* text eol=lf
+*.sh text eol=lf

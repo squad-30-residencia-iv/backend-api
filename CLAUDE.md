@@ -1,0 +1,12 @@
+# Governança Backend .NET (Spec-Driven Development)
+
+1. REGRAS DE OURO:
+
+- NUNCA crie endpoints ou entidades sem uma spec técnica correspondente em `docs/specs/in-progress/`.
+- Use DTOs/Records estritos para contratos de API; nunca exponha entidades de persistência diretamente.
+- O código só é considerado pronto quando aprovado por `dotnet test`.
+
+2. COMANDOS OPERACIONAIS:
+
+- Siga as instruções em `docs/prompts/` (resume-session.md, implement-spec.md e save-session.md).
+- Antes de qualquer commit/push, assegure a atualização de `docs/PROJECT_STATE.md`.

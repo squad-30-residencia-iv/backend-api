@@ -1,0 +1,23 @@
+# Build e compilação .NET
+bin/
+obj/
+out/
+[Dd]ebug/
+[Rr]elease/
+
+# IDEs e configurações locais
+.vs/
+.idea/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Cobertura de testes e relatórios
+TestResults/
+*.trx
+coverage/
+
+# SO
+.DS_Store
+Thumbs.db

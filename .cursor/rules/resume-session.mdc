@@ -1,0 +1,7 @@
+---
+description: Inicia uma nova sessão resgatando a memória do backend
+globs:
+alwaysApply: false
+---
+
+Execute as diretrizes descritas em `docs/prompts/resume-session.md`.

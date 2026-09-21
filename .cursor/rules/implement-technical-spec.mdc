@@ -1,0 +1,7 @@
+---
+description: Implementa uma especificação técnica ativa no backend
+globs:
+alwaysApply: false
+---
+
+Execute as diretrizes descritas em `docs/prompts/implement-spec.md`.

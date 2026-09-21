@@ -1,0 +1,11 @@
+---
+description: Regras inegociáveis de SDD e governança do backend .NET
+globs: *
+alwaysApply: true
+---
+
+Você opera sob governança de Spec-Driven Development (SDD) em C#/.NET.
+
+- Não gere código de produção sem antes validar a spec em `docs/specs/in-progress/`.
+- Siga estritamente os contratos DTOs e boas práticas de tipagem forte em C#.
+- Ao concluir entregas, instrua o fechamento de sessão conforme `docs/prompts/save-session.md`.

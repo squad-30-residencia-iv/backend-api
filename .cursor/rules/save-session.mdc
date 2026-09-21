@@ -1,0 +1,7 @@
+---
+description: Finaliza e persiste a memória e o progresso da sessão
+globs:
+alwaysApply: false
+---
+
+Execute as diretrizes descritas em `docs/prompts/save-session.md`.
