@@ -9,4 +9,5 @@ Você deve consolidar e persistir o estado da sessão de desenvolvimento.
    - Mova a tarefa concluída para a seção "Últimas Entregas Concluídas".
    - Atualize "Tarefas em Andamento" com os próximos passos lógicos.
    - Registre eventuais decisões técnicas tomadas.
-3. Gere uma sugestão de mensagem de commit semântico seguindo Conventional Commits (ex: `feat(api): adiciona endpoint X`).
+3. Se foram criadas novas rotinas, comandos ou convenções reutilizáveis, documente-as na secção de Skills do ficheiro `agents.md`.
+4. Gere uma sugestão de mensagem de commit semântico seguindo Conventional Commits (ex: `feat(api): adiciona endpoint X`).
