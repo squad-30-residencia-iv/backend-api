@@ -18,6 +18,12 @@ TestResults/
 *.trx
 coverage/
 
+# Configuração local e bancos SQLite de desenvolvimento
+.env
+*.db
+*.db-shm
+*.db-wal
+
 # SO
 .DS_Store
 Thumbs.db

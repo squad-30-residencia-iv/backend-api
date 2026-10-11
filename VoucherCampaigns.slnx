@@ -1,0 +1,14 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/VoucherCampaigns.Api/VoucherCampaigns.Api.csproj" />
+    <Project Path="src/VoucherCampaigns.Application/VoucherCampaigns.Application.csproj" />
+    <Project Path="src/VoucherCampaigns.Domain/VoucherCampaigns.Domain.csproj" />
+    <Project Path="src/VoucherCampaigns.Infrastructure.Migrations.Postgres/VoucherCampaigns.Infrastructure.Migrations.Postgres.csproj" />
+    <Project Path="src/VoucherCampaigns.Infrastructure.Migrations.Sqlite/VoucherCampaigns.Infrastructure.Migrations.Sqlite.csproj" />
+    <Project Path="src/VoucherCampaigns.Infrastructure/VoucherCampaigns.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/VoucherCampaigns.IntegrationTests/VoucherCampaigns.IntegrationTests.csproj" />
+    <Project Path="tests/VoucherCampaigns.UnitTests/VoucherCampaigns.UnitTests.csproj" />
+  </Folder>
+</Solution>
