@@ -49,3 +49,32 @@ Qualquer assistente que iniciar uma sessão de desenvolvimento deve seguir estri
   ```bash
   dotnet test --verbosity normal
   ```
+
+### [Skill] Execução Local da API
+
+- A Solution é `VoucherCampaigns.slnx`; o projeto de entrada é `src/VoucherCampaigns.Api`:
+  ```bash
+  dotnet tool restore
+  dotnet run --project src/VoucherCampaigns.Api
+  ```
+- Sem `.env`, a API usa SQLite e aplica as migrações na inicialização. Verifique com `GET /health` e `GET /api/v1/system/status`.
+- O banco é escolhido por `Database__Provider` (`Sqlite` | `Postgres`) e `Database__ConnectionString` (variáveis de ambiente, `.env` ou `appsettings.json`). Nunca referencie o provider fora de `VoucherCampaigns.Infrastructure/DependencyInjection.cs`.
+
+### [Skill] Criação de Migrações (EF Core)
+
+- Toda migração deve existir nos dois conjuntos (SQLite e PostgreSQL). Não use `dotnet ef migrations add` diretamente; use:
+  ```bash
+  sh scripts/add-migration.sh NomeDaMigracao
+  ```
+- Para inspecionar o DDL do PostgreSQL sem um banco disponível:
+  ```bash
+  Database__Provider=Postgres Database__ConnectionString="Host=localhost;Database=x" \
+    dotnet ef migrations script --idempotent \
+    --project src/VoucherCampaigns.Infrastructure.Migrations.Postgres \
+    --startup-project src/VoucherCampaigns.Api
+  ```
+
+### [Skill] Dependências entre Camadas
+
+- `Domain` não referencia nada; `Application` → `Domain`; `Infrastructure` → `Application`; `Api` compõe tudo.
+- Versões de pacotes NuGet ficam somente em `Directory.Packages.props`; warnings quebram o build (`Directory.Build.props`).
