@@ -134,6 +134,6 @@ public record DatabaseOptions
 - [x] Cenário Unitário: `SystemStatusService` devolve o resultado fornecido pela porta `IDatabaseStatusReader`.
 - [x] Cenário PostgreSQL (offline): `dotnet ef migrations script --idempotent` gera o DDL do conjunto Postgres sem erros.
 
-### Pendência conhecida
+### Validação com PostgreSQL
 
-- A validação de ponta a ponta contra uma instância real de PostgreSQL depende do provisionamento do banco oficial (não há Docker/PostgreSQL no ambiente local). Deve ser registrada em `docs/PROJECT_STATE.md` no fechamento.
+- Validado em 2026-10-11 contra um PostgreSQL 17 local em Docker, alterando apenas `Database__Provider` e `Database__ConnectionString` no `.env`: `InitialCreate` aplicada no startup, reinício sem reaplicar e rotas de verificação retornando 200. Resta apenas apontar a connection string para o banco oficial quando ele for provisionado.

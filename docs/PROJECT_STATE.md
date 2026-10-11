@@ -13,7 +13,7 @@
 
 ## 🚧 Tarefas em Andamento
 
-- [ ] [SQUAD-2] Validar a conexão de ponta a ponta com uma instância real de PostgreSQL assim que o banco oficial for provisionado (pendência da GH-010).
+- [ ] [SQUAD-2] Apontar `Database__ConnectionString` para o banco oficial quando ele for provisionado (apenas configuração).
 - [ ] [SQUAD-2] Iniciar a primeira US de negócio, introduzindo as entidades de domínio e a respectiva migração (`sh scripts/add-migration.sh`).
 
 ---
@@ -28,7 +28,7 @@
 
 ## ⚠️ Bloqueios & Decisões Recentes
 
-- **Banco oficial ainda não provisionado:** o conjunto de migrações do PostgreSQL foi validado apenas offline (`dotnet ef migrations script --idempotent`) e pela tentativa de conexão do Npgsql; falta o teste contra uma instância real.
+- **Banco oficial ainda não provisionado:** a troca para PostgreSQL foi validada contra um PostgreSQL 17 local em Docker (2026-10-11): migração `InitialCreate` aplicada no startup, reinício sem reaplicar, `GET /health` e `GET /api/v1/system/status` retornando 200 com `provider = Postgres`.
 - **Migrações por provider:** o DDL do EF Core é específico de cada banco, então existem dois assemblies de migrações (`Infrastructure.Migrations.Sqlite` e `.Postgres`). Toda migração é gerada nos dois via `scripts/add-migration.sh`.
 - **Migração inicial sem tabelas de negócio:** `InitialCreate` é uma baseline; as entidades entram com as US.
 - **Configuração:** `Database__Provider` e `Database__ConnectionString`, com precedência variáveis de ambiente > `.env` (DotNetEnv) > `appsettings.json`. Configuração inválida impede a inicialização.
