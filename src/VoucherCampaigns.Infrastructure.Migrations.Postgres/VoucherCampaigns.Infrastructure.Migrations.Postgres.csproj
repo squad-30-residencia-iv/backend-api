@@ -1,0 +1,7 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <ItemGroup>
+    <ProjectReference Include="../VoucherCampaigns.Infrastructure/VoucherCampaigns.Infrastructure.csproj" />
+  </ItemGroup>
+
+</Project>

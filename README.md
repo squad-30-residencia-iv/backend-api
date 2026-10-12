@@ -85,7 +85,55 @@ Se você utiliza outro editor ou assistentes externos (Claude Web, ChatGPT, GitH
 
 ---
 
-## 4. Travas e Boas Práticas
+## 4. Executando a API Localmente
+
+Pré-requisito: **.NET SDK 10** (a versão é fixada em `global.json`).
+
+```bash
+dotnet tool restore                              # instala o dotnet-ef definido em dotnet-tools.json
+dotnet run --project src/VoucherCampaigns.Api    # sobe a API em http://localhost:5026
+```
+
+Sem nenhuma configuração extra, a API usa **SQLite** (`src/VoucherCampaigns.Api/vouchercampaigns.db`) e aplica as migrações pendentes na inicialização. Rotas de verificação:
+
+- `GET /health`: estado da aplicação e do banco.
+- `GET /api/v1/system/status`: provider ativo, teste de conexão e migrações aplicadas.
+
+### Estrutura da Solution (`VoucherCampaigns.slnx`)
+
+| Projeto | Responsabilidade |
+|---|---|
+| `src/VoucherCampaigns.Api` | Controllers, `Program.cs` e composição |
+| `src/VoucherCampaigns.Application` | Serviços de aplicação, portas (interfaces) e contratos (Records) |
+| `src/VoucherCampaigns.Domain` | Entidades e regras de domínio |
+| `src/VoucherCampaigns.Infrastructure` | `AppDbContext`, repositórios e registro de DI |
+| `src/VoucherCampaigns.Infrastructure.Migrations.Sqlite` / `.Postgres` | Migrações EF Core de cada banco |
+| `tests/VoucherCampaigns.UnitTests` / `.IntegrationTests` | Testes unitários e de integração |
+
+### Trocando de banco (SQLite ⇄ PostgreSQL)
+
+A troca é apenas configuracional. Copie `.env.example` para `.env` na raiz do repositório e ajuste:
+
+```dotenv
+Database__Provider=Postgres
+Database__ConnectionString="Host=localhost;Port=5432;Database=vouchercampaigns;Username=postgres;Password=postgres"
+```
+
+Ordem de precedência: variáveis de ambiente reais > `.env` > `appsettings.json`. Valores aceitos em `Database__Provider`: `Sqlite` e `Postgres`; uma configuração inválida impede a inicialização.
+
+### Criando uma migração
+
+O DDL do EF Core é específico de cada banco, por isso toda migração é gerada nos dois conjuntos:
+
+```bash
+sh scripts/add-migration.sh NomeDaMigracao
+```
+
+Faça o commit dos arquivos gerados nos dois projetos `Infrastructure.Migrations.*`. Elas são aplicadas automaticamente no próximo start da API.
+
+---
+
+## 5. Travas e Boas Práticas
 
 - **Não use `--no-verify` no push:** Se o push for bloqueado, verifique a saída do terminal. Isso indica que os testes falharam ou que o arquivo `docs/PROJECT_STATE.md` não foi modificado nesta ramificação.
 - **Padronização de Quebras de Linha (`LF`):** Arquivos de scripts em `scripts/` e arquivos de governança devem ser salvos com terminação Unix (`LF`) para evitar falhas de execução no Git e em containers Docker.

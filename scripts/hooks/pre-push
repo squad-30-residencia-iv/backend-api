@@ -10,7 +10,7 @@ echo "🔍 [SDD Backend Hook] Iniciando validações obrigatórias antes do push
 echo "⚙️ Executando dotnet test..."
 
 # Verifica se existe ficheiro de solução ou projeto antes de executar
-if ls *.sln 1> /dev/null 2>&1 || ls */*.*proj 1> /dev/null 2>&1; then
+if ls *.sln 1> /dev/null 2>&1 || ls *.slnx 1> /dev/null 2>&1 || ls */*.*proj 1> /dev/null 2>&1; then
   if ! dotnet test --verbosity normal; then
     echo ""
     echo "❌ [ERRO] Falha na compilação ou nos testes do backend."
