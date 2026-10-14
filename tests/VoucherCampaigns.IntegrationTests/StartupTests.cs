@@ -15,7 +15,7 @@ public class StartupTests
             var first = await GetStatusAsync(connectionString);
             var second = await GetStatusAsync(connectionString);
 
-            Assert.Single(first.AppliedMigrations);
+            Assert.Contains(first.AppliedMigrations, migration => migration.EndsWith("_CoreTables"));
             Assert.Equal(first.AppliedMigrations, second.AppliedMigrations);
         }
         finally
@@ -34,6 +34,25 @@ public class StartupTests
         var exception = Assert.Throws<InvalidOperationException>(() => factory.CreateClient());
 
         Assert.Contains("Configuração inválida", exception.Message);
+    }
+
+    [Fact]
+    public void Startup_WithInvalidSeedDemoData_Fails()
+    {
+        var connectionString = ApiFactory.NewSqliteConnectionString();
+
+        try
+        {
+            using var factory = ApiFactory.For("Sqlite", connectionString, seedDemoData: "sim");
+
+            var exception = Assert.Throws<InvalidOperationException>(() => factory.CreateClient());
+
+            Assert.Contains("Database:SeedDemoData", exception.Message);
+        }
+        finally
+        {
+            ApiFactory.DeleteSqliteDatabase(connectionString);
+        }
     }
 
     private static async Task<SystemStatusResponse> GetStatusAsync(string connectionString)

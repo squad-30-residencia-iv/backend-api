@@ -10,6 +10,9 @@ public record DatabaseOptions
 
     public string ConnectionString { get; init; } = string.Empty;
 
+    /// <summary>Insere os dados de demonstração após as migrações (somente para ambiente local).</summary>
+    public bool SeedDemoData { get; init; }
+
     public static DatabaseOptions FromConfiguration(IConfiguration configuration)
     {
         var section = configuration.GetSection(SectionName);
@@ -17,7 +20,8 @@ public record DatabaseOptions
         var options = new DatabaseOptions
         {
             Provider = section[nameof(Provider)] ?? string.Empty,
-            ConnectionString = section[nameof(ConnectionString)] ?? string.Empty
+            ConnectionString = section[nameof(ConnectionString)] ?? string.Empty,
+            SeedDemoData = ParseSeedDemoData(section[nameof(SeedDemoData)])
         };
 
         options.Validate();
@@ -43,5 +47,18 @@ public record DatabaseOptions
             throw new InvalidOperationException(
                 $"Configuração inválida: '{SectionName}:{nameof(ConnectionString)}' não pode ser vazia.");
         }
+    }
+
+    private static bool ParseSeedDemoData(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return false;
+        }
+
+        return bool.TryParse(value, out var seed)
+            ? seed
+            : throw new InvalidOperationException(
+                $"Configuração inválida: '{SectionName}:{nameof(SeedDemoData)}' = '{value}'. Valores aceitos: true, false.");
     }
 }
