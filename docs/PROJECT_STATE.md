@@ -24,6 +24,9 @@
 - Configuração do ecossistema de SDD (prompts, templates C# e governança).
 - Implementação da trava de integridade via Git Hook pre-push (`dotnet test` e checagem de memória).
 
+- **US-07.5 e US-02.5 — Autenticação e Escopo:** Implementação da camada de segurança com emissão de token JWT (`POST /api/v1/auth/login`), serviço de autenticação (`JwtAuthService`), e proteção de rotas com RBAC e `ValidateTenantScopeAttribute` para garantir o isolamento organizacional (tenant). Testes validados.
+
+
 ---
 
 ## ⚠️ Bloqueios & Decisões Recentes
