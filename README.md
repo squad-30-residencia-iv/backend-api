@@ -121,6 +121,34 @@ Database__ConnectionString="Host=localhost;Port=5432;Database=vouchercampaigns;U
 
 Ordem de precedência: variáveis de ambiente reais > `.env` > `appsettings.json`. Valores aceitos em `Database__Provider`: `Sqlite` e `Postgres`; uma configuração inválida impede a inicialização.
 
+### PostgreSQL local com Docker
+
+O `docker-compose.yml` da raiz sobe um PostgreSQL 17 com o banco `vouchercampaigns` (usuário e senha `postgres`), na porta 5432:
+
+```bash
+docker compose up -d       # sobe o banco
+docker compose down        # para (os dados ficam no volume)
+docker compose down -v     # para e apaga os dados
+```
+
+Depois, use as linhas de PostgreSQL do `.env.example` no seu `.env` e rode a API: as migrações são aplicadas na inicialização.
+
+**Supabase:** como ele é um PostgreSQL gerenciado, basta trocar a `Database__ConnectionString` pela do painel do projeto (conexão direta ou *Session pooler*, com `SSL Mode=Require`). As mesmas migrações são usadas.
+
+### Tabelas do núcleo inicial
+
+| Grupo | Tabelas |
+|---|---|
+| Hierarquia organizacional | `networks` → `regions` → `establishments` → `channels` |
+| Catálogo | `categories` → `products` |
+| Campanhas | `campaigns`, `campaign_items` (alvo, benefício e quantidade), `campaign_scopes` (rede, região ou loja + canal) |
+
+Nomes em `snake_case`; enums gravados como texto. A especificação completa (chaves, índices e `CHECK`s) está em `docs/specs/completed/GH-008-banco-de-dados.md`.
+
+### Dados de demonstração (seed)
+
+Em ambiente `Development`, a API insere 1 rede, 1 região, 3 lojas (001 Loja Centro, 002 Loja Shopping, 003 Loja Online) com seus canais, 3 categorias e 3 produtos, logo após aplicar as migrações. O seed só roda se o banco ainda não tiver nenhuma rede. Ele é controlado por `Database__SeedDemoData` (`true`/`false`) e nunca deve ser ligado em produção.
+
 ### Criando uma migração
 
 O DDL do EF Core é específico de cada banco, por isso toda migração é gerada nos dois conjuntos:

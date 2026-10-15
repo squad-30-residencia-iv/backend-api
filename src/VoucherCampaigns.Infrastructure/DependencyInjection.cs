@@ -3,6 +3,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using VoucherCampaigns.Application.SystemStatus;
 using VoucherCampaigns.Infrastructure.Persistence;
+using VoucherCampaigns.Infrastructure.Persistence.Seed;
 
 namespace VoucherCampaigns.Infrastructure;
 
@@ -33,6 +34,14 @@ public static class DependencyInjection
                         options.ConnectionString,
                         npgsql => npgsql.MigrationsAssembly(PostgresMigrationsAssembly));
                     break;
+            }
+
+            // O EF Core chama o seeding logo após aplicar as migrações (MigrateAsync no startup).
+            if (options.SeedDemoData)
+            {
+                builder
+                    .UseSeeding((context, _) => DemoDataSeeder.Seed(context))
+                    .UseAsyncSeeding((context, _, cancellationToken) => DemoDataSeeder.SeedAsync(context, cancellationToken));
             }
         });
 
