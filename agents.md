@@ -81,6 +81,15 @@ Qualquer assistente que iniciar uma sessão de desenvolvimento deve seguir estri
 - Novas entidades: classe no `Domain`, `IEntityTypeConfiguration` em `Infrastructure/Persistence/Configurations` com `ToTable("nome_snake")`, `DbSet` no `AppDbContext` e migração via `scripts/add-migration.sh`. O teste `MigrationsModelTests` falha se a migração for esquecida.
 - O seed (`Persistence/Seed/DemoDataSeeder.cs`) só roda com `Database__SeedDemoData=true` (ligado em `appsettings.Development.json`) e quando não há nenhuma rede no banco.
 
+### [Skill] Autenticação, Papéis e Escopo
+
+- Configuração na seção `Auth` (`Infrastructure/Authentication/AuthOptions.cs`), validada no startup. A chave de desenvolvimento e os usuários provisórios (`Auth:MockUsers`) ficam só em `appsettings.Development.json`; nunca escreva chave ou senha no código.
+- Rotas protegidas: `[Authorize(Policy = AuthorizationPolicies.ManageCampaigns)]` (analista e gestor) ou `ApproveCampaigns` (só gestor).
+- Rotas que operam sobre uma rede: adicione `[ValidateTenantScope]` e receba `Guid networkId` na rota/query ou um request que implemente `INetworkScopedRequest`. Sem rede identificável o filtro falha de propósito.
+- Para saber quem está chamando, injete `ICurrentUser` (`UserId`, `Role`, `NetworkId`); não leia claims direto do `HttpContext`.
+- Erros: use `ApiProblems` e `ErrorCodes` (`Api/Errors/ApiProblems.cs`). Erro de contrato → `400 VALIDATION_ERROR` (automático pelo `[ApiController]`); regra de negócio → `422` com `code` próprio.
+- Testes: `tests/VoucherCampaigns.IntegrationTests/Authentication/TestAuth.cs` faz login (`LoginAsync`) ou monta tokens com papel, rede e validade variáveis (`CreateToken`).
+
 ### [Skill] Dependências entre Camadas
 
 - `Domain` não referencia nada; `Application` → `Domain`; `Infrastructure` → `Application`; `Api` compõe tudo.

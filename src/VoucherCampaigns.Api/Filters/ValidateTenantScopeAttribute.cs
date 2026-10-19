@@ -1,29 +1,56 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
+using VoucherCampaigns.Api.Errors;
+using VoucherCampaigns.Application.Authentication;
 
 namespace VoucherCampaigns.Api.Filters;
 
+/// <summary>
+/// TenantGuard: recusa a operação quando a rede dela não é a rede do usuário (US-02.5).
+/// A rede vem do argumento <c>networkId</c> (rota ou query) ou de um argumento <see cref="INetworkScopedRequest"/>.
+/// </summary>
 public class ValidateTenantScopeAttribute : ActionFilterAttribute
 {
+    public const string NetworkIdArgument = "networkId";
+
     public override void OnActionExecuting(ActionExecutingContext context)
     {
-        var user = context.HttpContext.User;
-        if (!user.Identity?.IsAuthenticated ?? true)
+        if (context.HttpContext.User.Identity?.IsAuthenticated != true)
         {
-            context.Result = new UnauthorizedResult();
+            context.Result = new ChallengeResult();
             return;
         }
 
-        var userScopeId = user.FindFirst("escopoId")?.Value;
-        var requestScopeId = context.HttpContext.Request.Headers["X-Tenant-Id"].FirstOrDefault();
+        var requestedNetworks = RequestedNetworks(context);
 
-        if (!string.IsNullOrEmpty(requestScopeId) && requestScopeId != userScopeId)
+        if (requestedNetworks.Count == 0)
         {
-            context.Result = new ObjectResult(new { error = "Forbidden", message = "Tentativa de operação fora do escopo organizacional." })
-            {
-                StatusCode = 403
-            };
+            // Erro de programação: sem rede identificável, liberar o acesso esconderia a falha.
+            throw new InvalidOperationException(
+                $"{nameof(ValidateTenantScopeAttribute)} exige um argumento '{NetworkIdArgument}' ou um {nameof(INetworkScopedRequest)} " +
+                $"na ação '{context.ActionDescriptor.DisplayName}'.");
         }
-        base.OnActionExecuting(context);
+
+        var userNetworkId = context.HttpContext.RequestServices.GetRequiredService<ICurrentUser>().NetworkId;
+
+        if (requestedNetworks.Any(networkId => networkId != userNetworkId))
+        {
+            context.Result = ApiProblems.Result(
+                context.HttpContext, StatusCodes.Status403Forbidden, ErrorCodes.ScopeForbidden, ApiProblems.ScopeForbiddenDetail);
+        }
+    }
+
+    private static List<Guid> RequestedNetworks(ActionExecutingContext context)
+    {
+        var networks = context.ActionArguments.Values.OfType<INetworkScopedRequest>()
+            .Select(request => request.NetworkId)
+            .ToList();
+
+        if (context.ActionArguments.TryGetValue(NetworkIdArgument, out var argument) && argument is Guid networkId)
+        {
+            networks.Add(networkId);
+        }
+
+        return networks;
     }
 }

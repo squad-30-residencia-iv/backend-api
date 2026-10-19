@@ -1,7 +1,10 @@
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using VoucherCampaigns.IntegrationTests.Authentication;
 
 namespace VoucherCampaigns.IntegrationTests;
 
@@ -9,18 +12,25 @@ public class ApiFactory : WebApplicationFactory<Program>
 {
     private readonly bool _ownsDatabaseFile;
     private readonly string? _seedDemoData;
+    private readonly IReadOnlyDictionary<string, string?> _settings;
 
     public ApiFactory()
-        : this("Sqlite", NewSqliteConnectionString(), ownsDatabaseFile: true, seedDemoData: null)
+        : this("Sqlite", NewSqliteConnectionString(), ownsDatabaseFile: true, seedDemoData: null, settings: null)
     {
     }
 
-    private ApiFactory(string provider, string connectionString, bool ownsDatabaseFile, string? seedDemoData)
+    private ApiFactory(
+        string provider,
+        string connectionString,
+        bool ownsDatabaseFile,
+        string? seedDemoData,
+        IReadOnlyDictionary<string, string?>? settings)
     {
         Provider = provider;
         ConnectionString = connectionString;
         _ownsDatabaseFile = ownsDatabaseFile;
         _seedDemoData = seedDemoData;
+        _settings = settings ?? new Dictionary<string, string?>();
     }
 
     public string Provider { get; }
@@ -28,8 +38,13 @@ public class ApiFactory : WebApplicationFactory<Program>
     public string ConnectionString { get; }
 
     /// <param name="seedDemoData">Sobrescreve Database:SeedDemoData; null mantém o appsettings do ambiente (Development = true).</param>
-    public static ApiFactory For(string provider, string connectionString, string? seedDemoData = null) =>
-        new(provider, connectionString, ownsDatabaseFile: false, seedDemoData);
+    /// <param name="settings">Chaves extras de configuração (ex.: Auth:Jwt:SigningKey).</param>
+    public static ApiFactory For(
+        string provider,
+        string connectionString,
+        string? seedDemoData = null,
+        IReadOnlyDictionary<string, string?>? settings = null) =>
+        new(provider, connectionString, ownsDatabaseFile: false, seedDemoData, settings);
 
     public static string NewSqliteConnectionString() =>
         $"Data Source={Path.Combine(Path.GetTempPath(), $"vouchercampaigns-tests-{Guid.NewGuid():N}.db")}";
@@ -53,7 +68,16 @@ public class ApiFactory : WebApplicationFactory<Program>
             settings["Database:SeedDemoData"] = _seedDemoData;
         }
 
+        foreach (var (key, value) in _settings)
+        {
+            settings[key] = value;
+        }
+
         builder.ConfigureAppConfiguration((_, configuration) => configuration.AddInMemoryCollection(settings));
+
+        // Rotas usadas só pelos testes de autenticação e escopo; não existem na Api.
+        builder.ConfigureTestServices(services =>
+            services.AddControllers().AddApplicationPart(typeof(AuthTestController).Assembly));
     }
 
     protected override void Dispose(bool disposing)

@@ -55,6 +55,30 @@ public class StartupTests
         }
     }
 
+    [Theory]
+    [InlineData("Auth:Jwt:SigningKey", "", "Auth:Jwt:SigningKey")]
+    [InlineData("Auth:Jwt:SigningKey", "curta-demais", "Auth:Jwt:SigningKey")]
+    [InlineData("Auth:Jwt:ExpirationMinutes", "uma-hora", "Auth:Jwt:ExpirationMinutes")]
+    [InlineData("Auth:MockUsers:0:Role", "admin", "Auth:MockUsers:0:Role")]
+    public void Startup_WithInvalidAuthConfiguration_Fails(string key, string value, string expectedKey)
+    {
+        var connectionString = ApiFactory.NewSqliteConnectionString();
+
+        try
+        {
+            using var factory = ApiFactory.For("Sqlite", connectionString, settings: new Dictionary<string, string?> { [key] = value });
+
+            var exception = Assert.Throws<InvalidOperationException>(() => factory.CreateClient());
+
+            Assert.Contains("Configuração inválida", exception.Message);
+            Assert.Contains(expectedKey, exception.Message);
+        }
+        finally
+        {
+            ApiFactory.DeleteSqliteDatabase(connectionString);
+        }
+    }
+
     private static async Task<SystemStatusResponse> GetStatusAsync(string connectionString)
     {
         using var factory = ApiFactory.For("Sqlite", connectionString);
