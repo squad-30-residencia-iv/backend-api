@@ -14,5 +14,8 @@ public class NetworkConfiguration : IEntityTypeConfiguration<Network>
 
         builder.Property(network => network.Name).HasMaxLength(150).IsRequired();
         builder.HasIndex(network => network.Name).IsUnique();
+
+        // ID IANA (ex.: America/Sao_Paulo); o maior ID IANA tem menos de 40 caracteres.
+        builder.Property(network => network.TimeZone).HasMaxLength(64).IsRequired();
     }
 }

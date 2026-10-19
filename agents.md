@@ -90,6 +90,13 @@ Qualquer assistente que iniciar uma sessão de desenvolvimento deve seguir estri
 - Erros: use `ApiProblems` e `ErrorCodes` (`Api/Errors/ApiProblems.cs`). Erro de contrato → `400 VALIDATION_ERROR` (automático pelo `[ApiController]`); regra de negócio → `422` com `code` próprio.
 - Testes: `tests/VoucherCampaigns.IntegrationTests/Authentication/TestAuth.cs` faz login (`LoginAsync`) ou monta tokens com papel, rede e validade variáveis (`CreateToken`).
 
+### [Skill] Regras de Negócio, Datas e Fuso
+
+- Regra de negócio violada: lance `BusinessRuleException(code, mensagem)` (Domain/Common) com código e mensagem exata do backlog; o `ApiExceptionHandler` responde `422`. Erro de contrato que só o serviço detecta: `RequestValidationException(campo, mensagem)` → `400 VALIDATION_ERROR`.
+- Mensagens de validação de campo (`[Required]`, `[StringLength]`...) sempre com `ErrorMessage` em português.
+- Datas de negócio digitadas pelo usuário chegam **sem fuso** (`[LocalDateTime]`) e são convertidas com `NetworkTime` usando `Network.TimeZone`; no banco ficam em UTC e voltam com o offset da rede.
+- "Agora" sempre via `TimeProvider` injetado, nunca `DateTime.UtcNow` em regra de negócio. Nos testes de integração, fixe `factory.Clock.UtcNow`; como o JWT é validado com a hora real, use `TestAuth.CreateToken` (e não o login) nesses testes.
+
 ### [Skill] Dependências entre Camadas
 
 - `Domain` não referencia nada; `Application` → `Domain`; `Infrastructure` → `Application`; `Api` compõe tudo.

@@ -37,6 +37,9 @@ public class ApiFactory : WebApplicationFactory<Program>
 
     public string ConnectionString { get; }
 
+    /// <summary>Relógio da Api (TimeProvider); fixe <see cref="TestClock.UtcNow"/> para simular "hoje".</summary>
+    public TestClock Clock { get; } = new();
+
     /// <param name="seedDemoData">Sobrescreve Database:SeedDemoData; null mantém o appsettings do ambiente (Development = true).</param>
     /// <param name="settings">Chaves extras de configuração (ex.: Auth:Jwt:SigningKey).</param>
     public static ApiFactory For(
@@ -77,7 +80,10 @@ public class ApiFactory : WebApplicationFactory<Program>
 
         // Rotas usadas só pelos testes de autenticação e escopo; não existem na Api.
         builder.ConfigureTestServices(services =>
-            services.AddControllers().AddApplicationPart(typeof(AuthTestController).Assembly));
+        {
+            services.AddControllers().AddApplicationPart(typeof(AuthTestController).Assembly);
+            services.AddSingleton<TimeProvider>(Clock);
+        });
     }
 
     protected override void Dispose(bool disposing)

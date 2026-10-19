@@ -1,6 +1,7 @@
 using DotNetEnv;
 using VoucherCampaigns.Api.Authentication;
 using VoucherCampaigns.Api.Errors;
+using VoucherCampaigns.Application.Campaigns;
 using VoucherCampaigns.Application.SystemStatus;
 using VoucherCampaigns.Infrastructure;
 using VoucherCampaigns.Infrastructure.Authentication;
@@ -15,8 +16,10 @@ builder.Services.AddControllers()
     .ConfigureApiBehaviorOptions(options => options.InvalidModelStateResponseFactory = ApiProblems.Validation);
 builder.Services.AddOpenApi();
 builder.Services.AddProblemDetails();
+builder.Services.AddExceptionHandler<ApiExceptionHandler>();
 
 builder.Services.AddScoped<ISystemStatusService, SystemStatusService>();
+builder.Services.AddScoped<ICampaignService, CampaignService>();
 builder.Services.AddInfrastructure();
 builder.Services.AddApiAuthentication();
 

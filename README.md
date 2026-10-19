@@ -110,6 +110,17 @@ Sem nenhuma configuração extra, a API usa **SQLite** (`src/VoucherCampaigns.Ap
 
 Fora de Development, defina `Auth__Jwt__SigningKey` (mínimo de 32 caracteres); sem ela a API não inicia. Os erros seguem `ProblemDetails` com a extensão `code` (ex.: `AUTH_UNAUTHENTICATED`, `SCOPE_FORBIDDEN`).
 
+### Campanhas
+
+`POST /api/v1/campaigns` (analista ou gestor, rede do token) cadastra a campanha em rascunho. As datas vão **sem fuso** e valem no fuso da rede (`networks.time_zone`, padrão `America/Sao_Paulo`):
+
+```json
+{ "networkId": "0199e3a0-0000-7000-8000-000000000001", "name": "Volta às Aulas",
+  "startsAt": "2026-12-01T08:00:00", "endsAt": "2026-12-25T23:59:00" }
+```
+
+Resposta `201` com as datas no offset da rede (`"2026-12-01T08:00:00-03:00"`). Regras de negócio violadas respondem `422` com `code` (`CAMPAIGN_INVALID_PERIOD`, `CAMPAIGN_START_IN_PAST`, `NETWORK_UNAVAILABLE`).
+
 ### Estrutura da Solution (`VoucherCampaigns.slnx`)
 
 | Projeto | Responsabilidade |

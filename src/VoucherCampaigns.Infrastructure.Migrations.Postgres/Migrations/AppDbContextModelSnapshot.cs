@@ -383,6 +383,12 @@ namespace VoucherCampaigns.Infrastructure.Migrations.Postgres.Migrations
                         .HasColumnType("character varying(150)")
                         .HasColumnName("name");
 
+                    b.Property<string>("TimeZone")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("time_zone");
+
                     b.HasKey("Id")
                         .HasName("pk_networks");
 
