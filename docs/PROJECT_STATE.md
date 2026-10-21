@@ -7,13 +7,16 @@
 ## 📌 Contexto Geral
 
 - **Sprint:** Sprint 1
-- **Foco:** Banco e autenticação/escopo prontos; próximo passo é a US-01.1 (cadastro de campanha e vigência)
+- **Foco:** Cadastro de campanha em rascunho pronto (US-01.1); próximos passos são a configuração da campanha (US-01.2 a 01.5) e a submissão para aprovação (US-01.6)
 
 ---
 
 ## 🚧 Tarefas em Andamento
 
-- [ ] [SQUAD-2] US-01.1 Cadastrar campanha e definir vigência (`POST /api/v1/campaigns`), primeira rota protegida real. Decidir antes o fuso horário da RN02 (proposta: `TimeZone` na `Network`, alinhado à US-02.6).
+- [ ] [SQUAD-2] US-01.9 Consultar campanhas (o `Location` do `POST /api/v1/campaigns` já aponta para `GET /api/v1/campaigns/{id}`), com isolamento por rede (US-02.5, cenário 3).
+- [ ] [SQUAD-2] US-01.2 a US-01.5: alvos e benefícios, quantidade, condições de geração e público elegível da campanha em rascunho.
+- [ ] [SQUAD-2] US-01.6 Submeter para aprovação (`Draft` → `PendingApproval`).
+- [ ] [SQUAD-2] Confirmar com o cliente se o fim da vigência às 23:59 inclui o minuto inteiro (hoje termina em 23:59:00).
 - [ ] [SQUAD-2] Avisar o autor do commit `56839cd` e o frontend: `escopoId` agora é o Guid da rede, novos usuários de teste e erros em `ProblemDetails` com `code`.
 - [ ] [SQUAD-2] Confirmar com o cliente a origem das contas de analista e gestor (importação do sistema do cliente, projeção local ou SSO).
 - [ ] [SQUAD-2] Apontar `Database__ConnectionString` para o banco oficial quando ele for provisionado (apenas configuração; Supabase usa o mesmo conjunto de migrações `Postgres`).
@@ -24,6 +27,7 @@
 
 ## ✅ Últimas Entregas Concluídas
 
+- **US-01.1 — Cadastrar campanha e definir vigência:** `POST /api/v1/campaigns` (analista e gestor, TenantGuard) cria a campanha sempre em `Draft`, com Guid v7. RN02 no domínio (`Campaign.CreateDraft`): início posterior ou igual ao fim → `422 CAMPAIGN_INVALID_PERIOD`; início antes do minuto atual → `422 CAMPAIGN_START_IN_PAST`; rede inexistente/inativa → `422 NETWORK_UNAVAILABLE`. `Campaign.CanIssueVouchers` (só `Active` na vigência) pronto para o EP-04. Novo `Network.TimeZone` (migração `NetworkTimeZone`, padrão `America/Sao_Paulo`): datas chegam sem fuso, valem no fuso da rede, ficam em UTC e voltam com offset. `CampaignStatus` ganhou `PendingApproval` (PR-02). Padrão `BusinessRuleException` → `422` via `ApiExceptionHandler`. 40 testes novos; validado em PostgreSQL 17 e Postman.
 - **US-02.5 — Validar o escopo de atuação do usuário:** refaz a autenticação do commit `56839cd` (spec antiga `US-07.5-autenticacao-e-escopo.md` removida: estava truncada e com o ID errado). Login provisório `POST /api/v1/auth/login` com usuários de `Auth:MockUsers` (analista e gestor da "Supermercados Norte"); JWT com `sub`, `role` e `escopoId` (Guid da rede); seção `Auth` validada no startup, sem segredo no código; ordem `UseAuthentication()` → `UseAuthorization()` corrigida; policies `ManageCampaigns` e `ApproveCampaigns`; `ICurrentUser`; TenantGuard (`ValidateTenantScopeAttribute`) por rede via rota ou `INetworkScopedRequest`; erros `ProblemDetails` com `code` (padrão da US-07.5). 46 testes novos; validado no Postman.
 - **GH-008 — Banco de dados (núcleo inicial):** entidades e mapeamento EF Core de Hierarquia Organizacional (`networks`, `regions`, `establishments`, `channels`), Catálogo (`categories`, `products`) e Campanhas (`campaigns`, `campaign_items`, `campaign_scopes`), com PKs, FKs, índices únicos e `CHECK`s (RN02, RN05); nomes em `snake_case`; migração `CoreTables` nos dois conjuntos; `docker-compose.yml` com PostgreSQL 17; seed de demonstração em Development; validado em PostgreSQL 17 real.
 - **GH-010 — Setup do projeto:** Solution `VoucherCampaigns.slnx` (.NET 10) em camadas (Api, Application, Domain, Infrastructure), persistência com EF Core selecionada por configuração (SQLite local / PostgreSQL), migração `InitialCreate` nos dois conjuntos aplicada na inicialização, rotas `GET /health` e `GET /api/v1/system/status`, projetos de testes unitários e de integração com `dotnet test` verde.
@@ -34,6 +38,9 @@
 
 ## ⚠️ Bloqueios & Decisões Recentes
 
+- **Datas de campanha:** sem fuso no request, interpretadas no fuso da rede; "agora" via `TimeProvider`, comparado na precisão de minuto. Herança de fuso por região/loja e moeda ficam para a US-02.6.
+- **Fluxo de status:** a campanha nasce em rascunho; o analista decide quando submeter (US-01.6), e só então ela vai para `PendingApproval` e aparece ao gestor.
+- **Branches empilhadas:** `feat/US-01.1-cadastrar-campanha-e-vigencia` parte de `fix/US-02.5-validar-escopo-de-atuacao`; o PR da US-01.1 deve ter base na branch da US-02.5 até ela ser mesclada.
 - **Contas de usuário (em aberto com o cliente):** o login atual é provisório. A troca para importação, projeção local ou SSO é feita por outra implementação de `IUserCredentialStore` (ou de provedor externo), sem mexer em `ICurrentUser`, policies ou TenantGuard.
 - **Escopo:** nesta fase é só a rede. Região e estabelecimento ficam para a US-02.3; alçada de aprovação para a US-01.11; isolamento na consulta para a US-01.9.
 - **Erros:** contrato inválido → `400 VALIDATION_ERROR`; regra de negócio → `422` com `code` próprio. As mensagens por campo do `400` ainda são as padrão (em inglês) do DataAnnotations.

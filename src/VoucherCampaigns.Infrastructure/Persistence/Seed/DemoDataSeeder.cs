@@ -48,6 +48,7 @@ public static class DemoDataSeeder
         {
             Id = NetworkId,
             Name = "Supermercados Norte",
+            TimeZone = "America/Sao_Paulo",
             Regions =
             [
                 new Region

@@ -153,6 +153,37 @@ public class DatabaseSchemaTests
     }
 
     /// <summary>Abre um escopo de DI e entrega o AppDbContext dele; descarta os dois juntos.</summary>
+    [Fact]
+    public async Task Startup_InDevelopment_SeedsNetworkWithBrasiliaTimeZone()
+    {
+        using var factory = new ApiFactory();
+        await using var db = DbScope.Open(factory);
+
+        var network = await db.Context.Networks.SingleAsync();
+
+        Assert.Equal("America/Sao_Paulo", network.TimeZone);
+    }
+
+    [Fact]
+    public async Task Campaign_WithPendingApprovalStatus_IsStoredAsText()
+    {
+        using var factory = new ApiFactory();
+        await using var db = DbScope.Open(factory);
+
+        var campaign = NewCampaign();
+        campaign.Name = "Aguardando o gestor";
+        campaign.Status = CampaignStatus.PendingApproval;
+        db.Context.Campaigns.Add(campaign);
+        await db.Context.SaveChangesAsync();
+
+        // Filtra pelo nome: o formato do Guid no SQL puro varia por provider.
+        var status = await db.Context.Database
+            .SqlQuery<string>($"SELECT status AS \"Value\" FROM campaigns WHERE name = {campaign.Name}")
+            .SingleAsync();
+
+        Assert.Equal("PendingApproval", status);
+    }
+
     private sealed class DbScope(AsyncServiceScope scope) : IAsyncDisposable
     {
         public AppDbContext Context { get; } = scope.ServiceProvider.GetRequiredService<AppDbContext>();
