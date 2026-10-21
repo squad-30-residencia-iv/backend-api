@@ -99,6 +99,17 @@ Sem nenhuma configuração extra, a API usa **SQLite** (`src/VoucherCampaigns.Ap
 - `GET /health`: estado da aplicação e do banco.
 - `GET /api/v1/system/status`: provider ativo, teste de conexão e migrações aplicadas.
 
+### Autenticação (provisória)
+
+`POST /api/v1/auth/login` devolve um JWT com `sub`, `role` (`analista` ou `gestor`) e `escopoId` (Guid da rede). Envie-o como `Authorization: Bearer <token>`. Em Development há dois usuários da rede de demonstração "Supermercados Norte":
+
+| E-mail | Senha | Papel |
+|---|---|---|
+| `analista@empresa.com` | `Senha123` | `analista` |
+| `gestor@empresa.com` | `Senha123` | `gestor` |
+
+Fora de Development, defina `Auth__Jwt__SigningKey` (mínimo de 32 caracteres); sem ela a API não inicia. Os erros seguem `ProblemDetails` com a extensão `code` (ex.: `AUTH_UNAUTHENTICATED`, `SCOPE_FORBIDDEN`).
+
 ### Estrutura da Solution (`VoucherCampaigns.slnx`)
 
 | Projeto | Responsabilidade |

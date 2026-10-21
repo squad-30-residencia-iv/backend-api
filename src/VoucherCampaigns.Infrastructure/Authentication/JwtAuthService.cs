@@ -1,37 +1,47 @@
-using System.IdentityModel.Tokens.Jwt;
-using System.Security.Claims;
 using System.Text;
+using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
-using VoucherCampaigns.Application.DTOs;
+using VoucherCampaigns.Application.Authentication;
 
 namespace VoucherCampaigns.Infrastructure.Authentication;
 
-public class JwtAuthService
+public class JwtAuthService(AuthOptions options, IUserCredentialStore credentialStore, TimeProvider timeProvider) : IAuthService
 {
-    private const string SecretKey = "chave-super-secreta-para-assinatura-jwt-2026-vouchers"; 
+    public const string SuccessMessage = "Autenticação realizada com sucesso.";
 
     public TokenResponse? Authenticate(LoginRequest request)
     {
-        // Mock provisório para aprovação da US. (No futuro, injetar IUserRepository)
-        if (request.Email != "gestor@empresa.com" || request.Password != "Senha123") return null;
+        var account = credentialStore.FindByCredentials(request.Email, request.Password);
 
-        var tokenHandler = new JwtSecurityTokenHandler();
-        var key = Encoding.ASCII.GetBytes(SecretKey);
-
-        var tokenDescriptor = new SecurityTokenDescriptor
+        if (account is null)
         {
-            Subject = new ClaimsIdentity(new[]
+            return null;
+        }
+
+        var now = timeProvider.GetUtcNow().UtcDateTime;
+        var lifetime = TimeSpan.FromMinutes(options.ExpirationMinutes);
+
+        var descriptor = new SecurityTokenDescriptor
+        {
+            Issuer = options.Issuer,
+            Audience = options.Audience,
+            IssuedAt = now,
+            NotBefore = now,
+            Expires = now.Add(lifetime),
+            Claims = new Dictionary<string, object>
             {
-                new Claim(JwtRegisteredClaimNames.Sub, "usr_12345"),
-                new Claim(ClaimTypes.Role, "gestor"),
-                new Claim("escopoId", "tenant_abc") // Isolamento de dados
-            }),
-            Expires = DateTime.UtcNow.AddHours(1),
-            SigningCredentials = new SigningCredentials(new SymmetricSecurityKey(key), SecurityAlgorithms.HmacSha256Signature)
+                [AuthClaimTypes.UserId] = account.UserId.ToString(),
+                [AuthClaimTypes.Role] = account.Role,
+                [AuthClaimTypes.NetworkId] = account.NetworkId.ToString()
+            },
+            SigningCredentials = new SigningCredentials(CreateSigningKey(options), SecurityAlgorithms.HmacSha256)
         };
 
-        var token = tokenHandler.CreateToken(tokenDescriptor);
+        var token = new JsonWebTokenHandler().CreateToken(descriptor);
 
-        return new TokenResponse(tokenHandler.WriteToken(token), 3600, "Autenticação realizada com sucesso.");
+        return new TokenResponse(token, (int)lifetime.TotalSeconds, SuccessMessage);
     }
+
+    public static SymmetricSecurityKey CreateSigningKey(AuthOptions options) =>
+        new(Encoding.UTF8.GetBytes(options.SigningKey));
 }
