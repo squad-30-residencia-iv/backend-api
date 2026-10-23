@@ -27,7 +27,6 @@ builder.Services.AddScoped<IProductService, ProductService>();
 builder.Services.AddScoped<INetworkService, NetworkService>();
 builder.Services.AddScoped<IRegionService, RegionService>();
 builder.Services.AddScoped<IEstablishmentService, EstablishmentService>();
-builder.Services.AddScoped<IChannelService, ChannelService>();
 builder.Services.AddInfrastructure();
 builder.Services.AddApiAuthentication();
 

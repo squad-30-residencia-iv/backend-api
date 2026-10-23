@@ -9,7 +9,11 @@ public class HttpCurrentUser(IHttpContextAccessor httpContextAccessor) : ICurren
 
     public string Role => Claim(AuthClaimTypes.Role);
 
-    public Guid NetworkId => Guid.Parse(Claim(AuthClaimTypes.NetworkId));
+    public bool IsPlatformAdmin => Role == Roles.Administrador;
+
+    public Guid NetworkId => IsPlatformAdmin
+        ? throw new InvalidOperationException("O administrador da plataforma não tem rede; consulte IsPlatformAdmin antes de NetworkId.")
+        : Guid.Parse(Claim(AuthClaimTypes.NetworkId));
 
     private string Claim(string type)
     {

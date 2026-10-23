@@ -6,6 +6,12 @@ namespace VoucherCampaigns.Infrastructure.Persistence.Repositories;
 
 public class OrganizationRepository(AppDbContext context) : IOrganizationRepository
 {
+    public async Task<IReadOnlyList<Network>> GetNetworksAsync(bool? activeOnly, CancellationToken cancellationToken)
+    {
+        var query = Active(context.Networks.AsNoTracking(), activeOnly);
+        return await query.OrderBy(network => network.Name).ToListAsync(cancellationToken);
+    }
+
     public Task<Network?> GetNetworkByIdAsync(Guid id, CancellationToken cancellationToken) =>
         context.Networks.AsNoTracking().FirstOrDefaultAsync(network => network.Id == id, cancellationToken);
 
@@ -24,8 +30,7 @@ public class OrganizationRepository(AppDbContext context) : IOrganizationReposit
         {
             query = query
                 .Include(stored => stored.Regions)
-                .ThenInclude(region => region.Establishments)
-                .ThenInclude(establishment => establishment.Channels);
+                .ThenInclude(region => region.Establishments);
         }
 
         var stored = await query.FirstAsync(stored => stored.Id == network.Id, cancellationToken);
@@ -33,7 +38,7 @@ public class OrganizationRepository(AppDbContext context) : IOrganizationReposit
         stored.TimeZone = network.TimeZone;
         stored.IsActive = network.IsActive;
 
-        // Rede, regiões, lojas e canais na mesma gravação.
+        // Rede, regiões e lojas na mesma gravação (US-02.2). Os canais são atributo da loja e não mudam.
         if (!network.IsActive)
         {
             foreach (var region in stored.Regions)
@@ -43,11 +48,6 @@ public class OrganizationRepository(AppDbContext context) : IOrganizationReposit
                 foreach (var establishment in region.Establishments)
                 {
                     establishment.IsActive = false;
-
-                    foreach (var channel in establishment.Channels)
-                    {
-                        channel.IsActive = false;
-                    }
                 }
             }
         }
@@ -81,9 +81,7 @@ public class OrganizationRepository(AppDbContext context) : IOrganizationReposit
 
         if (!region.IsActive)
         {
-            query = query
-                .Include(stored => stored.Establishments)
-                .ThenInclude(establishment => establishment.Channels);
+            query = query.Include(stored => stored.Establishments);
         }
 
         var stored = await query.FirstAsync(stored => stored.Id == region.Id, cancellationToken);
@@ -95,11 +93,6 @@ public class OrganizationRepository(AppDbContext context) : IOrganizationReposit
             foreach (var establishment in stored.Establishments)
             {
                 establishment.IsActive = false;
-
-                foreach (var channel in establishment.Channels)
-                {
-                    channel.IsActive = false;
-                }
             }
         }
 
@@ -114,12 +107,18 @@ public class OrganizationRepository(AppDbContext context) : IOrganizationReposit
 
     public async Task<IReadOnlyList<Establishment>> GetEstablishmentsAsync(Guid regionId, bool? activeOnly, CancellationToken cancellationToken)
     {
-        var query = Active(context.Establishments.AsNoTracking().Where(establishment => establishment.RegionId == regionId), activeOnly);
+        var query = Active(
+            context.Establishments.AsNoTracking()
+                .Include(establishment => establishment.Channels)
+                .Where(establishment => establishment.RegionId == regionId),
+            activeOnly);
         return await query.OrderBy(establishment => establishment.Name).ToListAsync(cancellationToken);
     }
 
     public Task<Establishment?> GetEstablishmentByIdAsync(Guid id, CancellationToken cancellationToken) =>
-        context.Establishments.AsNoTracking().FirstOrDefaultAsync(establishment => establishment.Id == id, cancellationToken);
+        context.Establishments.AsNoTracking()
+            .Include(establishment => establishment.Channels)
+            .FirstOrDefaultAsync(establishment => establishment.Id == id, cancellationToken);
 
     public async Task<Establishment> CreateEstablishmentAsync(Establishment establishment, CancellationToken cancellationToken)
     {
@@ -131,23 +130,25 @@ public class OrganizationRepository(AppDbContext context) : IOrganizationReposit
 
     public async Task<Establishment> UpdateEstablishmentAsync(Establishment establishment, CancellationToken cancellationToken)
     {
-        IQueryable<Establishment> query = context.Establishments;
-
-        if (!establishment.IsActive)
-        {
-            query = query.Include(stored => stored.Channels);
-        }
-
-        var stored = await query.FirstAsync(stored => stored.Id == establishment.Id, cancellationToken);
+        var stored = await context.Establishments
+            .Include(stored => stored.Channels)
+            .FirstAsync(stored => stored.Id == establishment.Id, cancellationToken);
         stored.Code = establishment.Code;
         stored.Name = establishment.Name;
         stored.IsActive = establishment.IsActive;
 
-        if (!establishment.IsActive)
+        // Loja e canais na mesma gravação: o canal que já existe é atualizado, o novo é inserido.
+        foreach (var channel in establishment.Channels)
         {
-            foreach (var channel in stored.Channels)
+            var storedChannel = stored.Channels.FirstOrDefault(candidate => candidate.Id == channel.Id);
+
+            if (storedChannel is null)
             {
-                channel.IsActive = false;
+                context.Channels.Add(channel);
+            }
+            else
+            {
+                storedChannel.IsActive = channel.IsActive;
             }
         }
 
@@ -159,36 +160,6 @@ public class OrganizationRepository(AppDbContext context) : IOrganizationReposit
     public Task<bool> ExistsEstablishmentByCodeInRegionAsync(Guid regionId, string code, Guid? excludeId, CancellationToken cancellationToken) =>
         context.Establishments.AnyAsync(
             establishment => establishment.RegionId == regionId && establishment.Code == code && (excludeId == null || establishment.Id != excludeId),
-            cancellationToken);
-
-    public async Task<IReadOnlyList<Channel>> GetChannelsAsync(Guid establishmentId, bool? activeOnly, CancellationToken cancellationToken)
-    {
-        var query = Active(context.Channels.AsNoTracking().Where(channel => channel.EstablishmentId == establishmentId), activeOnly);
-        return await query.OrderBy(channel => channel.Type).ToListAsync(cancellationToken);
-    }
-
-    public Task<Channel?> GetChannelByIdAsync(Guid id, CancellationToken cancellationToken) =>
-        context.Channels.AsNoTracking().FirstOrDefaultAsync(channel => channel.Id == id, cancellationToken);
-
-    public async Task<Channel> CreateChannelAsync(Channel channel, CancellationToken cancellationToken)
-    {
-        context.Channels.Add(channel);
-        await ConstraintSave.SaveAsync(context, OrganizationErrors.ChannelTypeTakenCode, OrganizationErrors.ChannelTypeTakenMessage, cancellationToken);
-        return channel;
-    }
-
-    public async Task<Channel> UpdateChannelAsync(Channel channel, CancellationToken cancellationToken)
-    {
-        var stored = await context.Channels.FirstAsync(stored => stored.Id == channel.Id, cancellationToken);
-        stored.IsActive = channel.IsActive;
-        await context.SaveChangesAsync(cancellationToken);
-        return stored;
-    }
-
-    public Task<bool> ExistsChannelByTypeInEstablishmentAsync(
-        Guid establishmentId, ChannelType type, Guid? excludeId, CancellationToken cancellationToken) =>
-        context.Channels.AnyAsync(
-            channel => channel.EstablishmentId == establishmentId && channel.Type == type && (excludeId == null || channel.Id != excludeId),
             cancellationToken);
 
     private static IQueryable<T> Active<T>(IQueryable<T> query, bool? activeOnly) where T : class =>

@@ -24,6 +24,13 @@ public class NetworkService(IOrganizationRepository repository, ICurrentUser cur
 {
     public async Task<IReadOnlyList<NetworkResponse>> GetAllAsync(bool? activeOnly, CancellationToken cancellationToken = default)
     {
+        // O administrador da plataforma enxerga todas as redes; os demais, só a do token.
+        if (currentUser.IsPlatformAdmin)
+        {
+            var networks = await repository.GetNetworksAsync(activeOnly, cancellationToken);
+            return networks.Select(Map).ToList();
+        }
+
         var network = await repository.GetNetworkByIdAsync(currentUser.NetworkId, cancellationToken);
 
         if (network is null || !Matches(network.IsActive, activeOnly))

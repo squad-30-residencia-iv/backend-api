@@ -31,6 +31,21 @@ public class JwtAuthServiceTests
     }
 
     [Fact]
+    public void Authenticate_AsAdministrador_IssuesTokenWithoutNetwork()
+    {
+        var admin = AuthOptionsTests.ValidUser("admin@empresa.com", Roles.Administrador) with { NetworkId = "" };
+        var options = _options with { MockUsers = [admin] };
+        var service = new JwtAuthService(options, new ConfigurationUserCredentialStore(options), new FixedTimeProvider(Now));
+
+        var response = service.Authenticate(new LoginRequest("admin@empresa.com", "Senha123"));
+
+        Assert.NotNull(response);
+        var token = new JsonWebToken(response.Token);
+        Assert.Equal(Roles.Administrador, token.GetClaim(AuthClaimTypes.Role).Value);
+        Assert.False(token.TryGetClaim(AuthClaimTypes.NetworkId, out _));
+    }
+
+    [Fact]
     public void Authenticate_IgnoresEmailCase()
     {
         var response = CreateService().Authenticate(new LoginRequest(" Analista@Empresa.COM ", "Senha123"));

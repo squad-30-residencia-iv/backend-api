@@ -4,7 +4,7 @@ internal static class NetworkScope
 {
     public static void Ensure(ICurrentUser currentUser, Guid networkId)
     {
-        if (networkId != currentUser.NetworkId)
+        if (!currentUser.IsPlatformAdmin && networkId != currentUser.NetworkId)
         {
             throw new ScopeForbiddenException();
         }

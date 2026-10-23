@@ -8,7 +8,7 @@ using VoucherCampaigns.Application.Organization;
 namespace VoucherCampaigns.Api.Controllers;
 
 [ApiController]
-[Authorize(Policy = AuthorizationPolicies.ManageCampaigns)]
+[Authorize(Policy = AuthorizationPolicies.ReadHierarchy)]
 [Route("api/v1/establishments")]
 public class EstablishmentsController(IEstablishmentService establishmentService) : ControllerBase
 {
@@ -32,6 +32,7 @@ public class EstablishmentsController(IEstablishmentService establishmentService
         Ok(await establishmentService.GetByIdAsync(id, cancellationToken));
 
     [HttpPost]
+    [Authorize(Policy = AuthorizationPolicies.ManageHierarchy)]
     [ProducesResponseType<EstablishmentResponse>(StatusCodes.Status201Created)]
     [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
@@ -43,6 +44,7 @@ public class EstablishmentsController(IEstablishmentService establishmentService
     }
 
     [HttpPut("{id:guid}")]
+    [Authorize(Policy = AuthorizationPolicies.ManageHierarchy)]
     [ProducesResponseType<EstablishmentResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
@@ -53,6 +55,7 @@ public class EstablishmentsController(IEstablishmentService establishmentService
         Ok(await establishmentService.UpdateAsync(id, request, cancellationToken));
 
     [HttpDelete("{id:guid}")]
+    [Authorize(Policy = AuthorizationPolicies.ManageHierarchy)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
