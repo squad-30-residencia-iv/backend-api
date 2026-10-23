@@ -12,6 +12,7 @@ public static class ErrorCodes
     public const string Unauthenticated = "AUTH_UNAUTHENTICATED";
     public const string ForbiddenRole = "AUTH_FORBIDDEN_ROLE";
     public const string ScopeForbidden = "SCOPE_FORBIDDEN";
+    public const string NotFound = "NOT_FOUND";
 }
 
 public static class ApiProblems

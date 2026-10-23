@@ -87,7 +87,8 @@ Qualquer assistente que iniciar uma sessão de desenvolvimento deve seguir estri
 - Rotas protegidas: `[Authorize(Policy = AuthorizationPolicies.ManageCampaigns)]` (analista e gestor) ou `ApproveCampaigns` (só gestor).
 - Rotas que operam sobre uma rede: adicione `[ValidateTenantScope]` e receba `Guid networkId` na rota/query ou um request que implemente `INetworkScopedRequest`. Sem rede identificável o filtro falha de propósito.
 - Para saber quem está chamando, injete `ICurrentUser` (`UserId`, `Role`, `NetworkId`); não leia claims direto do `HttpContext`.
-- Erros: use `ApiProblems` e `ErrorCodes` (`Api/Errors/ApiProblems.cs`). Erro de contrato → `400 VALIDATION_ERROR` (automático pelo `[ApiController]`); regra de negócio → `422` com `code` próprio.
+- Erros: use `ApiProblems` e `ErrorCodes` (`Api/Errors/ApiProblems.cs`). Erro de contrato → `400 VALIDATION_ERROR` (automático pelo `[ApiController]`); regra de negócio → `422` com `code` próprio; recurso ausente → `ResourceNotFoundException` (`404 NOT_FOUND`); rede descoberta só no serviço (filho cujo pai está em outra rede) → `ScopeForbiddenException` (`403 SCOPE_FORBIDDEN`). O filtro `[ValidateTenantScope]` continua obrigatório quando a rede já está na rota, na query ou no request.
+- Cadastros de hierarquia e catálogo: `DELETE` inativa (`is_active`) e a cascata para os descendentes ocorre na mesma `SaveChanges`. Violação de índice único vira `BusinessRuleException` em `Persistence/ConstraintSave.cs`. Categoria e produto não têm rede. `bool?` e `Guid?` nos contratos obrigatórios, para que o campo omitido seja `400` e não um valor padrão.
 - Testes: `tests/VoucherCampaigns.IntegrationTests/Authentication/TestAuth.cs` faz login (`LoginAsync`) ou monta tokens com papel, rede e validade variáveis (`CreateToken`).
 
 ### [Skill] Regras de Negócio, Datas e Fuso

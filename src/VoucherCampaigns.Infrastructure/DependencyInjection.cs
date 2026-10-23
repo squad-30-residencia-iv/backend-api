@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 using VoucherCampaigns.Application.Authentication;
 using VoucherCampaigns.Application.Campaigns;
+using VoucherCampaigns.Application.Ports;
 using VoucherCampaigns.Application.SystemStatus;
 using VoucherCampaigns.Infrastructure.Authentication;
 using VoucherCampaigns.Infrastructure.Persistence;
@@ -53,6 +54,8 @@ public static class DependencyInjection
         services.AddScoped<IDatabaseStatusReader, DatabaseStatusReader>();
         services.AddScoped<INetworkRepository, NetworkRepository>();
         services.AddScoped<ICampaignRepository, CampaignRepository>();
+        services.AddScoped<ICatalogRepository, CatalogRepository>();
+        services.AddScoped<IOrganizationRepository, OrganizationRepository>();
 
         services.AddSingleton(provider =>
             AuthOptions.FromConfiguration(provider.GetRequiredService<IConfiguration>()));
