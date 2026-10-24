@@ -25,7 +25,10 @@ public class EstablishmentService(IOrganizationRepository repository, ICurrentUs
     public async Task<IReadOnlyList<EstablishmentResponse>> GetAllAsync(Guid? regionId, bool? activeOnly, CancellationToken cancellationToken = default)
     {
         var scopedRegionId = InputValues.RequiredId(regionId, nameof(CreateEstablishmentRequest.RegionId), OrganizationContract.RegionRequired);
-        await RequireRegionInScopeAsync(scopedRegionId, cancellationToken);
+
+        var region = await repository.GetRegionByIdAsync(scopedRegionId, cancellationToken)
+            ?? throw new ResourceNotFoundException(OrganizationContract.RegionNotFound);
+        NetworkScope.Ensure(currentUser, region.NetworkId);
 
         var items = await repository.GetEstablishmentsAsync(scopedRegionId, activeOnly, cancellationToken);
         return items.Select(Map).ToList();
@@ -42,14 +45,21 @@ public class EstablishmentService(IOrganizationRepository repository, ICurrentUs
         var regionId = InputValues.RequiredId(request.RegionId, nameof(request.RegionId), OrganizationContract.RegionRequired);
         var code = Code(request.Code);
         var name = Name(request.Name);
+        var channels = InputValues.ChannelTypes(request.Channels);
 
-        await RequireActiveRegionAsync(regionId, cancellationToken);
+        // US-02.1, cenário 2: região inexistente no corpo recusa o cadastro com a mensagem do backlog.
+        var region = await repository.GetRegionByIdAsync(regionId, cancellationToken)
+            ?? throw new BusinessRuleException(
+                OrganizationErrors.EstablishmentRegionNotFoundCode, OrganizationErrors.EstablishmentRegionNotFoundMessage);
+        NetworkScope.Ensure(currentUser, region.NetworkId);
+        RequireActive(region);
 
         if (await repository.ExistsEstablishmentByCodeInRegionAsync(regionId, code, null, cancellationToken))
         {
             throw new BusinessRuleException(OrganizationErrors.EstablishmentCodeTakenCode, OrganizationErrors.EstablishmentCodeTakenMessage);
         }
 
+        var now = timeProvider.GetUtcNow().UtcDateTime;
         var establishment = new Establishment
         {
             Id = Guid.CreateVersion7(),
@@ -57,8 +67,9 @@ public class EstablishmentService(IOrganizationRepository repository, ICurrentUs
             Code = code,
             Name = name,
             IsActive = true,
-            CreatedAt = timeProvider.GetUtcNow().UtcDateTime
+            CreatedAt = now
         };
+        establishment.EnableChannels(channels, now);
 
         return Map(await repository.CreateEstablishmentAsync(establishment, cancellationToken));
     }
@@ -69,10 +80,13 @@ public class EstablishmentService(IOrganizationRepository repository, ICurrentUs
         var code = Code(request.Code);
         var name = Name(request.Name);
         var isActive = InputValues.RequiredFlag(request.IsActive, nameof(request.IsActive), OrganizationContract.EstablishmentActiveRequired);
+        var channels = InputValues.ChannelTypes(request.Channels);
 
         if (isActive)
         {
-            await RequireActiveRegionAsync(existing.RegionId, cancellationToken);
+            var region = await repository.GetRegionByIdAsync(existing.RegionId, cancellationToken)
+                ?? throw new ResourceNotFoundException(OrganizationContract.RegionNotFound);
+            RequireActive(region);
         }
 
         if (await repository.ExistsEstablishmentByCodeInRegionAsync(existing.RegionId, code, id, cancellationToken))
@@ -83,6 +97,7 @@ public class EstablishmentService(IOrganizationRepository repository, ICurrentUs
         existing.Code = code;
         existing.Name = name;
         existing.IsActive = isActive;
+        existing.EnableChannels(channels, timeProvider.GetUtcNow().UtcDateTime);
 
         return Map(await repository.UpdateEstablishmentAsync(existing, cancellationToken));
     }
@@ -99,27 +114,19 @@ public class EstablishmentService(IOrganizationRepository repository, ICurrentUs
         var establishment = await repository.GetEstablishmentByIdAsync(id, cancellationToken)
             ?? throw new ResourceNotFoundException(OrganizationContract.EstablishmentNotFound);
 
-        await RequireRegionInScopeAsync(establishment.RegionId, cancellationToken);
-        return establishment;
-    }
-
-    private async Task<Region> RequireRegionInScopeAsync(Guid regionId, CancellationToken cancellationToken)
-    {
-        var region = await repository.GetRegionByIdAsync(regionId, cancellationToken)
+        var region = await repository.GetRegionByIdAsync(establishment.RegionId, cancellationToken)
             ?? throw new ResourceNotFoundException(OrganizationContract.RegionNotFound);
 
         NetworkScope.Ensure(currentUser, region.NetworkId);
-        return region;
+        return establishment;
     }
 
-    private async Task RequireActiveRegionAsync(Guid regionId, CancellationToken cancellationToken)
+    private static void RequireActive(Region region)
     {
-        var region = await RequireRegionInScopeAsync(regionId, cancellationToken);
-
         if (!region.IsActive)
         {
             throw new BusinessRuleException(
-                OrganizationErrors.EstablishmentParentUnavailableCode, OrganizationErrors.EstablishmentParentUnavailableMessage);
+                OrganizationErrors.EstablishmentRegionInactiveCode, OrganizationErrors.EstablishmentRegionInactiveMessage);
         }
     }
 
@@ -134,5 +141,12 @@ public class EstablishmentService(IOrganizationRepository repository, ICurrentUs
             OrganizationContract.NameMaxLength, OrganizationContract.NameMaxLengthMessage);
 
     private static EstablishmentResponse Map(Establishment establishment) =>
-        new(establishment.Id, establishment.RegionId, establishment.Code, establishment.Name, establishment.IsActive, establishment.CreatedAt);
+        new(
+            establishment.Id,
+            establishment.RegionId,
+            establishment.Code,
+            establishment.Name,
+            establishment.EnabledChannels().Select(type => type.ToString()).ToList(),
+            establishment.IsActive,
+            establishment.CreatedAt);
 }

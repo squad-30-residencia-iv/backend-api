@@ -1,3 +1,4 @@
+using VoucherCampaigns.Application.DTOs.Organization;
 using VoucherCampaigns.Domain.Organization;
 
 namespace VoucherCampaigns.Application.Common;
@@ -52,20 +53,35 @@ public static class InputValues
         return timeZone;
     }
 
-    public static ChannelType ParseChannelType(string? value)
+    /// <summary>Canais da loja: ao menos um, sem repetição, só <c>Physical</c> ou <c>Virtual</c> (PR-11).</summary>
+    public static IReadOnlyList<ChannelType> ChannelTypes(IReadOnlyList<string?>? values)
     {
-        var trimmed = value?.Trim() ?? string.Empty;
+        const string field = "Channels";
 
-        if (trimmed.Length == 0)
+        if (values is null || values.Count == 0)
         {
-            throw new RequestValidationException("Type", "Informe o tipo do canal.");
+            throw new RequestValidationException(field, OrganizationContract.ChannelsRequired);
         }
 
-        if (!Enum.GetNames<ChannelType>().Contains(trimmed, StringComparer.OrdinalIgnoreCase))
+        var types = new List<ChannelType>();
+
+        foreach (var value in values)
         {
-            throw new RequestValidationException("Type", "Tipo de canal inválido. Use 'Physical' ou 'Virtual'.");
+            var trimmed = value?.Trim() ?? string.Empty;
+
+            if (!Enum.GetNames<ChannelType>().Contains(trimmed, StringComparer.OrdinalIgnoreCase))
+            {
+                throw new RequestValidationException(field, OrganizationContract.ChannelTypeInvalid);
+            }
+
+            types.Add(Enum.Parse<ChannelType>(trimmed, ignoreCase: true));
         }
 
-        return Enum.Parse<ChannelType>(trimmed, ignoreCase: true);
+        if (types.Distinct().Count() != types.Count)
+        {
+            throw new RequestValidationException(field, OrganizationContract.ChannelsRepeated);
+        }
+
+        return types.Order().ToList();
     }
 }

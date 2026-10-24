@@ -103,11 +103,12 @@ public class ProductService(ICatalogRepository repository, TimeProvider timeProv
 
     private async Task RequireActiveCategoryAsync(Guid categoryId, CancellationToken cancellationToken)
     {
-        var category = await repository.GetCategoryByIdAsync(categoryId, cancellationToken);
+        var category = await repository.GetCategoryByIdAsync(categoryId, cancellationToken)
+            ?? throw new BusinessRuleException(CatalogErrors.ProductCategoryNotFoundCode, CatalogErrors.ProductCategoryNotFoundMessage);
 
-        if (category is null || !category.IsActive)
+        if (!category.IsActive)
         {
-            throw new BusinessRuleException(CatalogErrors.ProductParentUnavailableCode, CatalogErrors.ProductParentUnavailableMessage);
+            throw new BusinessRuleException(CatalogErrors.ProductCategoryInactiveCode, CatalogErrors.ProductCategoryInactiveMessage);
         }
     }
 

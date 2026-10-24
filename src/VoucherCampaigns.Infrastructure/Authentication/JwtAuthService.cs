@@ -21,6 +21,18 @@ public class JwtAuthService(AuthOptions options, IUserCredentialStore credential
         var now = timeProvider.GetUtcNow().UtcDateTime;
         var lifetime = TimeSpan.FromMinutes(options.ExpirationMinutes);
 
+        var claims = new Dictionary<string, object>
+        {
+            [AuthClaimTypes.UserId] = account.UserId.ToString(),
+            [AuthClaimTypes.Role] = account.Role
+        };
+
+        // O administrador da plataforma não tem rede: o token sai sem escopoId.
+        if (account.NetworkId is { } networkId)
+        {
+            claims[AuthClaimTypes.NetworkId] = networkId.ToString();
+        }
+
         var descriptor = new SecurityTokenDescriptor
         {
             Issuer = options.Issuer,
@@ -28,12 +40,7 @@ public class JwtAuthService(AuthOptions options, IUserCredentialStore credential
             IssuedAt = now,
             NotBefore = now,
             Expires = now.Add(lifetime),
-            Claims = new Dictionary<string, object>
-            {
-                [AuthClaimTypes.UserId] = account.UserId.ToString(),
-                [AuthClaimTypes.Role] = account.Role,
-                [AuthClaimTypes.NetworkId] = account.NetworkId.ToString()
-            },
+            Claims = claims,
             SigningCredentials = new SigningCredentials(CreateSigningKey(options), SecurityAlgorithms.HmacSha256)
         };
 

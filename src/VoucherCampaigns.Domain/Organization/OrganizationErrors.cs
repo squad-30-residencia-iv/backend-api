@@ -5,18 +5,22 @@ public static class OrganizationErrors
     public const string NetworkNameTakenCode = "NETWORK_NAME_TAKEN";
     public const string NetworkNameTakenMessage = "Já existe uma rede cadastrada com este nome.";
 
+    public const string RegionNetworkNotFoundCode = "REGION_NETWORK_NOT_FOUND";
+    public const string RegionNetworkNotFoundMessage = "Rede informada não encontrada";
+
+    public const string RegionNetworkInactiveCode = "REGION_NETWORK_INACTIVE";
+    public const string RegionNetworkInactiveMessage = "Rede informada está inativa";
+
     public const string RegionNameTakenCode = "REGION_NAME_TAKEN";
     public const string RegionNameTakenMessage = "Já existe uma região com este nome nesta rede.";
 
-    public const string EstablishmentParentUnavailableCode = "ESTABLISHMENT_PARENT_UNAVAILABLE";
-    public const string EstablishmentParentUnavailableMessage = "A região informada não existe ou está inativa.";
+    /// <summary>Mensagem exata da US-02.1, cenário 2.</summary>
+    public const string EstablishmentRegionNotFoundCode = "ESTABLISHMENT_REGION_NOT_FOUND";
+    public const string EstablishmentRegionNotFoundMessage = "Região informada não encontrada";
+
+    public const string EstablishmentRegionInactiveCode = "ESTABLISHMENT_REGION_INACTIVE";
+    public const string EstablishmentRegionInactiveMessage = "Região informada está inativa";
 
     public const string EstablishmentCodeTakenCode = "ESTABLISHMENT_CODE_TAKEN";
     public const string EstablishmentCodeTakenMessage = "Já existe um estabelecimento com este código nesta região.";
-
-    public const string ChannelParentUnavailableCode = "CHANNEL_PARENT_UNAVAILABLE";
-    public const string ChannelParentUnavailableMessage = "O estabelecimento informado não existe ou está inativo.";
-
-    public const string ChannelTypeTakenCode = "CHANNEL_TYPE_TAKEN";
-    public const string ChannelTypeTakenMessage = "O estabelecimento já possui um canal deste tipo.";
 }

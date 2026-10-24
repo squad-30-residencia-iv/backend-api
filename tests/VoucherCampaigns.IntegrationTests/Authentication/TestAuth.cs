@@ -14,6 +14,7 @@ public static class TestAuth
 {
     public const string AnalistaEmail = "analista@empresa.com";
     public const string GestorEmail = "gestor@empresa.com";
+    public const string AdministradorEmail = "admin@empresa.com";
     public const string Password = "Senha123";
 
     public static readonly Guid OtherNetworkId = Guid.Parse("0199e3a0-0000-7000-8000-0000000000ff");
@@ -39,6 +40,18 @@ public static class TestAuth
         var options = factory.Services.GetRequiredService<AuthOptions>();
         var expiresAt = expires ?? DateTime.UtcNow.AddMinutes(10);
 
+        var claims = new Dictionary<string, object>
+        {
+            [AuthClaimTypes.UserId] = Guid.NewGuid().ToString(),
+            [AuthClaimTypes.Role] = role
+        };
+
+        // Como na Api, o administrador da plataforma não tem rede, a não ser que o teste informe uma.
+        if (role != Roles.Administrador || networkId is not null)
+        {
+            claims[AuthClaimTypes.NetworkId] = (networkId ?? DemoDataSeeder.NetworkId).ToString();
+        }
+
         var descriptor = new SecurityTokenDescriptor
         {
             Issuer = options.Issuer,
@@ -46,12 +59,7 @@ public static class TestAuth
             IssuedAt = expiresAt.AddMinutes(-20),
             NotBefore = expiresAt.AddMinutes(-20),
             Expires = expiresAt,
-            Claims = new Dictionary<string, object>
-            {
-                [AuthClaimTypes.UserId] = Guid.NewGuid().ToString(),
-                [AuthClaimTypes.Role] = role,
-                [AuthClaimTypes.NetworkId] = (networkId ?? DemoDataSeeder.NetworkId).ToString()
-            },
+            Claims = claims,
             SigningCredentials = new SigningCredentials(
                 JwtAuthService.CreateSigningKey(options with { SigningKey = signingKey ?? options.SigningKey }),
                 SecurityAlgorithms.HmacSha256)

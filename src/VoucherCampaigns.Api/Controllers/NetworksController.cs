@@ -8,7 +8,7 @@ using VoucherCampaigns.Application.Organization;
 namespace VoucherCampaigns.Api.Controllers;
 
 [ApiController]
-[Authorize(Policy = AuthorizationPolicies.ManageCampaigns)]
+[Authorize(Policy = AuthorizationPolicies.ReadHierarchy)]
 [Route("api/v1/networks")]
 public class NetworksController(INetworkService networkService) : ControllerBase
 {
@@ -28,6 +28,7 @@ public class NetworksController(INetworkService networkService) : ControllerBase
         Ok(await networkService.GetByIdAsync(networkId, cancellationToken));
 
     [HttpPost]
+    [Authorize(Policy = AuthorizationPolicies.ManageHierarchy)]
     [ProducesResponseType<NetworkResponse>(StatusCodes.Status201Created)]
     [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status422UnprocessableEntity)]
@@ -38,7 +39,7 @@ public class NetworksController(INetworkService networkService) : ControllerBase
     }
 
     [HttpPut("{networkId:guid}")]
-    [ValidateTenantScope]
+    [Authorize(Policy = AuthorizationPolicies.ManageHierarchy)]
     [ProducesResponseType<NetworkResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
@@ -49,7 +50,7 @@ public class NetworksController(INetworkService networkService) : ControllerBase
         Ok(await networkService.UpdateAsync(networkId, request, cancellationToken));
 
     [HttpDelete("{networkId:guid}")]
-    [ValidateTenantScope]
+    [Authorize(Policy = AuthorizationPolicies.ManageHierarchy)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]

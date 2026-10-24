@@ -2,7 +2,6 @@ using VoucherCampaigns.Application.Authentication;
 using VoucherCampaigns.Application.Common;
 using VoucherCampaigns.Application.DTOs.Organization;
 using VoucherCampaigns.Application.Ports;
-using VoucherCampaigns.Domain.Campaigns;
 using VoucherCampaigns.Domain.Common;
 using VoucherCampaigns.Domain.Organization;
 
@@ -27,6 +26,9 @@ public class RegionService(IOrganizationRepository repository, ICurrentUser curr
     {
         var scopedNetworkId = InputValues.RequiredId(networkId, nameof(CreateRegionRequest.NetworkId), OrganizationContract.NetworkRequired);
         NetworkScope.Ensure(currentUser, scopedNetworkId);
+
+        _ = await repository.GetNetworkByIdAsync(scopedNetworkId, cancellationToken)
+            ?? throw new ResourceNotFoundException(OrganizationContract.NetworkNotFound);
 
         var items = await repository.GetRegionsAsync(scopedNetworkId, activeOnly, cancellationToken);
         return items.Select(Map).ToList();
@@ -103,11 +105,12 @@ public class RegionService(IOrganizationRepository repository, ICurrentUser curr
 
     private async Task RequireActiveNetworkAsync(Guid networkId, CancellationToken cancellationToken)
     {
-        var network = await repository.GetNetworkByIdAsync(networkId, cancellationToken);
+        var network = await repository.GetNetworkByIdAsync(networkId, cancellationToken)
+            ?? throw new BusinessRuleException(OrganizationErrors.RegionNetworkNotFoundCode, OrganizationErrors.RegionNetworkNotFoundMessage);
 
-        if (network is null || !network.IsActive)
+        if (!network.IsActive)
         {
-            throw new BusinessRuleException(CampaignErrors.NetworkUnavailableCode, CampaignErrors.NetworkUnavailableMessage);
+            throw new BusinessRuleException(OrganizationErrors.RegionNetworkInactiveCode, OrganizationErrors.RegionNetworkInactiveMessage);
         }
     }
 

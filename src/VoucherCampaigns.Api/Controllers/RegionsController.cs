@@ -9,7 +9,7 @@ using VoucherCampaigns.Application.Organization;
 namespace VoucherCampaigns.Api.Controllers;
 
 [ApiController]
-[Authorize(Policy = AuthorizationPolicies.ManageCampaigns)]
+[Authorize(Policy = AuthorizationPolicies.ReadHierarchy)]
 [Route("api/v1/regions")]
 public class RegionsController(IRegionService regionService) : ControllerBase
 {
@@ -33,7 +33,7 @@ public class RegionsController(IRegionService regionService) : ControllerBase
         Ok(await regionService.GetByIdAsync(id, cancellationToken));
 
     [HttpPost]
-    [ValidateTenantScope]
+    [Authorize(Policy = AuthorizationPolicies.ManageHierarchy)]
     [ProducesResponseType<RegionResponse>(StatusCodes.Status201Created)]
     [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
@@ -45,6 +45,7 @@ public class RegionsController(IRegionService regionService) : ControllerBase
     }
 
     [HttpPut("{id:guid}")]
+    [Authorize(Policy = AuthorizationPolicies.ManageHierarchy)]
     [ProducesResponseType<RegionResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
@@ -54,6 +55,7 @@ public class RegionsController(IRegionService regionService) : ControllerBase
         Ok(await regionService.UpdateAsync(id, request, cancellationToken));
 
     [HttpDelete("{id:guid}")]
+    [Authorize(Policy = AuthorizationPolicies.ManageHierarchy)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]

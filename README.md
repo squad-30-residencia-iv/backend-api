@@ -101,12 +101,21 @@ Sem nenhuma configuração extra, a API usa **SQLite** (`src/VoucherCampaigns.Ap
 
 ### Autenticação (provisória)
 
-`POST /api/v1/auth/login` devolve um JWT com `sub`, `role` (`analista` ou `gestor`) e `escopoId` (Guid da rede). Envie-o como `Authorization: Bearer <token>`. Em Development há dois usuários da rede de demonstração "Supermercados Norte":
+`POST /api/v1/auth/login` devolve um JWT com `sub`, `role` (`analista`, `gestor` ou `administrador`) e `escopoId` (Guid da rede). Envie-o como `Authorization: Bearer <token>`. O administrador da plataforma é global e o token dele não traz `escopoId`. Em Development há três usuários:
 
-| E-mail | Senha | Papel |
-|---|---|---|
-| `analista@empresa.com` | `Senha123` | `analista` |
-| `gestor@empresa.com` | `Senha123` | `gestor` |
+| E-mail | Senha | Papel | Rede |
+|---|---|---|---|
+| `analista@empresa.com` | `Senha123` | `analista` | Supermercados Norte |
+| `gestor@empresa.com` | `Senha123` | `gestor` | Supermercados Norte |
+| `admin@empresa.com` | `Senha123` | `administrador` | — (todas) |
+
+### Hierarquia e catálogo
+
+- `/api/v1/networks`, `/regions` e `/establishments`: só o **administrador** cadastra, altera e inativa (PR-15). Analista e gestor consultam a própria rede.
+- O canal é atributo da loja (PR-11): `POST` e `PUT` de `/establishments` recebem `"channels": ["Physical", "Virtual"]` (um ou os dois).
+- `/api/v1/categories` e `/products`: analista e gestor.
+- `DELETE` inativa o registro e desce em cascata (rede → regiões → lojas; categoria → produtos).
+- Documento OpenAPI em Development: `GET /openapi/v1.json`.
 
 Fora de Development, defina `Auth__Jwt__SigningKey` (mínimo de 32 caracteres); sem ela a API não inicia. Os erros seguem `ProblemDetails` com a extensão `code` (ex.: `AUTH_UNAUTHENTICATED`, `SCOPE_FORBIDDEN`).
 
