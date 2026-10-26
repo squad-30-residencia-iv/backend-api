@@ -49,6 +49,11 @@ Qualquer assistente que iniciar uma sessão de desenvolvimento deve seguir estri
   ```bash
   dotnet test --verbosity normal
   ```
+- Para rodar a suíte de integração no PostgreSQL (com `docker compose up -d`), defina `TEST_POSTGRES_CONNECTION` sem o nome do banco. Cada `new ApiFactory()` cria um banco `vc_tests_*` próprio e o apaga no fim; sem a variável, os testes usam SQLite:
+  ```bash
+  TEST_POSTGRES_CONNECTION="Host=localhost;Port=5432;Username=postgres;Password=postgres" dotnet test
+  ```
+- Nos testes, não fixe o provider: compare com `factory.Provider` (ou `ApiFactory.DefaultProvider`), para o mesmo teste valer nos dois bancos.
 
 ### [Skill] Execução Local da API
 

@@ -164,6 +164,12 @@ docker compose down -v     # para e apaga os dados
 
 Depois, use as linhas de PostgreSQL do `.env.example` no seu `.env` e rode a API: as migrações são aplicadas na inicialização.
 
+Para rodar os testes de integração nesse PostgreSQL em vez do SQLite (cada teste cria e apaga um banco `vc_tests_*`):
+
+```bash
+TEST_POSTGRES_CONNECTION="Host=localhost;Port=5432;Username=postgres;Password=postgres" dotnet test
+```
+
 **Supabase:** como ele é um PostgreSQL gerenciado, basta trocar a `Database__ConnectionString` pela do painel do projeto (conexão direta ou *Session pooler*, com `SSL Mode=Require`). As mesmas migrações são usadas.
 
 ### Tabelas do núcleo inicial
