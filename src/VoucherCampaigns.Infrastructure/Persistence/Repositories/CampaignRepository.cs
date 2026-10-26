@@ -17,7 +17,7 @@ public class CampaignRepository(AppDbContext context) : ICampaignRepository
         CampaignStatus? status,
         CancellationToken cancellationToken)
     {
-        var query = context.Campaigns.AsNoTracking().Where(campaign => campaign.NetworkId == networkId);
+        var query = WithItems(context.Campaigns.AsNoTracking()).Where(campaign => campaign.NetworkId == networkId);
 
         if (status is not null)
         {
@@ -28,12 +28,23 @@ public class CampaignRepository(AppDbContext context) : ICampaignRepository
         return await query
             .OrderByDescending(campaign => campaign.CreatedAt)
             .ThenByDescending(campaign => campaign.Id)
+            .AsSplitQuery()
             .ToListAsync(cancellationToken);
     }
 
     public Task<Campaign?> FindByIdAsync(Guid id, CancellationToken cancellationToken) =>
-        context.Campaigns
-            .AsNoTracking()
+        WithItems(context.Campaigns.AsNoTracking())
             .Include(campaign => campaign.Network)
             .FirstOrDefaultAsync(campaign => campaign.Id == id, cancellationToken);
+
+    public Task<Campaign?> FindForUpdateAsync(Guid id, CancellationToken cancellationToken) =>
+        WithItems(context.Campaigns)
+            .Include(campaign => campaign.Network)
+            .FirstOrDefaultAsync(campaign => campaign.Id == id, cancellationToken);
+
+    public Task SaveChangesAsync(CancellationToken cancellationToken) => context.SaveChangesAsync(cancellationToken);
+
+    // Itens na ordem em que foram informados: os ids (Guid v7) são gerados em sequência.
+    private static IQueryable<Campaign> WithItems(IQueryable<Campaign> query) =>
+        query.Include(campaign => campaign.Items.OrderBy(item => item.Id));
 }

@@ -47,6 +47,10 @@ namespace VoucherCampaigns.Infrastructure.Migrations.Sqlite.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("network_id");
 
+                    b.Property<int?>("PerCustomerVoucherLimit")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("per_customer_voucher_limit");
+
                     b.Property<DateTime>("StartsAt")
                         .HasColumnType("TEXT")
                         .HasColumnName("starts_at");
@@ -93,6 +97,8 @@ namespace VoucherCampaigns.Infrastructure.Migrations.Sqlite.Migrations
 
                     b.ToTable("campaigns", null, t =>
                         {
+                            t.HasCheckConstraint("ck_campaigns_per_customer_voucher_limit", "per_customer_voucher_limit IS NULL OR per_customer_voucher_limit > 0");
+
                             t.HasCheckConstraint("ck_campaigns_period", "ends_at > starts_at");
 
                             t.HasCheckConstraint("ck_campaigns_total_voucher_limit", "total_voucher_limit IS NULL OR total_voucher_limit > 0");
@@ -104,7 +110,6 @@ namespace VoucherCampaigns.Infrastructure.Migrations.Sqlite.Migrations
             modelBuilder.Entity("VoucherCampaigns.Domain.Campaigns.CampaignItem", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT")
                         .HasColumnName("id");
 

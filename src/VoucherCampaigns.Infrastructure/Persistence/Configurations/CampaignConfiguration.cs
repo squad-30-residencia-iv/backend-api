@@ -13,6 +13,8 @@ public class CampaignConfiguration : IEntityTypeConfiguration<Campaign>
         {
             table.HasCheckConstraint("ck_campaigns_period", "ends_at > starts_at");
             table.HasCheckConstraint("ck_campaigns_total_voucher_limit", "total_voucher_limit IS NULL OR total_voucher_limit > 0");
+            table.HasCheckConstraint(
+                "ck_campaigns_per_customer_voucher_limit", "per_customer_voucher_limit IS NULL OR per_customer_voucher_limit > 0");
             table.HasCheckConstraint("ck_campaigns_voucher_validity_days", "voucher_validity_days IS NULL OR voucher_validity_days > 0");
         });
 

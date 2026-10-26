@@ -35,6 +35,34 @@ public class CampaignsController(ICampaignService campaignService) : ControllerB
     public async Task<ActionResult<CampaignResponse>> GetById(Guid id, CancellationToken cancellationToken) =>
         Ok(await campaignService.GetByIdAsync(id, cancellationToken));
 
+    /// <summary>Substitui os alvos, benefícios e cotas por alvo da campanha em rascunho (US-01.2, US-01.3).</summary>
+    [HttpPut("{id:guid}/items")]
+    [ProducesResponseType<CampaignResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<ActionResult<CampaignResponse>> ReplaceItems(
+        Guid id,
+        ReplaceCampaignItemsRequest request,
+        CancellationToken cancellationToken) =>
+        Ok(await campaignService.ReplaceItemsAsync(id, request, cancellationToken));
+
+    /// <summary>Define a quantidade total e o limite por cliente da campanha em rascunho (US-01.3).</summary>
+    [HttpPut("{id:guid}/quantities")]
+    [ProducesResponseType<CampaignResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<ActionResult<CampaignResponse>> UpdateQuantities(
+        Guid id,
+        UpdateCampaignQuantitiesRequest request,
+        CancellationToken cancellationToken) =>
+        Ok(await campaignService.UpdateQuantitiesAsync(id, request, cancellationToken));
+
     /// <summary>Cadastra a campanha em rascunho (US-01.1). Datas na hora local da rede, sem fuso.</summary>
     [HttpPost]
     [ValidateTenantScope]
