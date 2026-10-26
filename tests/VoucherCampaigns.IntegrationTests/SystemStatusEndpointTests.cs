@@ -7,7 +7,7 @@ namespace VoucherCampaigns.IntegrationTests;
 public class SystemStatusEndpointTests(ApiFactory factory) : IClassFixture<ApiFactory>
 {
     [Fact]
-    public async Task GetStatus_WithSqlite_ReturnsProviderConnectionAndAppliedMigrations()
+    public async Task GetStatus_ReturnsProviderConnectionAndAppliedMigrations()
     {
         var client = factory.CreateClient();
 
@@ -18,13 +18,13 @@ public class SystemStatusEndpointTests(ApiFactory factory) : IClassFixture<ApiFa
         var status = await response.Content.ReadFromJsonAsync<SystemStatusResponse>();
 
         Assert.NotNull(status);
-        Assert.Equal("Sqlite", status.Provider);
+        Assert.Equal(factory.Provider, status.Provider);
         Assert.True(status.CanConnect);
         Assert.Single(status.AppliedMigrations, migration => migration.EndsWith("_InitialCreate"));
     }
 
     [Fact]
-    public async Task GetHealth_WithSqlite_ReturnsHealthy()
+    public async Task GetHealth_ReturnsHealthy()
     {
         var client = factory.CreateClient();
 
