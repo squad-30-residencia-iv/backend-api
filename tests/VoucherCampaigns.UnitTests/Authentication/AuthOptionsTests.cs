@@ -96,6 +96,38 @@ public class AuthOptionsTests
     }
 
     [Fact]
+    public void Validate_AcceptsAdministradorWithoutNetwork()
+    {
+        var admin = ValidUser("admin@empresa.com", "administrador") with { NetworkId = "" };
+
+        (ValidOptions() with { MockUsers = [admin] }).Validate();
+
+        Assert.Null(admin.ToAccount().NetworkId);
+    }
+
+    [Fact]
+    public void Validate_ThrowsWhenAdministradorHasNetwork()
+    {
+        var admin = ValidUser("admin@empresa.com", "administrador");
+
+        var exception = Assert.Throws<InvalidOperationException>((ValidOptions() with { MockUsers = [admin] }).Validate);
+
+        Assert.Contains("Auth:MockUsers:0:NetworkId", exception.Message);
+    }
+
+    [Theory]
+    [InlineData("analista")]
+    [InlineData("gestor")]
+    public void Validate_ThrowsWhenNetworkUserHasNoNetwork(string role)
+    {
+        var user = ValidUser("usuario@empresa.com", role) with { NetworkId = "" };
+
+        var exception = Assert.Throws<InvalidOperationException>((ValidOptions() with { MockUsers = [user] }).Validate);
+
+        Assert.Contains("Auth:MockUsers:0:NetworkId", exception.Message);
+    }
+
+    [Fact]
     public void Validate_ThrowsWhenMockUserEmailIsRepeated()
     {
         var options = ValidOptions() with

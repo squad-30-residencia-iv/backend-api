@@ -2,6 +2,8 @@ using DotNetEnv;
 using VoucherCampaigns.Api.Authentication;
 using VoucherCampaigns.Api.Errors;
 using VoucherCampaigns.Application.Campaigns;
+using VoucherCampaigns.Application.Catalog;
+using VoucherCampaigns.Application.Organization;
 using VoucherCampaigns.Application.SystemStatus;
 using VoucherCampaigns.Infrastructure;
 using VoucherCampaigns.Infrastructure.Authentication;
@@ -20,6 +22,11 @@ builder.Services.AddExceptionHandler<ApiExceptionHandler>();
 
 builder.Services.AddScoped<ISystemStatusService, SystemStatusService>();
 builder.Services.AddScoped<ICampaignService, CampaignService>();
+builder.Services.AddScoped<ICategoryService, CategoryService>();
+builder.Services.AddScoped<IProductService, ProductService>();
+builder.Services.AddScoped<INetworkService, NetworkService>();
+builder.Services.AddScoped<IRegionService, RegionService>();
+builder.Services.AddScoped<IEstablishmentService, EstablishmentService>();
 builder.Services.AddInfrastructure();
 builder.Services.AddApiAuthentication();
 

@@ -118,7 +118,8 @@ public record MockUserOptions
     public string NetworkId { get; init; } = string.Empty;
 
     /// <summary>Converte após <see cref="Validate"/>; os IDs já foram conferidos.</summary>
-    public UserAccount ToAccount() => new(Guid.Parse(UserId), Email.Trim(), Role, Guid.Parse(NetworkId));
+    public UserAccount ToAccount() =>
+        new(Guid.Parse(UserId), Email.Trim(), Role, Role == Roles.Administrador ? null : Guid.Parse(NetworkId));
 
     public void Validate(string path)
     {
@@ -132,15 +133,24 @@ public record MockUserOptions
             throw new InvalidOperationException($"Configuração inválida: '{path}:{nameof(UserId)}' = '{UserId}' não é um Guid.");
         }
 
-        if (!Guid.TryParse(NetworkId, out _))
-        {
-            throw new InvalidOperationException($"Configuração inválida: '{path}:{nameof(NetworkId)}' = '{NetworkId}' não é um Guid.");
-        }
-
         if (!Roles.All.Contains(Role))
         {
             throw new InvalidOperationException(
                 $"Configuração inválida: '{path}:{nameof(Role)}' = '{Role}'. Valores aceitos: {string.Join(", ", Roles.All)}.");
+        }
+
+        // O administrador da plataforma é global (PR-15); os demais papéis atuam sobre uma rede (US-02.5).
+        if (Role == Roles.Administrador)
+        {
+            if (!string.IsNullOrWhiteSpace(NetworkId))
+            {
+                throw new InvalidOperationException(
+                    $"Configuração inválida: '{path}:{nameof(NetworkId)}' deve ficar vazio para o papel '{Roles.Administrador}'.");
+            }
+        }
+        else if (!Guid.TryParse(NetworkId, out _))
+        {
+            throw new InvalidOperationException($"Configuração inválida: '{path}:{nameof(NetworkId)}' = '{NetworkId}' não é um Guid.");
         }
     }
 }

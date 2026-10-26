@@ -32,6 +32,15 @@ public class LoginEndpointTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.Equal(DemoDataSeeder.NetworkId.ToString(), token.GetClaim(AuthClaimTypes.NetworkId).Value);
     }
 
+    [Fact]
+    public async Task Login_AsAdministrador_ReturnsTokenWithoutNetwork()
+    {
+        var token = new JsonWebToken(await TestAuth.LoginAsync(factory.CreateClient(), TestAuth.AdministradorEmail));
+
+        Assert.Equal(Roles.Administrador, token.GetClaim(AuthClaimTypes.Role).Value);
+        Assert.False(token.TryGetClaim(AuthClaimTypes.NetworkId, out _));
+    }
+
     [Theory]
     [InlineData(TestAuth.AnalistaEmail, "senha-errada")]
     [InlineData("ninguem@empresa.com", TestAuth.Password)]
