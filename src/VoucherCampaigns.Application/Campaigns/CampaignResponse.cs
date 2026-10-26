@@ -5,6 +5,7 @@ namespace VoucherCampaigns.Application.Campaigns;
 /// <param name="PerCustomerVoucherLimit">Limite por cliente (RF06c); null = sem limite.</param>
 /// <param name="UndistributedVouchers">Total menos a soma das cotas por alvo; null sem total definido.</param>
 /// <param name="IssuedVouchers">Vouchers emitidos; sempre 0 até a emissão existir (EP-04).</param>
+/// <param name="AudienceType">Público elegível (US-01.5); null enquanto não definido.</param>
 public record CampaignResponse(
     Guid Id,
     Guid NetworkId,
@@ -19,7 +20,8 @@ public record CampaignResponse(
     int? UndistributedVouchers,
     int IssuedVouchers,
     IReadOnlyList<CampaignItemResponse> Items,
-    DateTime CreatedAt);
+    DateTime CreatedAt,
+    string? AudienceType);
 
 public record CampaignItemResponse(
     Guid Id,

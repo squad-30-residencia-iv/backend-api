@@ -66,6 +66,7 @@ Qualquer assistente que iniciar uma sessão de desenvolvimento deve seguir estri
   ```bash
   sh scripts/add-migration.sh NomeDaMigracao
   ```
+- Com a API rodando (`bin/Debug` travado), compile e teste com `--artifacts-path <pasta temporária>`. Para a migração, rode os comandos do script com `--configuration Release`.
 - Para inspecionar o DDL do PostgreSQL sem um banco disponível:
   ```bash
   Database__Provider=Postgres Database__ConnectionString="Host=localhost;Database=x" \

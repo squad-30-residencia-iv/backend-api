@@ -63,6 +63,34 @@ public class CampaignsController(ICampaignService campaignService) : ControllerB
         CancellationToken cancellationToken) =>
         Ok(await campaignService.UpdateQuantitiesAsync(id, request, cancellationToken));
 
+    /// <summary>Define o público elegível da campanha em rascunho (US-01.5).</summary>
+    [HttpPut("{id:guid}/audience")]
+    [ProducesResponseType<CampaignResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<ActionResult<CampaignResponse>> UpdateAudience(
+        Guid id,
+        UpdateCampaignAudienceRequest request,
+        CancellationToken cancellationToken) =>
+        Ok(await campaignService.UpdateAudienceAsync(id, request, cancellationToken));
+
+    /// <summary>Edita nome, descrição e vigência da campanha em rascunho (US-01.7). Datas na hora local da rede.</summary>
+    [HttpPut("{id:guid}")]
+    [ProducesResponseType<CampaignResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<ActionResult<CampaignResponse>> Update(
+        Guid id,
+        UpdateCampaignRequest request,
+        CancellationToken cancellationToken) =>
+        Ok(await campaignService.UpdateAsync(id, request, cancellationToken));
+
     /// <summary>Cadastra a campanha em rascunho (US-01.1). Datas na hora local da rede, sem fuso.</summary>
     [HttpPost]
     [ValidateTenantScope]

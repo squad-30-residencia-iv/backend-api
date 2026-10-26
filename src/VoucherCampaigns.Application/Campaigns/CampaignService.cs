@@ -109,6 +109,39 @@ public class CampaignService(
         return Map(campaign, campaign.Network!);
     }
 
+    public async Task<CampaignResponse> UpdateAudienceAsync(
+        Guid id,
+        UpdateCampaignAudienceRequest request,
+        CancellationToken cancellationToken)
+    {
+        var audienceType = ParseEnum<CampaignAudienceType>(
+            request.AudienceType, nameof(request.AudienceType), CampaignContract.AudienceTypeInvalid);
+        var campaign = await RequireForUpdateAsync(id, cancellationToken);
+
+        campaign.SetAudience(audienceType, timeProvider.GetUtcNow().UtcDateTime);
+        await campaigns.SaveChangesAsync(cancellationToken);
+
+        return Map(campaign, campaign.Network!);
+    }
+
+    public async Task<CampaignResponse> UpdateAsync(Guid id, UpdateCampaignRequest request, CancellationToken cancellationToken)
+    {
+        var campaign = await RequireForUpdateAsync(id, cancellationToken);
+
+        // RN02: as datas digitadas valem no fuso da rede (US-02.6).
+        var timeZone = NetworkTime.Resolve(campaign.Network!.TimeZone);
+
+        campaign.UpdateDetails(
+            request.Name,
+            request.Description,
+            NetworkTime.ToUtc(request.StartsAt!.Value, timeZone, nameof(request.StartsAt)),
+            NetworkTime.ToUtc(request.EndsAt!.Value, timeZone, nameof(request.EndsAt)),
+            timeProvider.GetUtcNow().UtcDateTime);
+        await campaigns.SaveChangesAsync(cancellationToken);
+
+        return Map(campaign, campaign.Network);
+    }
+
     /// <summary>Campanha existente (404), da rede do usuário (403) e em rascunho (422), nessa ordem.</summary>
     private async Task<Campaign> RequireForUpdateAsync(Guid id, CancellationToken cancellationToken)
     {
@@ -234,7 +267,8 @@ public class CampaignService(
             IssuedVouchers: 0,
             campaign.Items.OrderBy(item => item.Id).Select(MapItem).ToList(),
             // O banco devolve o DateTime sem Kind; sem isso o GET sairia sem "Z", diferente do POST.
-            DateTime.SpecifyKind(campaign.CreatedAt, DateTimeKind.Utc));
+            DateTime.SpecifyKind(campaign.CreatedAt, DateTimeKind.Utc),
+            campaign.AudienceType?.ToString());
     }
 
     private static CampaignItemResponse MapItem(CampaignItem item) =>

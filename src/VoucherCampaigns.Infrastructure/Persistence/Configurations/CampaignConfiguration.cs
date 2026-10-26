@@ -23,6 +23,7 @@ public class CampaignConfiguration : IEntityTypeConfiguration<Campaign>
         builder.Property(campaign => campaign.Name).HasMaxLength(150).IsRequired();
         builder.Property(campaign => campaign.Description).HasMaxLength(500);
         builder.Property(campaign => campaign.Status).HasConversion<string>().HasMaxLength(20);
+        builder.Property(campaign => campaign.AudienceType).HasConversion<string>().HasMaxLength(20);
         builder.Property(campaign => campaign.VoucherValidityType).HasConversion<string>().HasMaxLength(20);
 
         builder.HasIndex(campaign => campaign.Status);

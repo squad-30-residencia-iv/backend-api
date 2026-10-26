@@ -29,6 +29,9 @@ public class Campaign
     /// <summary>Limite de vouchers por cliente (RF06c), independente do total; null = sem limite.</summary>
     public int? PerCustomerVoucherLimit { get; set; }
 
+    /// <summary>Público elegível (US-01.5); null enquanto não definido, o que bloqueia a submissão (RN01).</summary>
+    public CampaignAudienceType? AudienceType { get; set; }
+
     public VoucherValidityType? VoucherValidityType { get; set; }
 
     /// <summary>Validade relativa: dias a partir da emissão.</summary>
@@ -61,20 +64,7 @@ public class Campaign
         DateTime endsAtUtc,
         DateTime utcNow)
     {
-        EnsureUtc(startsAtUtc, nameof(startsAtUtc));
-        EnsureUtc(endsAtUtc, nameof(endsAtUtc));
-        EnsureUtc(utcNow, nameof(utcNow));
-
-        // Início igual ao fim também é recusado: o banco exige ends_at > starts_at e a vigência ficaria vazia.
-        if (startsAtUtc >= endsAtUtc)
-        {
-            throw new BusinessRuleException(CampaignErrors.InvalidPeriodCode, CampaignErrors.InvalidPeriodMessage);
-        }
-
-        if (startsAtUtc < TruncateToMinute(utcNow))
-        {
-            throw new BusinessRuleException(CampaignErrors.StartInPastCode, CampaignErrors.StartInPastMessage);
-        }
+        EnsureValidPeriod(startsAtUtc, endsAtUtc, utcNow, checkStart: true, checkEnd: false);
 
         return new Campaign
         {
@@ -87,6 +77,40 @@ public class Campaign
             CreatedAt = utcNow,
             UpdatedAt = utcNow
         };
+    }
+
+    /// <summary>
+    /// Edita nome, descrição e vigência em rascunho (US-01.7). O início no passado só é recusado quando o início
+    /// muda, e o fim no passado só quando o fim muda: um rascunho antigo pode ter só o nome corrigido.
+    /// </summary>
+    /// <exception cref="BusinessRuleException">Campanha fora de rascunho ou período inválido (RN02).</exception>
+    public void UpdateDetails(string name, string? description, DateTime startsAtUtc, DateTime endsAtUtc, DateTime utcNow)
+    {
+        EnsureDraft();
+        EnsureValidPeriod(
+            startsAtUtc, endsAtUtc, utcNow, checkStart: startsAtUtc != StartsAt, checkEnd: endsAtUtc != EndsAt);
+
+        Name = name.Trim();
+        Description = string.IsNullOrWhiteSpace(description) ? null : description.Trim();
+        StartsAt = startsAtUtc;
+        EndsAt = endsAtUtc;
+        UpdatedAt = utcNow;
+    }
+
+    /// <summary>Define o público elegível (US-01.5); o restrito depende dos critérios do EP-06.</summary>
+    /// <exception cref="BusinessRuleException">Campanha fora de rascunho ou público restrito.</exception>
+    public void SetAudience(CampaignAudienceType audienceType, DateTime utcNow)
+    {
+        EnsureDraft();
+
+        if (audienceType == CampaignAudienceType.Restricted)
+        {
+            throw new BusinessRuleException(
+                CampaignErrors.AudienceRestrictedUnavailableCode, CampaignErrors.AudienceRestrictedUnavailableMessage);
+        }
+
+        AudienceType = audienceType;
+        UpdatedAt = utcNow;
     }
 
     /// <summary>Só campanha ativa e dentro da vigência concede voucher (PR-10); rascunho nunca concede.</summary>
@@ -189,6 +213,33 @@ public class Campaign
     // Separador de milhar com ponto, como no backlog ("5.500"), sem depender da cultura do servidor.
     private static string Thousands(long value) =>
         value.ToString("N0", new System.Globalization.NumberFormatInfo { NumberGroupSeparator = "." });
+
+    /// <summary>RN02; o "agora" é comparado na precisão de minuto.</summary>
+    private static void EnsureValidPeriod(
+        DateTime startsAtUtc, DateTime endsAtUtc, DateTime utcNow, bool checkStart, bool checkEnd)
+    {
+        EnsureUtc(startsAtUtc, nameof(startsAtUtc));
+        EnsureUtc(endsAtUtc, nameof(endsAtUtc));
+        EnsureUtc(utcNow, nameof(utcNow));
+
+        // Início igual ao fim também é recusado: o banco exige ends_at > starts_at e a vigência ficaria vazia.
+        if (startsAtUtc >= endsAtUtc)
+        {
+            throw new BusinessRuleException(CampaignErrors.InvalidPeriodCode, CampaignErrors.InvalidPeriodMessage);
+        }
+
+        var now = TruncateToMinute(utcNow);
+
+        if (checkStart && startsAtUtc < now)
+        {
+            throw new BusinessRuleException(CampaignErrors.StartInPastCode, CampaignErrors.StartInPastMessage);
+        }
+
+        if (checkEnd && endsAtUtc < now)
+        {
+            throw new BusinessRuleException(CampaignErrors.EndInPastCode, CampaignErrors.EndInPastMessage);
+        }
+    }
 
     private static DateTime TruncateToMinute(DateTime value) =>
         new(value.Ticks - value.Ticks % TimeSpan.TicksPerMinute, value.Kind);

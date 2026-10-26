@@ -9,6 +9,11 @@ public static class CampaignContract
     public const decimal MaxBenefitValue = 99_999_999.99m;
 
     public const string NetworkRequired = "Informe a rede da campanha.";
+    public const string NameRequired = "Informe o nome da campanha.";
+    public const string NameTooLong = "O nome deve ter no máximo 150 caracteres.";
+    public const string DescriptionTooLong = "A descrição deve ter no máximo 500 caracteres.";
+    public const string StartsAtRequired = "Informe a data e hora de início.";
+    public const string EndsAtRequired = "Informe a data e hora de fim.";
     public const string StatusInvalid =
         "Status inválido. Use Draft, PendingApproval, Scheduled, Active, Paused, Ended, Cancelled ou SoldOut.";
 
@@ -29,6 +34,9 @@ public static class CampaignContract
     public const string TotalVoucherLimitRequired = "Informe a quantidade total de vouchers.";
     public const string TotalVoucherLimitPositive = "A quantidade total de vouchers deve ser maior que zero.";
     public const string PerCustomerVoucherLimitPositive = "O limite de vouchers por cliente deve ser maior que zero.";
+
+    public const string AudienceTypeRequired = "Informe o público da campanha.";
+    public const string AudienceTypeInvalid = "Público inválido. Use AllCustomers ou Restricted.";
 
     public const string CampaignNotFound = "Campanha não encontrada.";
 }

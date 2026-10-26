@@ -11,4 +11,8 @@ public interface ICampaignService
     Task<CampaignResponse> ReplaceItemsAsync(Guid id, ReplaceCampaignItemsRequest request, CancellationToken cancellationToken);
 
     Task<CampaignResponse> UpdateQuantitiesAsync(Guid id, UpdateCampaignQuantitiesRequest request, CancellationToken cancellationToken);
+
+    Task<CampaignResponse> UpdateAudienceAsync(Guid id, UpdateCampaignAudienceRequest request, CancellationToken cancellationToken);
+
+    Task<CampaignResponse> UpdateAsync(Guid id, UpdateCampaignRequest request, CancellationToken cancellationToken);
 }

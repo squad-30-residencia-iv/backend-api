@@ -9,6 +9,9 @@ public static class CampaignErrors
     public const string StartInPastCode = "CAMPAIGN_START_IN_PAST";
     public const string StartInPastMessage = "A data de início não pode ser anterior à data atual";
 
+    public const string EndInPastCode = "CAMPAIGN_END_IN_PAST";
+    public const string EndInPastMessage = "A data de fim não pode ser anterior à data atual";
+
     public const string NetworkUnavailableCode = "NETWORK_UNAVAILABLE";
     public const string NetworkUnavailableMessage = "A rede informada não existe ou está inativa.";
 
@@ -38,4 +41,8 @@ public static class CampaignErrors
     public const string QuotasExceedTotalCode = "CAMPAIGN_ITEM_QUOTAS_EXCEED_TOTAL";
     public const string QuotasExceedTotalMessage =
         "A soma das quantidades por alvo ({0}) ultrapassa a quantidade total da campanha ({1})";
+
+    public const string AudienceRestrictedUnavailableCode = "CAMPAIGN_AUDIENCE_RESTRICTED_UNAVAILABLE";
+    public const string AudienceRestrictedUnavailableMessage =
+        "O público restrito ainda não está disponível: os critérios de elegibilidade serão configurados no EP-06.";
 }
