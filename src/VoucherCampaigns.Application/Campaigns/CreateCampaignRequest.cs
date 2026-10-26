@@ -6,7 +6,7 @@ namespace VoucherCampaigns.Application.Campaigns;
 
 /// <summary>Cadastro de campanha (US-01.1). Datas na hora local da rede, sem fuso.</summary>
 public record CreateCampaignRequest(
-    [Required(ErrorMessage = "Informe a rede da campanha.")]
+    [Required(ErrorMessage = CampaignContract.NetworkRequired)]
     Guid? NetworkId,
     [Required(ErrorMessage = "Informe o nome da campanha.")]
     [StringLength(150, ErrorMessage = "O nome deve ter no máximo 150 caracteres.")]
