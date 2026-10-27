@@ -41,7 +41,7 @@
 - **GH-010 — Setup do projeto:** Solution `VoucherCampaigns.slnx` (.NET 10) em camadas (Api, Application, Domain, Infrastructure), persistência com EF Core selecionada por configuração (SQLite local / PostgreSQL), migração `InitialCreate` nos dois conjuntos aplicada na inicialização, rotas `GET /health` e `GET /api/v1/system/status`, projetos de testes unitários e de integração com `dotnet test` verde.
 - Configuração do ecossistema de SDD (prompts, templates C# e governança).
 - Implementação da trava de integridade via Git Hook pre-push (`dotnet test` e checagem de memória).
-
+- **US-01.12 e GH-23 — Base do Motor de Vouchers:** Criação das entidades `Voucher`, `VoucherEvent`, `AuditEntry`, `CampaignCondition` e `EligibilityCriterion`. Registo das decisões de negócio (D1-D4, D9). Migrações duplas (SQLite e PostgreSQL) geradas e testes validados.
 ---
 
 ## ⚠️ Bloqueios & Decisões Recentes
