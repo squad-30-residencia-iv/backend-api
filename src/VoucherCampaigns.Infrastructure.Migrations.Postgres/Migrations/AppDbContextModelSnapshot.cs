@@ -286,6 +286,180 @@ namespace VoucherCampaigns.Infrastructure.Migrations.Postgres.Migrations
                     b.ToTable("products", (string)null);
                 });
 
+            modelBuilder.Entity("VoucherCampaigns.Domain.Entities.AuditEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("action");
+
+                    b.Property<string>("Changes")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("changes");
+
+                    b.Property<string>("EntityId")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("entity_id");
+
+                    b.Property<string>("EntityName")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("entity_name");
+
+                    b.Property<DateTime>("Timestamp")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("timestamp");
+
+                    b.Property<string>("UserId")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_audit_entries");
+
+                    b.ToTable("AuditEntries");
+                });
+
+            modelBuilder.Entity("VoucherCampaigns.Domain.Entities.CampaignCondition", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("CampaignId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("campaign_id");
+
+                    b.Property<int>("ConditionType")
+                        .HasColumnType("integer")
+                        .HasColumnName("condition_type");
+
+                    b.Property<int>("Operator")
+                        .HasColumnType("integer")
+                        .HasColumnName("operator");
+
+                    b.Property<string>("Value")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("value");
+
+                    b.HasKey("Id")
+                        .HasName("pk_campaign_conditions");
+
+                    b.ToTable("CampaignConditions");
+                });
+
+            modelBuilder.Entity("VoucherCampaigns.Domain.Entities.EligibilityCriterion", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("CampaignId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("campaign_id");
+
+                    b.Property<int>("CriterionType")
+                        .HasColumnType("integer")
+                        .HasColumnName("criterion_type");
+
+                    b.Property<string>("Value")
+                        .IsRequired()
+                        .HasColumnType("text")
+                        .HasColumnName("value");
+
+                    b.HasKey("Id")
+                        .HasName("pk_eligibility_criteria");
+
+                    b.ToTable("EligibilityCriteria");
+                });
+
+            modelBuilder.Entity("VoucherCampaigns.Domain.Entities.Voucher", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("CampaignId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("campaign_id");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("code");
+
+                    b.Property<int>("CurrentUsageCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("current_usage_count");
+
+                    b.Property<DateTime>("ExpirationDate")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expiration_date");
+
+                    b.Property<int>("Status")
+                        .HasColumnType("integer")
+                        .HasColumnName("status");
+
+                    b.Property<int>("UsageLimit")
+                        .HasColumnType("integer")
+                        .HasColumnName("usage_limit");
+
+                    b.HasKey("Id")
+                        .HasName("pk_vouchers");
+
+                    b.HasIndex("Code")
+                        .IsUnique()
+                        .HasDatabaseName("ix_vouchers_code");
+
+                    b.ToTable("Vouchers");
+                });
+
+            modelBuilder.Entity("VoucherCampaigns.Domain.Entities.VoucherEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Details")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("details");
+
+                    b.Property<int>("EventType")
+                        .HasColumnType("integer")
+                        .HasColumnName("event_type");
+
+                    b.Property<DateTime>("Timestamp")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("timestamp");
+
+                    b.Property<Guid>("VoucherId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("voucher_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_voucher_events");
+
+                    b.HasIndex("VoucherId")
+                        .HasDatabaseName("ix_voucher_events_voucher_id");
+
+                    b.ToTable("VoucherEvents");
+                });
+
             modelBuilder.Entity("VoucherCampaigns.Domain.Organization.Channel", b =>
                 {
                     b.Property<Guid>("Id")
@@ -514,6 +688,18 @@ namespace VoucherCampaigns.Infrastructure.Migrations.Postgres.Migrations
                     b.Navigation("Category");
                 });
 
+            modelBuilder.Entity("VoucherCampaigns.Domain.Entities.VoucherEvent", b =>
+                {
+                    b.HasOne("VoucherCampaigns.Domain.Entities.Voucher", "Voucher")
+                        .WithMany("Events")
+                        .HasForeignKey("VoucherId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_voucher_events_vouchers_voucher_id");
+
+                    b.Navigation("Voucher");
+                });
+
             modelBuilder.Entity("VoucherCampaigns.Domain.Organization.Channel", b =>
                 {
                     b.HasOne("VoucherCampaigns.Domain.Organization.Establishment", "Establishment")
@@ -560,6 +746,11 @@ namespace VoucherCampaigns.Infrastructure.Migrations.Postgres.Migrations
             modelBuilder.Entity("VoucherCampaigns.Domain.Catalog.Category", b =>
                 {
                     b.Navigation("Products");
+                });
+
+            modelBuilder.Entity("VoucherCampaigns.Domain.Entities.Voucher", b =>
+                {
+                    b.Navigation("Events");
                 });
 
             modelBuilder.Entity("VoucherCampaigns.Domain.Organization.Establishment", b =>
