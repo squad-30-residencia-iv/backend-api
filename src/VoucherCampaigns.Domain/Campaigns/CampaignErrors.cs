@@ -45,4 +45,31 @@ public static class CampaignErrors
     public const string AudienceRestrictedUnavailableCode = "CAMPAIGN_AUDIENCE_RESTRICTED_UNAVAILABLE";
     public const string AudienceRestrictedUnavailableMessage =
         "O público restrito ainda não está disponível: os critérios de elegibilidade serão configurados no EP-06.";
+
+    public const string VoucherValidUntilBeforeEndCode = "CAMPAIGN_VOUCHER_VALID_UNTIL_BEFORE_END";
+    public const string VoucherValidUntilBeforeEndMessage = "A validade fixa do voucher não pode ser anterior ao fim da campanha";
+
+    public const string VoucherValidityCapBeforeStartCode = "CAMPAIGN_VOUCHER_VALIDITY_CAP_BEFORE_START";
+    public const string VoucherValidityCapBeforeStartMessage = "O teto da validade do voucher deve ser posterior ao início da campanha";
+
+    public const string PurchaseRangeInvalidCode = "CAMPAIGN_PURCHASE_RANGE_INVALID";
+    public const string PurchaseRangeInvalidMessage = "O valor mínimo da compra não pode ser maior que o valor máximo";
+
+    /// <summary>Mensagem exata da US-01.4, cenário 3.</summary>
+    public const string ConditionMinQuantityNotPositiveCode = "CAMPAIGN_CONDITION_MIN_QUANTITY_NOT_POSITIVE";
+    public const string ConditionMinQuantityNotPositiveMessage = "A quantidade mínima de itens deve ser maior que zero";
+
+    public const string ConditionMinAmountNotPositiveCode = "CAMPAIGN_CONDITION_MIN_AMOUNT_NOT_POSITIVE";
+    public const string ConditionMinAmountNotPositiveMessage = "O valor mínimo da compra deve ser maior que zero";
+
+    public const string ConditionTypeUnavailableCode = "CAMPAIGN_CONDITION_TYPE_UNAVAILABLE";
+    public const string ConditionTypeUnavailableMessage = "Este tipo de condição ainda não está disponível.";
+
+    public const string ConditionDuplicatedCode = "CAMPAIGN_CONDITION_DUPLICATED";
+    public const string ConditionDuplicatedMessage = "A mesma condição foi informada mais de uma vez.";
+
+    public const string ConditionCategoryNotFoundCode = "CAMPAIGN_CONDITION_CATEGORY_NOT_FOUND";
+    public const string ConditionCategoryInactiveCode = "CAMPAIGN_CONDITION_CATEGORY_INACTIVE";
+    public const string ConditionProductNotFoundCode = "CAMPAIGN_CONDITION_PRODUCT_NOT_FOUND";
+    public const string ConditionProductInactiveCode = "CAMPAIGN_CONDITION_PRODUCT_INACTIVE";
 }

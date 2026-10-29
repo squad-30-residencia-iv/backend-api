@@ -44,7 +44,10 @@ public class CampaignRepository(AppDbContext context) : ICampaignRepository
 
     public Task SaveChangesAsync(CancellationToken cancellationToken) => context.SaveChangesAsync(cancellationToken);
 
-    // Itens na ordem em que foram informados: os ids (Guid v7) são gerados em sequência.
+    // Itens e condições na ordem em que foram informados: os ids (Guid v7) são gerados em sequência.
+    // Consulta dividida: duas coleções na mesma consulta multiplicariam as linhas.
     private static IQueryable<Campaign> WithItems(IQueryable<Campaign> query) =>
-        query.Include(campaign => campaign.Items.OrderBy(item => item.Id));
+        query.Include(campaign => campaign.Items.OrderBy(item => item.Id))
+            .Include(campaign => campaign.Conditions.OrderBy(condition => condition.Id))
+            .AsSplitQuery();
 }

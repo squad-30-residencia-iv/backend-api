@@ -38,5 +38,40 @@ public static class CampaignContract
     public const string AudienceTypeRequired = "Informe o público da campanha.";
     public const string AudienceTypeInvalid = "Público inválido. Use AllCustomers ou Restricted.";
 
+    public const int MaxValidityDays = 3_650;
+    public const int MaxValidityHours = 87_600;
+
+    public const string ValidityTypeRequired = "Informe o tipo de validade do voucher.";
+    public const string ValidityTypeInvalid = "Tipo de validade inválido. Use Relative ou FixedDate.";
+    public const string ValidityAmountRequired = "Informe o prazo de validade do voucher.";
+    public const string ValidityAmountRange = "O prazo de validade deve ser de 1 a 3.650 dias ou de 1 a 87.600 horas.";
+    public const string ValidityUnitRequired = "Informe a unidade do prazo de validade.";
+    public const string ValidityUnitInvalid = "Unidade inválida. Use Days ou Hours.";
+    public const string ValidUntilRequired = "Informe a data de validade do voucher.";
+    public const string ValidityRelativeWithDate = "A validade relativa não aceita data fixa.";
+    public const string ValidityFixedWithRelative = "A validade por data fixa não aceita prazo, unidade nem teto.";
+
+    public const string PurchaseAmountPositive = "O valor da compra deve ser maior que zero.";
+    public const string PurchaseAmountScale = "O valor da compra deve ter no máximo 2 casas decimais.";
+    public const string PurchaseAmountTooLarge = "O valor da compra deve ser no máximo 99.999.999,99.";
+    public const string MaxUsesRequired = "Informe a quantidade de utilizações por voucher.";
+    public const string MaxUsesRange = "A quantidade de utilizações por voucher deve ser de 1 a 100.";
+
+    public const int MaxConditions = 20;
+
+    public const string ConditionsRequired = "Informe a lista de condições (pode ser vazia).";
+    public const string ConditionsTooMany = "A campanha pode ter no máximo 20 condições.";
+    public const string AllowUseInSamePurchaseRequired = "Informe se o voucher pode ser usado na mesma compra que o gerou.";
+    public const string ConditionTypeRequired = "Informe o tipo da condição.";
+    public const string ConditionTypeInvalid =
+        "Tipo de condição inválido. Use PurchaseTotal, ItemQuantity, Category, Product, CustomerPurchaseCount, ProductCombination ou PurchasePeriod.";
+    public const string ConditionMinAmountRequired = "Informe o valor mínimo da compra.";
+    public const string ConditionMinAmountScale = "O valor mínimo da compra deve ter no máximo 2 casas decimais.";
+    public const string ConditionMinAmountTooLarge = "O valor mínimo da compra deve ser no máximo 99.999.999,99.";
+    public const string ConditionMinQuantityRequired = "Informe a quantidade mínima de itens.";
+    public const string ConditionCategoryRequired = "Informe a categoria da condição.";
+    public const string ConditionProductRequired = "Informe o produto da condição.";
+    public const string ConditionUnexpectedField = "Este campo não se aplica ao tipo de condição informado.";
+
     public const string CampaignNotFound = "Campanha não encontrada.";
 }

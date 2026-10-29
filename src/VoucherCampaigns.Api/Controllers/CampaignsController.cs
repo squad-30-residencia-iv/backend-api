@@ -77,6 +77,48 @@ public class CampaignsController(ICampaignService campaignService) : ControllerB
         CancellationToken cancellationToken) =>
         Ok(await campaignService.UpdateAudienceAsync(id, request, cancellationToken));
 
+    /// <summary>Define a validade do voucher (prazo relativo ou data fixa) da campanha em rascunho (US-01.12).</summary>
+    [HttpPut("{id:guid}/voucher-validity")]
+    [ProducesResponseType<CampaignResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<ActionResult<CampaignResponse>> UpdateVoucherValidity(
+        Guid id,
+        UpdateVoucherValidityRequest request,
+        CancellationToken cancellationToken) =>
+        Ok(await campaignService.UpdateVoucherValidityAsync(id, request, cancellationToken));
+
+    /// <summary>Define as restrições de uso no resgate da campanha em rascunho (US-01.12).</summary>
+    [HttpPut("{id:guid}/usage-restrictions")]
+    [ProducesResponseType<CampaignResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<ActionResult<CampaignResponse>> UpdateUsageRestrictions(
+        Guid id,
+        UpdateUsageRestrictionsRequest request,
+        CancellationToken cancellationToken) =>
+        Ok(await campaignService.UpdateUsageRestrictionsAsync(id, request, cancellationToken));
+
+    /// <summary>Substitui as condições de geração e o uso na mesma compra da campanha em rascunho (US-01.4).</summary>
+    [HttpPut("{id:guid}/conditions")]
+    [ProducesResponseType<CampaignResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<ActionResult<CampaignResponse>> ReplaceConditions(
+        Guid id,
+        ReplaceCampaignConditionsRequest request,
+        CancellationToken cancellationToken) =>
+        Ok(await campaignService.ReplaceConditionsAsync(id, request, cancellationToken));
+
     /// <summary>Edita nome, descrição e vigência da campanha em rascunho (US-01.7). Datas na hora local da rede.</summary>
     [HttpPut("{id:guid}")]
     [ProducesResponseType<CampaignResponse>(StatusCodes.Status200OK)]

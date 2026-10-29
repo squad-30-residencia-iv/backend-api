@@ -25,6 +25,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
     public DbSet<CampaignScope> CampaignScopes => Set<CampaignScope>();
 
+    public DbSet<CampaignCondition> CampaignConditions => Set<CampaignCondition>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);

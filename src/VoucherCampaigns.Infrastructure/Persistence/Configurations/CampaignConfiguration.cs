@@ -15,7 +15,15 @@ public class CampaignConfiguration : IEntityTypeConfiguration<Campaign>
             table.HasCheckConstraint("ck_campaigns_total_voucher_limit", "total_voucher_limit IS NULL OR total_voucher_limit > 0");
             table.HasCheckConstraint(
                 "ck_campaigns_per_customer_voucher_limit", "per_customer_voucher_limit IS NULL OR per_customer_voucher_limit > 0");
-            table.HasCheckConstraint("ck_campaigns_voucher_validity_days", "voucher_validity_days IS NULL OR voucher_validity_days > 0");
+            table.HasCheckConstraint(
+                "ck_campaigns_voucher_validity_amount", "voucher_validity_amount IS NULL OR voucher_validity_amount > 0");
+
+            // O CAST evita a comparação como texto no SQLite, onde decimal é gravado como TEXT.
+            table.HasCheckConstraint(
+                "ck_campaigns_min_purchase_amount", "min_purchase_amount IS NULL OR CAST(min_purchase_amount AS REAL) > 0");
+            table.HasCheckConstraint(
+                "ck_campaigns_max_purchase_amount", "max_purchase_amount IS NULL OR CAST(max_purchase_amount AS REAL) > 0");
+            table.HasCheckConstraint("ck_campaigns_max_uses_per_voucher", "max_uses_per_voucher IS NULL OR max_uses_per_voucher > 0");
         });
 
         builder.HasKey(campaign => campaign.Id);
@@ -25,6 +33,9 @@ public class CampaignConfiguration : IEntityTypeConfiguration<Campaign>
         builder.Property(campaign => campaign.Status).HasConversion<string>().HasMaxLength(20);
         builder.Property(campaign => campaign.AudienceType).HasConversion<string>().HasMaxLength(20);
         builder.Property(campaign => campaign.VoucherValidityType).HasConversion<string>().HasMaxLength(20);
+        builder.Property(campaign => campaign.VoucherValidityUnit).HasConversion<string>().HasMaxLength(10);
+        builder.Property(campaign => campaign.MinPurchaseAmount).HasPrecision(10, 2);
+        builder.Property(campaign => campaign.MaxPurchaseAmount).HasPrecision(10, 2);
 
         builder.HasIndex(campaign => campaign.Status);
 

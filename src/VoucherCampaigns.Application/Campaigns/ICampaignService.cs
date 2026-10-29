@@ -15,4 +15,10 @@ public interface ICampaignService
     Task<CampaignResponse> UpdateAudienceAsync(Guid id, UpdateCampaignAudienceRequest request, CancellationToken cancellationToken);
 
     Task<CampaignResponse> UpdateAsync(Guid id, UpdateCampaignRequest request, CancellationToken cancellationToken);
+
+    Task<CampaignResponse> UpdateVoucherValidityAsync(Guid id, UpdateVoucherValidityRequest request, CancellationToken cancellationToken);
+
+    Task<CampaignResponse> UpdateUsageRestrictionsAsync(Guid id, UpdateUsageRestrictionsRequest request, CancellationToken cancellationToken);
+
+    Task<CampaignResponse> ReplaceConditionsAsync(Guid id, ReplaceCampaignConditionsRequest request, CancellationToken cancellationToken);
 }
