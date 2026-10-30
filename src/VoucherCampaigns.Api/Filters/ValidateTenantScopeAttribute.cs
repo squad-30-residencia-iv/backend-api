@@ -40,6 +40,12 @@ public class ValidateTenantScopeAttribute : ActionFilterAttribute
                 $"na ação '{context.ActionDescriptor.DisplayName}'.");
         }
 
+        // Guid vazio é erro de contrato, não outra rede: o serviço responde 400 (InputValues.RequiredId).
+        if (requestedNetworks.Contains(Guid.Empty))
+        {
+            return;
+        }
+
         if (requestedNetworks.Any(networkId => networkId != currentUser.NetworkId))
         {
             context.Result = ApiProblems.Result(

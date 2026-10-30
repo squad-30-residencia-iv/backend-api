@@ -6,17 +6,17 @@ namespace VoucherCampaigns.Application.Campaigns;
 
 /// <summary>Cadastro de campanha (US-01.1). Datas na hora local da rede, sem fuso.</summary>
 public record CreateCampaignRequest(
-    [Required(ErrorMessage = "Informe a rede da campanha.")]
+    [Required(ErrorMessage = CampaignContract.NetworkRequired)]
     Guid? NetworkId,
-    [Required(ErrorMessage = "Informe o nome da campanha.")]
-    [StringLength(150, ErrorMessage = "O nome deve ter no máximo 150 caracteres.")]
+    [Required(ErrorMessage = CampaignContract.NameRequired)]
+    [StringLength(150, ErrorMessage = CampaignContract.NameTooLong)]
     string Name,
-    [StringLength(500, ErrorMessage = "A descrição deve ter no máximo 500 caracteres.")]
+    [StringLength(500, ErrorMessage = CampaignContract.DescriptionTooLong)]
     string? Description,
-    [Required(ErrorMessage = "Informe a data e hora de início.")]
+    [Required(ErrorMessage = CampaignContract.StartsAtRequired)]
     [LocalDateTime]
     DateTime? StartsAt,
-    [Required(ErrorMessage = "Informe a data e hora de fim.")]
+    [Required(ErrorMessage = CampaignContract.EndsAtRequired)]
     [LocalDateTime]
     DateTime? EndsAt)
     : INetworkScopedRequest

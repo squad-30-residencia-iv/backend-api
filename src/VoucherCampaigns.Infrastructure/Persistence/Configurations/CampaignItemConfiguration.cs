@@ -27,6 +27,10 @@ public class CampaignItemConfiguration : IEntityTypeConfiguration<CampaignItem>
 
         builder.HasKey(item => item.Id);
 
+        // O id vem da aplicação (Guid v7). Sem isso, item novo adicionado à coleção de uma campanha
+        // rastreada seria tomado como existente (UPDATE) por já ter chave (US-01.2, Campaign.ReplaceItems).
+        builder.Property(item => item.Id).ValueGeneratedNever();
+
         builder.Property(item => item.TargetType).HasConversion<string>().HasMaxLength(20);
         builder.Property(item => item.BenefitType).HasConversion<string>().HasMaxLength(20);
         builder.Property(item => item.BenefitValue).HasPrecision(10, 2);
