@@ -4,20 +4,38 @@ using Microsoft.AspNetCore.TestHost;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Npgsql;
 using VoucherCampaigns.IntegrationTests.Authentication;
 
 namespace VoucherCampaigns.IntegrationTests;
 
 public class ApiFactory : WebApplicationFactory<Program>
 {
+    /// <summary>
+    /// Connection string de um PostgreSQL (sem o nome do banco) para rodar a suíte nele, ex.:
+    /// TEST_POSTGRES_CONNECTION="Host=localhost;Port=5432;Username=postgres;Password=postgres".
+    /// Sem a variável, os testes usam SQLite.
+    /// </summary>
+    public const string PostgresVariable = "TEST_POSTGRES_CONNECTION";
+
+    private static readonly string? PostgresServer = Environment.GetEnvironmentVariable(PostgresVariable);
+
     private readonly bool _ownsDatabaseFile;
     private readonly string? _seedDemoData;
     private readonly IReadOnlyDictionary<string, string?> _settings;
 
+    /// <summary>Banco novo e exclusivo desta fábrica: arquivo SQLite temporário ou banco PostgreSQL descartável.</summary>
     public ApiFactory()
-        : this("Sqlite", NewSqliteConnectionString(), ownsDatabaseFile: true, seedDemoData: null, settings: null)
+        : this(
+            DefaultProvider,
+            PostgresServer is null ? NewSqliteConnectionString() : NewPostgresConnectionString(PostgresServer),
+            ownsDatabaseFile: true,
+            seedDemoData: null,
+            settings: null)
     {
     }
+
+    public static string DefaultProvider => PostgresServer is null ? "Sqlite" : "Postgres";
 
     private ApiFactory(
         string provider,
@@ -58,6 +76,23 @@ public class ApiFactory : WebApplicationFactory<Program>
         File.Delete(new SqliteConnectionStringBuilder(connectionString).DataSource);
     }
 
+    private static string NewPostgresConnectionString(string server) =>
+        new NpgsqlConnectionStringBuilder(server) { Database = $"vc_tests_{Guid.NewGuid():N}" }.ConnectionString;
+
+    private static void DropPostgresDatabase(string connectionString)
+    {
+        var builder = new NpgsqlConnectionStringBuilder(connectionString);
+        var database = builder.Database;
+        NpgsqlConnection.ClearAllPools();
+
+        builder.Database = "postgres";
+        using var connection = new NpgsqlConnection(builder.ConnectionString);
+        connection.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = $"DROP DATABASE IF EXISTS \"{database}\" WITH (FORCE)";
+        command.ExecuteNonQuery();
+    }
+
     protected override void ConfigureWebHost(IWebHostBuilder builder)
     {
         var settings = new Dictionary<string, string?>
@@ -92,7 +127,14 @@ public class ApiFactory : WebApplicationFactory<Program>
 
         if (disposing && _ownsDatabaseFile)
         {
-            DeleteSqliteDatabase(ConnectionString);
+            if (Provider == "Postgres")
+            {
+                DropPostgresDatabase(ConnectionString);
+            }
+            else
+            {
+                DeleteSqliteDatabase(ConnectionString);
+            }
         }
     }
 }
