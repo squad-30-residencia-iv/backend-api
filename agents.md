@@ -71,6 +71,7 @@ Qualquer assistente que iniciar uma sessão de desenvolvimento deve seguir estri
   ```bash
   sh scripts/add-migration.sh NomeDaMigracao
   ```
+- Com a API rodando (`bin/Debug` travado), compile e teste com `--artifacts-path <pasta temporária>`. Para a migração, rode os comandos do script com `--configuration Release`.
 - Para inspecionar o DDL do PostgreSQL sem um banco disponível:
   ```bash
   Database__Provider=Postgres Database__ConnectionString="Host=localhost;Database=x" \
@@ -83,7 +84,7 @@ Qualquer assistente que iniciar uma sessão de desenvolvimento deve seguir estri
 
 - PostgreSQL local: `docker compose up -d` (arquivo `docker-compose.yml` na raiz) e as linhas de PostgreSQL do `.env.example` no `.env`.
 - Tabelas, colunas, chaves, FKs e índices ficam em `snake_case` (convenção em `Persistence/SnakeCaseNaming.cs`); os `CHECK`s nas configurações usam esses nomes e precisam funcionar em SQLite e PostgreSQL.
-- Novas entidades: classe no `Domain`, `IEntityTypeConfiguration` em `Infrastructure/Persistence/Configurations` com `ToTable("nome_snake")`, `DbSet` no `AppDbContext` e migração via `scripts/add-migration.sh`. O teste `MigrationsModelTests` falha se a migração for esquecida.
+- Novas entidades: classe no `Domain`, `IEntityTypeConfiguration` em `Infrastructure/Persistence/Configurations` com `ToTable("nome_snake")`, `DbSet` no `AppDbContext` e migração via `scripts/add-migration.sh`. O teste `MigrationsModelTests` falha se a migração for esquecida. Filho com id gerado pela aplicação e adicionado pela coleção de um agregado rastreado (ex.: `Campaign.Items`) precisa de `ValueGeneratedNever()` na chave; sem isso o EF o toma como existente e tenta `UPDATE` (`DbUpdateConcurrencyException`).
 - O seed (`Persistence/Seed/DemoDataSeeder.cs`) só roda com `Database__SeedDemoData=true` (ligado em `appsettings.Development.json`) e quando não há nenhuma rede no banco.
 
 ### [Skill] Autenticação, Papéis e Escopo
@@ -91,7 +92,7 @@ Qualquer assistente que iniciar uma sessão de desenvolvimento deve seguir estri
 - Configuração na seção `Auth` (`Infrastructure/Authentication/AuthOptions.cs`), validada no startup. A chave de desenvolvimento e os usuários provisórios (`Auth:MockUsers`) ficam só em `appsettings.Development.json`; nunca escreva chave ou senha no código.
 - Papéis (`Application/Authentication/Roles.cs`): `analista` e `gestor` pertencem a uma rede; `administrador` é o administrador da plataforma (PR-15), global e sem `escopoId` no token. Em `Auth:MockUsers` o administrador fica sem `NetworkId` e os demais exigem um; o startup recusa o contrário.
 - Rotas protegidas: `[Authorize(Policy = AuthorizationPolicies.ManageCampaigns)]` (analista e gestor), `ApproveCampaigns` (só gestor), `ReadHierarchy` (administrador, analista e gestor) ou `ManageHierarchy` (só administrador). Para restringir a escrita numa controller de leitura, some o `[Authorize]` da ação ao da classe: as policies se combinam.
-- Rotas que operam sobre uma rede: adicione `[ValidateTenantScope]` e receba `Guid networkId` na rota/query ou um request que implemente `INetworkScopedRequest`. Sem rede identificável o filtro falha de propósito. O filtro e o `NetworkScope.Ensure` liberam o administrador.
+- Rotas que operam sobre uma rede: adicione `[ValidateTenantScope]` e receba `Guid networkId` na rota/query ou um request que implemente `INetworkScopedRequest`. Sem rede identificável o filtro falha de propósito. O filtro e o `NetworkScope.Ensure` liberam o administrador. `Guid` vazio passa pelo filtro: o serviço deve validá-lo com `InputValues.RequiredId` (`400`) e chamar `NetworkScope.Ensure`.
 - Para saber quem está chamando, injete `ICurrentUser` (`UserId`, `Role`, `IsPlatformAdmin`, `NetworkId`); não leia claims direto do `HttpContext`. `NetworkId` lança para o administrador: consulte `IsPlatformAdmin` antes.
 - Erros: use `ApiProblems` e `ErrorCodes` (`Api/Errors/ApiProblems.cs`). Erro de contrato → `400 VALIDATION_ERROR` (automático pelo `[ApiController]`); regra de negócio → `422` com `code` próprio; recurso ausente → `ResourceNotFoundException` (`404 NOT_FOUND`); rede descoberta só no serviço (filho cujo pai está em outra rede) → `ScopeForbiddenException` (`403 SCOPE_FORBIDDEN`). O filtro `[ValidateTenantScope]` continua obrigatório quando a rede já está na rota, na query ou no request.
 - Cadastros de hierarquia e catálogo: `DELETE` inativa (`is_active`) e a cascata para os descendentes ocorre na mesma `SaveChanges` (rede → regiões → lojas; categoria → produtos). O canal é atributo da loja (PR-11), sem rota própria: `Establishment.EnableChannels` liga e desliga as linhas de `channels`, reaproveitando a linha do mesmo tipo. Pai inexistente informado no corpo → `422` com `code` e a mensagem do backlog; `404` só para o id da URL ou o pai da query. Violação de índice único vira `BusinessRuleException` em `Persistence/ConstraintSave.cs`. Categoria e produto não têm rede. `bool?` e `Guid?` nos contratos obrigatórios, para que o campo omitido seja `400` e não um valor padrão.

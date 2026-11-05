@@ -99,6 +99,7 @@ public class CreateCampaignEndpointTests : IClassFixture<ApiFactory>
     [InlineData("{ \"networkId\": \"0199e3a0-0000-7000-8000-000000000001\", \"name\": \"Com fuso\", \"startsAt\": \"2026-10-01T08:00:00Z\", \"endsAt\": \"2026-10-31T23:59:00\" }", "StartsAt", "Informe data e hora sem fuso; elas são interpretadas no fuso da rede.")]
     [InlineData("{ \"networkId\": \"0199e3a0-0000-7000-8000-000000000001\", \"name\": \"Com offset\", \"startsAt\": \"2026-10-01T08:00:00\", \"endsAt\": \"2026-10-31T23:59:00-03:00\" }", "EndsAt", "Informe data e hora sem fuso; elas são interpretadas no fuso da rede.")]
     [InlineData("{ \"name\": \"Sem rede\", \"startsAt\": \"2026-10-01T08:00:00\", \"endsAt\": \"2026-10-31T23:59:00\" }", "NetworkId", "Informe a rede da campanha.")]
+    [InlineData("{ \"networkId\": \"00000000-0000-0000-0000-000000000000\", \"name\": \"Rede vazia\", \"startsAt\": \"2026-10-01T08:00:00\", \"endsAt\": \"2026-10-31T23:59:00\" }", "NetworkId", "Informe a rede da campanha.")]
     public async Task Create_WithInvalidContract_ReturnsValidationProblem(string json, string field, string message)
     {
         var response = await Client().PostAsync(Route, new StringContent(json, Encoding.UTF8, "application/json"));

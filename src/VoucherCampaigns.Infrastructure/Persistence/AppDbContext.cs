@@ -24,6 +24,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<CampaignCondition> CampaignConditions => Set<CampaignCondition>();
     public DbSet<EligibilityCriterion> EligibilityCriteria => Set<EligibilityCriterion>();
 
+    public DbSet<CampaignCondition> CampaignConditions => Set<CampaignCondition>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
