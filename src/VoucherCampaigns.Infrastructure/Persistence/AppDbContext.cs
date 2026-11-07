@@ -24,8 +24,6 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<CampaignCondition> CampaignConditions => Set<CampaignCondition>();
     public DbSet<EligibilityCriterion> EligibilityCriteria => Set<EligibilityCriterion>();
 
-    public DbSet<CampaignCondition> CampaignConditions => Set<CampaignCondition>();
-
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         base.OnModelCreating(modelBuilder);
@@ -52,7 +50,6 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
             entity.Property(e => e.Changes).HasColumnType("jsonb");
         });
 
-        modelBuilder.Entity<CampaignCondition>(entity => entity.HasKey(e => e.Id));
         modelBuilder.Entity<EligibilityCriterion>(entity => entity.HasKey(e => e.Id));
 
         modelBuilder.ApplySnakeCaseNames();
