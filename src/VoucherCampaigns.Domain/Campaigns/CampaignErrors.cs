@@ -72,4 +72,28 @@ public static class CampaignErrors
     public const string ConditionCategoryInactiveCode = "CAMPAIGN_CONDITION_CATEGORY_INACTIVE";
     public const string ConditionProductNotFoundCode = "CAMPAIGN_CONDITION_PRODUCT_NOT_FOUND";
     public const string ConditionProductInactiveCode = "CAMPAIGN_CONDITION_PRODUCT_INACTIVE";
+
+    public const string SubmitNotDraftCode = "CAMPAIGN_SUBMIT_NOT_DRAFT";
+    public const string SubmitNotDraftMessage = "Somente um rascunho pode ser submetido para aprovação.";
+
+    public const string SubmitAudienceRequiredCode = "CAMPAIGN_SUBMIT_AUDIENCE_REQUIRED";
+    public const string SubmitAudienceRequiredMessage = "Defina o público antes de submeter a campanha.";
+
+    public const string SubmitItemsRequiredCode = "CAMPAIGN_SUBMIT_ITEMS_REQUIRED";
+    public const string SubmitItemsRequiredMessage = "Informe ao menos um alvo antes de submeter a campanha.";
+
+    public const string SubmitTotalRequiredCode = "CAMPAIGN_SUBMIT_TOTAL_REQUIRED";
+    public const string SubmitTotalRequiredMessage = "Informe a quantidade total de vouchers antes de submeter a campanha.";
+
+    public const string SubmitValidityRequiredCode = "CAMPAIGN_SUBMIT_VALIDITY_REQUIRED";
+    public const string SubmitValidityRequiredMessage = "Defina a validade do voucher antes de submeter a campanha.";
+
+    public const string SubmitMaxUsesRequiredCode = "CAMPAIGN_SUBMIT_MAX_USES_REQUIRED";
+    public const string SubmitMaxUsesRequiredMessage = "Informe as utilizações por voucher antes de submeter a campanha.";
+
+    public const string DecisionNotPendingCode = "CAMPAIGN_DECISION_NOT_PENDING";
+    public const string DecisionNotPendingMessage = "Somente uma campanha em aprovação pode ser aprovada ou reprovada.";
+
+    public const string ApprovePeriodEndedCode = "CAMPAIGN_APPROVE_PERIOD_ENDED";
+    public const string ApprovePeriodEndedMessage = "A vigência da campanha já terminou.";
 }

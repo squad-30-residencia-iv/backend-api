@@ -19,6 +19,7 @@ public static class AuthenticationSetup
 
         services.AddAuthorizationBuilder()
             .AddPolicy(AuthorizationPolicies.ManageCampaigns, policy => policy.RequireRole(Roles.Analista, Roles.Gestor))
+            .AddPolicy(AuthorizationPolicies.SubmitCampaigns, policy => policy.RequireRole(Roles.Analista))
             .AddPolicy(AuthorizationPolicies.ApproveCampaigns, policy => policy.RequireRole(Roles.Gestor))
             .AddPolicy(AuthorizationPolicies.ReadHierarchy, policy => policy.RequireRole(Roles.Administrador, Roles.Analista, Roles.Gestor))
             .AddPolicy(AuthorizationPolicies.ManageHierarchy, policy => policy.RequireRole(Roles.Administrador));

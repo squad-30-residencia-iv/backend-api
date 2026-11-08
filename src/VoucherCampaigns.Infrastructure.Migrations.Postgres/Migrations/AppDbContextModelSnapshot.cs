@@ -42,6 +42,14 @@ namespace VoucherCampaigns.Infrastructure.Migrations.Postgres.Migrations
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("created_at");
 
+                    b.Property<DateTime?>("DecidedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("decided_at");
+
+                    b.Property<Guid?>("DecidedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("decided_by_user_id");
+
                     b.Property<string>("Description")
                         .HasMaxLength(500)
                         .HasColumnType("character varying(500)")
@@ -79,6 +87,11 @@ namespace VoucherCampaigns.Infrastructure.Migrations.Postgres.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("per_customer_voucher_limit");
 
+                    b.Property<string>("RejectionReason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("rejection_reason");
+
                     b.Property<DateTime>("StartsAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("starts_at");
@@ -88,6 +101,14 @@ namespace VoucherCampaigns.Infrastructure.Migrations.Postgres.Migrations
                         .HasMaxLength(20)
                         .HasColumnType("character varying(20)")
                         .HasColumnName("status");
+
+                    b.Property<DateTime?>("SubmittedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("submitted_at");
+
+                    b.Property<Guid?>("SubmittedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("submitted_by_user_id");
 
                     b.Property<int?>("TotalVoucherLimit")
                         .HasColumnType("integer")
@@ -299,6 +320,50 @@ namespace VoucherCampaigns.Infrastructure.Migrations.Postgres.Migrations
                         {
                             t.HasCheckConstraint("ck_campaign_scopes_single_node", "region_id IS NULL OR establishment_id IS NULL");
                         });
+                });
+
+            modelBuilder.Entity("VoucherCampaigns.Domain.Campaigns.CampaignStatusEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("ActorUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("actor_user_id");
+
+                    b.Property<Guid>("CampaignId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("campaign_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("FromStatus")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("from_status");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("reason");
+
+                    b.Property<string>("ToStatus")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("to_status");
+
+                    b.HasKey("Id")
+                        .HasName("pk_campaign_status_events");
+
+                    b.HasIndex("CampaignId")
+                        .HasDatabaseName("ix_campaign_status_events_campaign_id");
+
+                    b.ToTable("campaign_status_events", (string)null);
                 });
 
             modelBuilder.Entity("VoucherCampaigns.Domain.Catalog.Category", b =>
@@ -518,6 +583,53 @@ namespace VoucherCampaigns.Infrastructure.Migrations.Postgres.Migrations
                         .HasDatabaseName("ix_voucher_events_voucher_id");
 
                     b.ToTable("VoucherEvents");
+                });
+
+            modelBuilder.Entity("VoucherCampaigns.Domain.Identity.User", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasMaxLength(254)
+                        .HasColumnType("character varying(254)")
+                        .HasColumnName("email");
+
+                    b.Property<Guid?>("NetworkId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("network_id");
+
+                    b.Property<string>("PasswordHash")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("password_hash");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("role");
+
+                    b.HasKey("Id")
+                        .HasName("pk_users");
+
+                    b.HasIndex("Email")
+                        .IsUnique()
+                        .HasDatabaseName("ix_users_email");
+
+                    b.ToTable("users", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_users_network", "(role = 'administrador' AND network_id IS NULL) OR (role <> 'administrador' AND network_id IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_users_role", "role IN ('analista', 'gestor', 'administrador')");
+                        });
                 });
 
             modelBuilder.Entity("VoucherCampaigns.Domain.Organization.Channel", b =>
@@ -764,6 +876,18 @@ namespace VoucherCampaigns.Infrastructure.Migrations.Postgres.Migrations
                     b.Navigation("Region");
                 });
 
+            modelBuilder.Entity("VoucherCampaigns.Domain.Campaigns.CampaignStatusEvent", b =>
+                {
+                    b.HasOne("VoucherCampaigns.Domain.Campaigns.Campaign", "Campaign")
+                        .WithMany("StatusEvents")
+                        .HasForeignKey("CampaignId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_campaign_status_events_campaigns_campaign_id");
+
+                    b.Navigation("Campaign");
+                });
+
             modelBuilder.Entity("VoucherCampaigns.Domain.Catalog.Product", b =>
                 {
                     b.HasOne("VoucherCampaigns.Domain.Catalog.Category", "Category")
@@ -831,6 +955,8 @@ namespace VoucherCampaigns.Infrastructure.Migrations.Postgres.Migrations
                     b.Navigation("Items");
 
                     b.Navigation("Scopes");
+
+                    b.Navigation("StatusEvents");
                 });
 
             modelBuilder.Entity("VoucherCampaigns.Domain.Catalog.Category", b =>

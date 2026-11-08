@@ -73,7 +73,6 @@ O cálculo na emissão e a recusa no resgate continuam no EP-04 e no EP-05. A sp
 | D2 | Contador de compras do cliente: enviado pelo satélite ou persistido pela plataforma | Condição "quantidade de compras" (01.4 / 04.1) |
 | D3 | Modelo de concessão provisória (P12) | 04.9, 07.2 — **default adotado em 2026-11-07 (ver 2.5)**, falta o aceite do representante |
 | D4 | Atributos do cliente enviados pelo satélite (só CPF?) | 04.2 e critérios de perfil da EP-06 |
-| D5 | Origem das contas de analista e gestor (importação, projeção local ou SSO) | Projeção local de usuários (02.5) |
 | D6 | Edição de campanha agendada; motivo obrigatório na reprovação | 01.7, 01.11 |
 | D7 | Campanha com loja única inativada | 02.2 |
 | D8 | Formato da exportação | 03.5 |
@@ -84,6 +83,7 @@ O cálculo na emissão e a recusa no resgate continuam no EP-04 e no EP-05. A sp
 | # | Default | Registrado em | Observação |
 |---|---|---|---|
 | D3 | **Concessão em duas fases, como no backlog** (PR-06, PR-17, RF14c, US-04.9): o voucher nasce **provisório** e reserva o saldo da campanha e do alvo. A confirmação da venda o torna **disponível** e consome o saldo. O desfazimento ou a expiração do prazo de reserva o descarta e devolve o saldo. | Decisão do responsável pela issue #27, 2026-11-07 | Substitui o default da spec do #36 (`GH-023-base-motor-e-decisoes.md`), que tratava de chamada síncrona contra fila, e não do voucher provisório. O `VoucherStatus` ganha `Provisional` na spec da #27. Se o representante optar por uma fase só, a mudança fica concentrada no motor (EP-04). |
+| D5 | **Projeção local.** O login confere e-mail e senha na tabela `users` (hash PBKDF2). `Auth:MockUsers` só abastece a tabela quando ela está vazia. | Implementado em 2026-11-08, spec `US-02.5-usuarios-locais.md` | Importação ou SSO, se vierem depois, trocam o `IUserCredentialStore`. |
 | D1, D2, D4, D9 | Os da spec do #36 (`GH-023-base-motor-e-decisoes.md`, seção 2) | PR #36 | Ainda sem aceite do cliente. |
 
 ---

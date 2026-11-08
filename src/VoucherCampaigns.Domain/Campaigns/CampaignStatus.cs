@@ -25,5 +25,8 @@ public enum CampaignStatus
     Cancelled,
 
     /// <summary>Esgotada.</summary>
-    SoldOut
+    SoldOut,
+
+    /// <summary>Reprovada pelo gestor (US-01.11). Não volta a rascunho nesta entrega.</summary>
+    Rejected
 }

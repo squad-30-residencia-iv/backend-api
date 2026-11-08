@@ -42,6 +42,8 @@ public class CampaignRepository(AppDbContext context) : ICampaignRepository
             .Include(campaign => campaign.Network)
             .FirstOrDefaultAsync(campaign => campaign.Id == id, cancellationToken);
 
+    public void AddStatusEvent(CampaignStatusEvent statusEvent) => context.CampaignStatusEvents.Add(statusEvent);
+
     public Task SaveChangesAsync(CancellationToken cancellationToken) => context.SaveChangesAsync(cancellationToken);
 
     // Itens e condições na ordem em que foram informados: os ids (Guid v7) são gerados em sequência.

@@ -15,5 +15,7 @@ public interface ICampaignRepository
     /// <summary>Como <see cref="FindByIdAsync"/>, mas rastreada para alteração e gravação com <see cref="SaveChangesAsync"/>.</summary>
     Task<Campaign?> FindForUpdateAsync(Guid id, CancellationToken cancellationToken);
 
+    void AddStatusEvent(CampaignStatusEvent statusEvent);
+
     Task SaveChangesAsync(CancellationToken cancellationToken);
 }

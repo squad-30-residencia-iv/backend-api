@@ -9,15 +9,15 @@ namespace VoucherCampaigns.Api.Controllers;
 [Route("api/v1/auth")]
 public class AuthController(IAuthService authService) : ControllerBase
 {
-    /// <summary>Login provisório: valida contra Auth:MockUsers até a origem das contas ser definida.</summary>
+    /// <summary>Valida e-mail e senha contra a tabela users.</summary>
     [AllowAnonymous]
     [HttpPost("login")]
     [ProducesResponseType<TokenResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
-    public ActionResult<TokenResponse> Login(LoginRequest request)
+    public async Task<ActionResult<TokenResponse>> Login(LoginRequest request, CancellationToken cancellationToken)
     {
-        var response = authService.Authenticate(request);
+        var response = await authService.AuthenticateAsync(request, cancellationToken);
 
         if (response is null)
         {

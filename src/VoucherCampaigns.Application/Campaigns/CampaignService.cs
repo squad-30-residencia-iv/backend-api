@@ -95,6 +95,33 @@ public class CampaignService(
         return Map(campaign, campaign.Network!);
     }
 
+    public async Task<CampaignResponse> SubmitAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var campaign = await RequireExistingAsync(id, cancellationToken);
+        var statusEvent = campaign.Submit(currentUser.UserId, timeProvider.GetUtcNow().UtcDateTime);
+        campaigns.AddStatusEvent(statusEvent);
+        await campaigns.SaveChangesAsync(cancellationToken);
+        return Map(campaign, campaign.Network!);
+    }
+
+    public async Task<CampaignResponse> ApproveAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var campaign = await RequireExistingAsync(id, cancellationToken);
+        var statusEvent = campaign.Approve(currentUser.UserId, timeProvider.GetUtcNow().UtcDateTime);
+        campaigns.AddStatusEvent(statusEvent);
+        await campaigns.SaveChangesAsync(cancellationToken);
+        return Map(campaign, campaign.Network!);
+    }
+
+    public async Task<CampaignResponse> RejectAsync(Guid id, RejectCampaignRequest? request, CancellationToken cancellationToken)
+    {
+        var campaign = await RequireExistingAsync(id, cancellationToken);
+        var statusEvent = campaign.Reject(currentUser.UserId, request?.Reason, timeProvider.GetUtcNow().UtcDateTime);
+        campaigns.AddStatusEvent(statusEvent);
+        await campaigns.SaveChangesAsync(cancellationToken);
+        return Map(campaign, campaign.Network!);
+    }
+
     public async Task<CampaignResponse> UpdateQuantitiesAsync(
         Guid id,
         UpdateCampaignQuantitiesRequest request,
@@ -397,13 +424,20 @@ public class CampaignService(
         }
     }
 
-    /// <summary>Campanha existente (404), da rede do usuário (403) e em rascunho (422), nessa ordem.</summary>
-    private async Task<Campaign> RequireForUpdateAsync(Guid id, CancellationToken cancellationToken)
+    /// <summary>Campanha existente (404) e da rede do usuário (403).</summary>
+    private async Task<Campaign> RequireExistingAsync(Guid id, CancellationToken cancellationToken)
     {
         var campaign = await campaigns.FindForUpdateAsync(id, cancellationToken)
             ?? throw new ResourceNotFoundException(CampaignContract.CampaignNotFound);
 
         NetworkScope.Ensure(currentUser, campaign.NetworkId);
+        return campaign;
+    }
+
+    /// <summary>Campanha existente (404), da rede do usuário (403) e em rascunho (422), nessa ordem.</summary>
+    private async Task<Campaign> RequireForUpdateAsync(Guid id, CancellationToken cancellationToken)
+    {
+        var campaign = await RequireExistingAsync(id, cancellationToken);
         campaign.EnsureDraft();
 
         return campaign;
@@ -529,7 +563,8 @@ public class CampaignService(
             campaign.MaxPurchaseAmount,
             campaign.MaxUsesPerVoucher,
             campaign.Conditions.OrderBy(condition => condition.Id).Select(MapCondition).ToList(),
-            campaign.AllowUseInSamePurchase);
+            campaign.AllowUseInSamePurchase,
+            campaign.RejectionReason);
     }
 
     private static VoucherValidityResponse? MapValidity(Campaign campaign, TimeZoneInfo timeZone) =>

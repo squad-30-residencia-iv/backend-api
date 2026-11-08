@@ -106,6 +106,7 @@ public class CampaignTests
     [InlineData(CampaignStatus.Ended)]
     [InlineData(CampaignStatus.Cancelled)]
     [InlineData(CampaignStatus.SoldOut)]
+    [InlineData(CampaignStatus.Rejected)]
     public void CanIssueVouchers_NonActiveStatus_IsFalse(CampaignStatus status)
     {
         Assert.False(StartedCampaign(status).CanIssueVouchers(Utc(2026, 10, 10, 12, 0)));

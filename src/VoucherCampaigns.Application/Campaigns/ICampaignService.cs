@@ -21,4 +21,10 @@ public interface ICampaignService
     Task<CampaignResponse> UpdateUsageRestrictionsAsync(Guid id, UpdateUsageRestrictionsRequest request, CancellationToken cancellationToken);
 
     Task<CampaignResponse> ReplaceConditionsAsync(Guid id, ReplaceCampaignConditionsRequest request, CancellationToken cancellationToken);
+
+    Task<CampaignResponse> SubmitAsync(Guid id, CancellationToken cancellationToken);
+
+    Task<CampaignResponse> ApproveAsync(Guid id, CancellationToken cancellationToken);
+
+    Task<CampaignResponse> RejectAsync(Guid id, RejectCampaignRequest? request, CancellationToken cancellationToken);
 }

@@ -15,7 +15,9 @@ public static class CampaignContract
     public const string StartsAtRequired = "Informe a data e hora de início.";
     public const string EndsAtRequired = "Informe a data e hora de fim.";
     public const string StatusInvalid =
-        "Status inválido. Use Draft, PendingApproval, Scheduled, Active, Paused, Ended, Cancelled ou SoldOut.";
+        "Status inválido. Use Draft, PendingApproval, Scheduled, Active, Paused, Ended, Cancelled, SoldOut ou Rejected.";
+
+    public const string RejectionReasonTooLong = "O motivo deve ter no máximo 500 caracteres.";
 
     public const string ItemsRequired = "Informe ao menos um alvo da campanha.";
     public const string ItemsTooMany = "A campanha pode ter no máximo 100 alvos.";
