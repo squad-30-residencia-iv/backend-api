@@ -3,6 +3,7 @@ using VoucherCampaigns.Domain.Campaigns;
 using VoucherCampaigns.Domain.Catalog;
 using VoucherCampaigns.Domain.Organization;
 using VoucherCampaigns.Domain.Entities;
+using CampaignCondition = VoucherCampaigns.Domain.Campaigns.CampaignCondition;
 
 namespace VoucherCampaigns.Infrastructure.Persistence;
 
