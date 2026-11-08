@@ -30,15 +30,33 @@ public class LoginEndpointTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.True(Guid.TryParse(token.Subject, out _));
         Assert.Equal(role, token.GetClaim(AuthClaimTypes.Role).Value);
         Assert.Equal(DemoDataSeeder.NetworkId.ToString(), token.GetClaim(AuthClaimTypes.NetworkId).Value);
+
+        Assert.NotNull(body.Profile);
+        Assert.True(body.Profile.UserId != Guid.Empty);
+        Assert.Equal(email, body.Profile.Email);
+        Assert.Equal(role, body.Profile.Role);
+        Assert.Equal(DemoDataSeeder.NetworkId, body.Profile.NetworkId);
     }
 
     [Fact]
     public async Task Login_AsAdministrador_ReturnsTokenWithoutNetwork()
     {
-        var token = new JsonWebToken(await TestAuth.LoginAsync(factory.CreateClient(), TestAuth.AdministradorEmail));
+        var client = factory.CreateClient();
+        var response = await client.PostAsJsonAsync("/api/v1/auth/login", new LoginRequest(TestAuth.AdministradorEmail, TestAuth.Password));
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+
+        var body = await response.Content.ReadFromJsonAsync<TokenResponse>();
+        Assert.NotNull(body);
+
+        var token = new JsonWebToken(body.Token);
 
         Assert.Equal(Roles.Administrador, token.GetClaim(AuthClaimTypes.Role).Value);
         Assert.False(token.TryGetClaim(AuthClaimTypes.NetworkId, out _));
+
+        Assert.NotNull(body.Profile);
+        Assert.Equal(Roles.Administrador, body.Profile.Role);
+        Assert.Null(body.Profile.NetworkId);
     }
 
     [Theory]
