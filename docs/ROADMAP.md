@@ -1,6 +1,6 @@
 # 🗺️ Roadmap do Backend — VoucherCampaigns
 
-> Data: 2026-10-20 (estado atualizado em 2026-10-26)
+> Data: 2026-10-20 (estado atualizado em 2026-11-08, a partir de `docs/PROJECT_STATE.md`)
 > Autor: Iago V. R.
 > Base: backlog oficial em `D:\residenciaIV\docs` (EP-01 a EP-07) e estado atual do repositório (`docs/PROJECT_STATE.md`)
 
@@ -16,8 +16,9 @@ Objetivo: chegar o quanto antes a uma **base útil** (campanha configurada, apro
 | GH-008 Banco de dados | ✅ Mesclado | Hierarquia, catálogo e campanhas; `CHECK`s; seed de demonstração |
 | US-02.5 Escopo de atuação | ✅ Mesclado (#16) | Login provisório, papéis `analista`/`gestor`, TenantGuard, erros `ProblemDetails` com `code` |
 | US-01.1 Cadastrar campanha | ✅ Mesclado (#17) | `POST /api/v1/campaigns` em rascunho, RN02 no fuso da rede, `Network.TimeZone` |
-| US-02.1 / 02.2 / 02.4 Hierarquia e catálogo | ✅ Mesclado (#22) | CRUD de rede, região, loja, categoria e produto; inativação em cascata; canais da loja |
-| EP-01 Trilha A (configuração da campanha) | 🔄 Em andamento | Branch do épico `feat/EP-01-configuracao-campanha`; uma US por PR |
+| US-02.1 / 02.2 / 02.4 Hierarquia e catálogo | ✅ Mesclado (#22, revisão TS#9) | CRUD de rede, região, loja, categoria e produto; inativação em cascata; canais da loja; papel `administrador` |
+| EP-01 Trilha A (configuração da campanha em rascunho) | ✅ Mesclado (#30) | 01.9, 01.2, 01.3, 01.4, 01.5 ("todos"), 01.12, 01.7 (só rascunho). Público restrito segue no EP-06 |
+| GH-023 Modelo único de condições | ✅ Mesclado | Fica `Domain.Campaigns.CampaignCondition` (`campaign_conditions`). Sai o modelo do #36. Migração `RemoveMotorCampaignConditions` |
 
 ---
 
@@ -27,14 +28,14 @@ Objetivo: chegar o quanto antes a uma **base útil** (campanha configurada, apro
 
 ```mermaid
 flowchart LR
-    U011["01.1 Cadastro ✅"] --> U012["01.2 Alvos e benefícios"]
-    U024["02.4 Catálogo"] -.alvos produto/categoria.-> U012
-    U012 --> U013["01.3 Quantidades e cotas"]
-    U011 --> U014["01.4 Condições de geração"]
-    U011 --> U015["01.5 Público elegível"]
+    U011["01.1 Cadastro ✅"] --> U012["01.2 Alvos e benefícios ✅"]
+    U024["02.4 Catálogo ✅"] -.alvos produto/categoria.-> U012
+    U012 --> U013["01.3 Quantidades e cotas ✅"]
+    U011 --> U014["01.4 Condições de geração ✅"]
+    U011 --> U015["01.5 Público todos ✅"]
     EP06["06.1–06.4 Critérios"] -.público restrito.-> U015
-    U021["02.1 Hierarquia"] --> U022["02.2 Inativação"] --> U023["02.3 Escopo e canais"]
-    U0112["01.12 Validade e restrições*"]
+    U021["02.1 Hierarquia ✅"] --> U022["02.2 Inativação ✅"] --> U023["02.3 Escopo e canais"]
+    U0112["01.12 Validade e restrições ✅"]
     U013 & U014 & U015 & U023 & U0112 --> U016["01.6 Submeter"]
     U016 --> U0111["01.11 Aprovar"]
     AUD["Auditoria"] --> U0111
@@ -44,7 +45,7 @@ flowchart LR
     EP05 --> EP03["EP-03 Acompanhamento"]
 ```
 
-\* A US-01.12 ainda não existe no backlog (ver seção 2.3).
+\* A US-01.12 foi implementada no EP-01 (ver seção 2.3). O público restrito da 01.5 continua no EP-06.
 
 ### 2.2 Peças transversais (construir uma vez, cedo)
 
@@ -55,14 +56,14 @@ flowchart LR
 | **Status efetivo** (agendada → ativa → encerrada pelas datas, PR-04) | 01.9, 01.11, EP-04 | Proposta: calcular o status na leitura, sem job agendado |
 | **Projeção local de usuários** | 01.6 e 01.11 (quem submeteu e quem aprovou) | Depende do cliente; até lá, gravar o `UserId` do token |
 
-### 2.3 Lacuna no backlog (bloqueia EP-04 e EP-05)
+### 2.3 Validade e restrições do voucher (US-01.12)
 
-Nenhuma US configura:
+A lacuna que bloqueava a 04.3, a 05.2, a 05.3 e a 05.4 foi fechada no EP-01. A US-01.12 grava, em rascunho:
 
-- a **regra de validade do voucher** (prazo relativo ou data fixa, com teto, RF18a), usada pela 04.3 e pela 05.3;
-- as **restrições de uso** (valor mínimo e máximo da compra, limite de utilizações por voucher), usadas pela 05.2 e pela 05.4.
+- a **regra de validade do voucher** (prazo relativo ou data fixa, com teto);
+- as **restrições de uso** (valor mínimo e máximo da compra, limite de utilizações por voucher).
 
-**Proposta ao PO:** criar a **US-01.12 "Configurar validade e restrições de uso do voucher"** no EP-01.
+O cálculo na emissão e a recusa no resgate continuam no EP-04 e no EP-05. A spec está em `docs/specs/completed/US-01.12-configurar-validade-e-restricoes-do-voucher.md`.
 
 ### 2.4 Decisões em aberto com o cliente
 
@@ -96,20 +97,20 @@ Nenhuma US configura:
 3. **Reduzir conflitos entre branches paralelas:**
    - cada módulo registra seus serviços em um método próprio (`AddCampaignsModule()`, `AddVouchersModule()`...), para que `Program.cs` e `DependencyInjection.cs` não entrem em conflito a cada PR;
    - migrações: uma por PR; quem rebasear depois de outra migração entrar regenera a sua com `sh scripts/add-migration.sh`.
-4. Levar a lista de decisões (2.4) e a proposta da US-01.12 ao cliente e ao PO.
+4. Levar a lista de decisões (2.4) ao cliente. A US-01.12 já foi implementada; o aceite do PO sobre o texto do backlog continua em aberto.
 
 ### Onda 1 — Configuração completa (4 trilhas em paralelo)
 
 | Trilha | Responsável | Sequência |
 |---|---|---|
-| **A — Configuração da campanha (EP-01)** | Pessoa 1 | 01.9 consulta → 01.2 alvos → 01.3 quantidades → 01.4 condições → 01.5 público ("todos") → 01.12 validade e restrições → 01.7 (edição em rascunho) |
+| **A — Configuração da campanha (EP-01)** | Pessoa 1 | ✅ na `main` (#30): 01.9 → 01.2 → 01.3 → 01.4 → 01.5 ("todos") → 01.12 → 01.7 (só rascunho). Fora desta onda: submeter, aprovar, duplicar, pausar e editar após o vigor |
 | **B — Cadastros de apoio (EP-02)** | Pessoa 2 | 02.4 catálogo → 02.1 hierarquia → 02.2 inativação → 02.3 escopo e canais → 02.6 herança de fuso e moeda |
 | **C — Governança e integrações** | Pessoa 3 | Auditoria → status efetivo → 07.5 auth satélite e padrão de erros da EP-07 |
 | **D — Elegibilidade (EP-06, configuração)** | Pessoa 4 | 06.1 perfil → 06.2 histórico → 06.3 combinação → 06.4 grupos e clientes específicos |
 
 **Pontos de contato:**
 
-- A trilha A usa alvo `TODOS` até a trilha B entregar a 02.4. Depois habilita alvos de categoria e produto.
+- A trilha A já grava alvo de categoria e produto (US-02.4 na `main`). Público restrito continua esperando a trilha D.
 - A 01.5 com público restrito se liga aos critérios da trilha D quando estiverem prontos.
 
 ### Onda 2 — Ciclo de vida e motor (🎯 Marco 1: base útil)
@@ -143,13 +144,13 @@ Nenhuma US configura:
 
 | Prioridade | US |
 |---|---|
-| **P0 — Fundações** | Mesclar 02.5 e 01.1 · contratos compartilhados · auditoria · status efetivo · 07.5 |
-| **P1 — Configuração** | 01.9, 01.2, 01.3, 01.4, 01.5, 01.12\*, 02.4, 02.1, 02.2, 02.3, 06.1, 06.2, 06.3, 06.4 |
+| **P0 — Fundações** | 02.5 e 01.1 já mescladas · contratos compartilhados (entidades do #36, ainda fora do padrão) · auditoria · status efetivo · 07.5 |
+| **P1 — Configuração** | 01.9 ✅, 01.2 ✅, 01.3 ✅, 01.4 ✅, 01.5 ✅ (só "todos"), 01.12 ✅, 02.4 ✅, 02.1 ✅, 02.2 ✅, 02.3, 06.1, 06.2, 06.3, 06.4 |
 | **P2 — Base útil** | 01.6, 01.11, 04.1 a 04.9, 06.5, 07.2, 07.4, 01.10, 01.8 (pausar e encerrar) |
 | **P3 — Resgate** | 05.1 a 05.6, 07.3, 07.1, 01.7 (após vigor), 01.8 (cancelar) |
 | **P4 — Gestão** | 03.1 a 03.5, 02.6 completa, 06.6 |
 
-\* US a ser criada no backlog.
+A US-01.12 já está implementada. O que resta sem ✅ continua pendente.
 
 ---
 
@@ -178,8 +179,9 @@ Ciclo SDD já usado nas US-02.5 e US-01.1 (`docs/prompts/` e `agents.md`):
 
 - [x] Revisar e mesclar os PRs da US-02.5 e da US-01.1
 - [x] Mesclar hierarquia e catálogo (US-02.1, 02.2, 02.4)
-- [ ] Trilha A em `feat/EP-01-configuracao-campanha`: 01.9 → 01.2 + 01.3 → 01.5 + 01.7 → 01.12 + 01.4
-- [ ] Definir os responsáveis pelas trilhas A, B, C e D
-- [ ] Escrever e aprovar a spec de contratos compartilhados (onda 0)
-- [ ] Levar ao cliente as decisões D1 a D9 e ao PO a proposta da US-01.12
-- [ ] Iniciar a onda 1
+- [x] Trilha A na `main` (#30): 01.9, 01.2, 01.3, 01.4, 01.5 ("todos"), 01.7 (rascunho) e 01.12
+- [x] Reconciliar o modelo de condições (GH-023): fica o da US-01.4
+- [ ] Issue #26 antes da #27: US-01.6, US-01.11, status efetivo, auditoria e US-07.5
+- [ ] Issue #27: motor de concessão e resgate, em specs próprias para `Voucher` e `VoucherEvent`
+- [ ] Levar ao representante os defaults D1, D2, D3, D4 e D9 (D3 já tem default de duas fases; falta o aceite)
+- [ ] US-02.3 escopo por região, loja e canal; US-02.6 herança de fuso e moeda; EP-06 público restrito
