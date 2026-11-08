@@ -7,7 +7,8 @@
 ## 📌 Contexto Geral
 
 - **Sprint:** Sprint 1
-- **Foco:** EP-01 Trilha A concluída e na `main` (#30). Agora: conserto da `main` (GH-023: modelo de condições duplicado pelo #36 + #30) e, em seguida, a issue #27 (motor de concessão e resgate). A #27 depende da issue #26 (governança: US-01.6, US-01.11, status efetivo, auditoria e US-07.5).
+- **Foco:** EP-01 Trilha A e o conserto GH-023 estão na `main`. Próximo: issue #26 (US-01.6, US-01.11, status efetivo, auditoria e US-07.5) e, depois, a issue #27 (motor de concessão e resgate). A #27 depende da #26.
+- **Leitura da memória (2026-11-08):** o `docs/ROADMAP.md` foi alinhado a este arquivo. A spec `GH-023-base-motor-e-decisoes.md` continua em `completed/`, mas o corpo ainda diz Draft e descreve a `CampaignCondition` removida; vale a nota do topo e a spec `GH-023-reconciliar-condicoes-e-corrigir-main.md`. O modelo de condições em vigor é o da US-01.4.
 
 ---
 
