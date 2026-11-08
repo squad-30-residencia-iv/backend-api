@@ -99,6 +99,13 @@ Qualquer assistente que iniciar uma sessão de desenvolvimento deve seguir estri
 - Cadastros de hierarquia e catálogo: `DELETE` inativa (`is_active`) e a cascata para os descendentes ocorre na mesma `SaveChanges` (rede → regiões → lojas; categoria → produtos). O canal é atributo da loja (PR-11), sem rota própria: `Establishment.EnableChannels` liga e desliga as linhas de `channels`, reaproveitando a linha do mesmo tipo. Pai inexistente informado no corpo → `422` com `code` e a mensagem do backlog; `404` só para o id da URL ou o pai da query. Violação de índice único vira `BusinessRuleException` em `Persistence/ConstraintSave.cs`. Categoria e produto não têm rede. `bool?` e `Guid?` nos contratos obrigatórios, para que o campo omitido seja `400` e não um valor padrão.
 - Testes: `tests/VoucherCampaigns.IntegrationTests/Authentication/TestAuth.cs` faz login (`LoginAsync`) ou monta tokens com papel, rede e validade variáveis (`CreateToken`; com `Roles.Administrador` e sem rede, o token sai sem `escopoId`).
 
+### [Skill] CORS do portal
+
+- O portal e a API ficam em origens diferentes. A allowlist é `Cors:AllowedOrigins` (`Api/Cors/PortalCorsOptions.cs`), validada no startup. Em Development: `http://localhost:5173`. Em produção: `Cors__AllowedOrigins__0`, `Cors__AllowedOrigins__1`, etc.
+- Origem válida é `http` ou `https` absoluta, sem caminho, consulta, fragmento ou barra final. Entrada inválida sobe com `Configuração inválida`. Lista vazia não registra a policy.
+- `UseCors` fica antes de `UseAuthentication`. Métodos `GET`, `POST`, `PUT` e `DELETE`. Cabeçalhos `Authorization` e `Content-Type`. Não usar `AllowCredentials`: o JWT vai no cabeçalho, não em cookie.
+- A lista é da origem do portal, não do usuário. O navegador em `http://127.0.0.1:5173` não é a mesma origem de `http://localhost:5173`.
+
 ### [Skill] Regras de Negócio, Datas e Fuso
 
 - Regra de negócio violada: lance `BusinessRuleException(code, mensagem)` (Domain/Common) com código e mensagem exata do backlog; o `ApiExceptionHandler` responde `422`. Erro de contrato que só o serviço detecta: `RequestValidationException(campo, mensagem)` → `400 VALIDATION_ERROR`.

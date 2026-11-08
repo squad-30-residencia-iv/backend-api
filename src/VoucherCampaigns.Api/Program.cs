@@ -1,5 +1,7 @@
 using DotNetEnv;
+using Microsoft.Net.Http.Headers;
 using VoucherCampaigns.Api.Authentication;
+using VoucherCampaigns.Api.Cors;
 using VoucherCampaigns.Api.Errors;
 using VoucherCampaigns.Application.Campaigns;
 using VoucherCampaigns.Application.Catalog;
@@ -29,14 +31,18 @@ builder.Services.AddScoped<IRegionService, RegionService>();
 builder.Services.AddScoped<IEstablishmentService, EstablishmentService>();
 builder.Services.AddInfrastructure();
 builder.Services.AddApiAuthentication();
+builder.Services.AddCors();
+builder.Services.AddSingleton(provider =>
+    PortalCorsOptions.FromConfiguration(provider.GetRequiredService<IConfiguration>()));
 
 builder.Services.AddHealthChecks()
     .AddDbContextCheck<AppDbContext>();
 
 var app = builder.Build();
 
-// Falha na inicialização se a seção Auth estiver inválida, em vez de na primeira requisição.
+// Falha na inicialização se Auth ou Cors estiverem inválidos, em vez de na primeira requisição.
 app.Services.GetRequiredService<AuthOptions>();
+var portalCors = app.Services.GetRequiredService<PortalCorsOptions>();
 
 await app.Services.MigrateDatabaseAsync();
 
@@ -49,6 +55,14 @@ if (app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+
+if (portalCors.AllowedOrigins.Count > 0)
+{
+    app.UseCors(policy => policy
+        .WithOrigins([.. portalCors.AllowedOrigins])
+        .WithHeaders(HeaderNames.Authorization, HeaderNames.ContentType)
+        .WithMethods(HttpMethods.Get, HttpMethods.Post, HttpMethods.Put, HttpMethods.Delete));
+}
 
 app.UseAuthentication();
 app.UseAuthorization();
