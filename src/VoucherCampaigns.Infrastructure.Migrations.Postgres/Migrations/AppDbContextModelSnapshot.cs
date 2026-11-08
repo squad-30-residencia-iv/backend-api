@@ -418,36 +418,6 @@ namespace VoucherCampaigns.Infrastructure.Migrations.Postgres.Migrations
                     b.ToTable("AuditEntries");
                 });
 
-            modelBuilder.Entity("VoucherCampaigns.Domain.Entities.CampaignCondition", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<Guid>("CampaignId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("campaign_id");
-
-                    b.Property<int>("ConditionType")
-                        .HasColumnType("integer")
-                        .HasColumnName("condition_type");
-
-                    b.Property<int>("Operator")
-                        .HasColumnType("integer")
-                        .HasColumnName("operator");
-
-                    b.Property<string>("Value")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("value");
-
-                    b.HasKey("Id")
-                        .HasName("pk_campaign_conditions");
-
-                    b.ToTable("CampaignConditions");
-                });
-
             modelBuilder.Entity("VoucherCampaigns.Domain.Entities.EligibilityCriterion", b =>
                 {
                     b.Property<Guid>("Id")

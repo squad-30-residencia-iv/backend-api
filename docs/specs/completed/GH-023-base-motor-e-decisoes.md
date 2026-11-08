@@ -1,5 +1,9 @@
 # Especificação Técnica: US-01.12 e Base Persistente do Motor de Vouchers
 
+> **Nota (2026-11-07, `GH-023-reconciliar-condicoes-e-corrigir-main.md`):** antes se chamava `US-01.12-base-motor-e-decisoes.md`. Foi renomeada porque o id US-01.12 é da spec `US-01.12-configurar-validade-e-restricoes-do-voucher.md`; o card de origem é a issue #23. O conteúdo abaixo não foi alterado, mas duas partes foram substituídas:
+> - **`CampaignCondition` (seção 3, item 4):** foi removida em favor do modelo tipado da US-01.4 (`Domain.Campaigns.CampaignCondition`, tabela `campaign_conditions`).
+> - **D3 (seção 2):** a pergunta do backlog (P12) é se o voucher nasce **provisório** até a confirmação da venda (RF14c, US-04.9), e não se a chamada é síncrona. O default adotado agora é o das duas fases do backlog (`docs/ROADMAP.md`, seção 2.5).
+
 **Status:** Draft / In-Progress  
 **Épico:** 01 (Campanhas) e Base do Motor (EP-04/05)  
 **Autor (IA):** Gemini  
