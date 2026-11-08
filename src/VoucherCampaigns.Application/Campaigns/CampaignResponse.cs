@@ -12,6 +12,7 @@ namespace VoucherCampaigns.Application.Campaigns;
 /// <param name="MaxUsesPerVoucher">Utilizações por voucher (US-01.12); null enquanto não definida.</param>
 /// <param name="Conditions">Condições de geração (US-01.4), na ordem informada.</param>
 /// <param name="AllowUseInSamePurchase">Uso na mesma compra que gerou o voucher (US-01.4); falso por padrão.</param>
+/// <param name="RejectionReason">Motivo da reprovação (US-01.11); nulo quando a campanha não foi reprovada.</param>
 public record CampaignResponse(
     Guid Id,
     Guid NetworkId,
@@ -33,7 +34,8 @@ public record CampaignResponse(
     decimal? MaxPurchaseAmount,
     int? MaxUsesPerVoucher,
     IReadOnlyList<CampaignConditionResponse> Conditions,
-    bool AllowUseInSamePurchase);
+    bool AllowUseInSamePurchase,
+    string? RejectionReason);
 
 public record CampaignItemResponse(
     Guid Id,

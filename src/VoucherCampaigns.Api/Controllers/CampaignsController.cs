@@ -133,6 +133,43 @@ public class CampaignsController(ICampaignService campaignService) : ControllerB
         CancellationToken cancellationToken) =>
         Ok(await campaignService.UpdateAsync(id, request, cancellationToken));
 
+    /// <summary>Submete o rascunho para aprovação (US-01.6). Somente o analista.</summary>
+    [HttpPost("{id:guid}/submit")]
+    [Authorize(Policy = AuthorizationPolicies.SubmitCampaigns)]
+    [ProducesResponseType<CampaignResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<ActionResult<CampaignResponse>> Submit(Guid id, CancellationToken cancellationToken) =>
+        Ok(await campaignService.SubmitAsync(id, cancellationToken));
+
+    /// <summary>Aprova a campanha em análise (US-01.11). Somente o gestor.</summary>
+    [HttpPost("{id:guid}/approve")]
+    [Authorize(Policy = AuthorizationPolicies.ApproveCampaigns)]
+    [ProducesResponseType<CampaignResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<ActionResult<CampaignResponse>> Approve(Guid id, CancellationToken cancellationToken) =>
+        Ok(await campaignService.ApproveAsync(id, cancellationToken));
+
+    /// <summary>Reprova a campanha em análise (US-01.11). Motivo opcional. Somente o gestor.</summary>
+    [HttpPost("{id:guid}/reject")]
+    [Authorize(Policy = AuthorizationPolicies.ApproveCampaigns)]
+    [ProducesResponseType<CampaignResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<ActionResult<CampaignResponse>> Reject(
+        Guid id,
+        RejectCampaignRequest? request,
+        CancellationToken cancellationToken) =>
+        Ok(await campaignService.RejectAsync(id, request, cancellationToken));
+
     /// <summary>Cadastra a campanha em rascunho (US-01.1). Datas na hora local da rede, sem fuso.</summary>
     [HttpPost]
     [ValidateTenantScope]

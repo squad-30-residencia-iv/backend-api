@@ -19,6 +19,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<Campaign> Campaigns => Set<Campaign>();
     public DbSet<CampaignItem> CampaignItems => Set<CampaignItem>();
     public DbSet<CampaignScope> CampaignScopes => Set<CampaignScope>();
+    public DbSet<CampaignStatusEvent> CampaignStatusEvents => Set<CampaignStatusEvent>();
     
     public DbSet<Voucher> Vouchers => Set<Voucher>();
     public DbSet<VoucherEvent> VoucherEvents => Set<VoucherEvent>();

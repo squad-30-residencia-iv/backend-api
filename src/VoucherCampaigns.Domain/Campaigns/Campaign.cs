@@ -23,6 +23,21 @@ public class Campaign
 
     public CampaignStatus Status { get; set; } = CampaignStatus.Draft;
 
+    /// <summary>Analista que submeteu o rascunho (US-01.6); nulo enquanto estiver em rascunho.</summary>
+    public Guid? SubmittedByUserId { get; set; }
+
+    /// <summary>Instante UTC da submissão.</summary>
+    public DateTime? SubmittedAt { get; set; }
+
+    /// <summary>Gestor que aprovou ou reprovou (US-01.11).</summary>
+    public Guid? DecidedByUserId { get; set; }
+
+    /// <summary>Instante UTC da aprovação ou reprovação.</summary>
+    public DateTime? DecidedAt { get; set; }
+
+    /// <summary>Motivo da reprovação; nulo quando não houve reprovação ou o gestor não informou motivo.</summary>
+    public string? RejectionReason { get; set; }
+
     /// <summary>Quantidade total de vouchers da campanha (RF06).</summary>
     public int? TotalVoucherLimit { get; set; }
 
@@ -67,6 +82,8 @@ public class Campaign
     public ICollection<CampaignScope> Scopes { get; set; } = [];
 
     public ICollection<CampaignCondition> Conditions { get; set; } = [];
+
+    public ICollection<CampaignStatusEvent> StatusEvents { get; set; } = [];
 
     /// <summary>
     /// Cria a campanha em rascunho (PR-01) aplicando a RN02. Datas em UTC; o "agora" é comparado
@@ -245,6 +262,110 @@ public class Campaign
         VoucherValidityUnit = null;
         VoucherValidityCap = null;
         UpdatedAt = utcNow;
+    }
+
+    /// <summary>
+    /// Envia o rascunho para aprovação (US-01.6). Exige público, alvo, quantidade total, validade e utilizações.
+    /// </summary>
+    /// <exception cref="BusinessRuleException">Fora de rascunho ou configuração incompleta.</exception>
+    public CampaignStatusEvent Submit(Guid actorUserId, DateTime utcNow)
+    {
+        EnsureUtc(utcNow, nameof(utcNow));
+
+        if (Status != CampaignStatus.Draft)
+        {
+            throw new BusinessRuleException(CampaignErrors.SubmitNotDraftCode, CampaignErrors.SubmitNotDraftMessage);
+        }
+
+        if (AudienceType is null)
+        {
+            throw new BusinessRuleException(CampaignErrors.SubmitAudienceRequiredCode, CampaignErrors.SubmitAudienceRequiredMessage);
+        }
+
+        if (Items.Count == 0)
+        {
+            throw new BusinessRuleException(CampaignErrors.SubmitItemsRequiredCode, CampaignErrors.SubmitItemsRequiredMessage);
+        }
+
+        if (TotalVoucherLimit is null)
+        {
+            throw new BusinessRuleException(CampaignErrors.SubmitTotalRequiredCode, CampaignErrors.SubmitTotalRequiredMessage);
+        }
+
+        if (VoucherValidityType is null)
+        {
+            throw new BusinessRuleException(CampaignErrors.SubmitValidityRequiredCode, CampaignErrors.SubmitValidityRequiredMessage);
+        }
+
+        if (MaxUsesPerVoucher is null)
+        {
+            throw new BusinessRuleException(CampaignErrors.SubmitMaxUsesRequiredCode, CampaignErrors.SubmitMaxUsesRequiredMessage);
+        }
+
+        SubmittedByUserId = actorUserId;
+        SubmittedAt = utcNow;
+        return MoveTo(CampaignStatus.PendingApproval, actorUserId, null, utcNow);
+    }
+
+    /// <summary>
+    /// Aprova a campanha em análise (US-01.11). Início futuro fica agendada; vigência já iniciada fica ativa.
+    /// </summary>
+    /// <exception cref="BusinessRuleException">Fora de aprovação ou vigência já encerrada.</exception>
+    public CampaignStatusEvent Approve(Guid actorUserId, DateTime utcNow)
+    {
+        EnsureUtc(utcNow, nameof(utcNow));
+        EnsurePending();
+
+        if (utcNow >= EndsAt)
+        {
+            throw new BusinessRuleException(CampaignErrors.ApprovePeriodEndedCode, CampaignErrors.ApprovePeriodEndedMessage);
+        }
+
+        DecidedByUserId = actorUserId;
+        DecidedAt = utcNow;
+        RejectionReason = null;
+        var next = utcNow < StartsAt ? CampaignStatus.Scheduled : CampaignStatus.Active;
+        return MoveTo(next, actorUserId, null, utcNow);
+    }
+
+    /// <summary>Reprova a campanha em análise (US-01.11). Motivo em branco fica nulo. Não volta a rascunho.</summary>
+    /// <exception cref="BusinessRuleException">Fora de aprovação.</exception>
+    public CampaignStatusEvent Reject(Guid actorUserId, string? reason, DateTime utcNow)
+    {
+        EnsureUtc(utcNow, nameof(utcNow));
+        EnsurePending();
+
+        var trimmed = string.IsNullOrWhiteSpace(reason) ? null : reason.Trim();
+        DecidedByUserId = actorUserId;
+        DecidedAt = utcNow;
+        RejectionReason = trimmed;
+        return MoveTo(CampaignStatus.Rejected, actorUserId, trimmed, utcNow);
+    }
+
+    private void EnsurePending()
+    {
+        if (Status != CampaignStatus.PendingApproval)
+        {
+            throw new BusinessRuleException(CampaignErrors.DecisionNotPendingCode, CampaignErrors.DecisionNotPendingMessage);
+        }
+    }
+
+    private CampaignStatusEvent MoveTo(CampaignStatus next, Guid actorUserId, string? reason, DateTime utcNow)
+    {
+        var from = Status;
+        Status = next;
+        UpdatedAt = utcNow;
+
+        return new CampaignStatusEvent
+        {
+            Id = Guid.CreateVersion7(new DateTimeOffset(utcNow)),
+            CampaignId = Id,
+            FromStatus = from,
+            ToStatus = next,
+            ActorUserId = actorUserId,
+            Reason = reason,
+            CreatedAt = utcNow,
+        };
     }
 
     /// <summary>Restrições de uso no resgate (US-01.12): faixa de valor da compra e utilizações por voucher.</summary>

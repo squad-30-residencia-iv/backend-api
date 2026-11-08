@@ -224,6 +224,10 @@ public class CampaignServiceTests
 
         public Task<Campaign?> FindForUpdateAsync(Guid id, CancellationToken cancellationToken) => FindByIdAsync(id, cancellationToken);
 
+        public void AddStatusEvent(CampaignStatusEvent statusEvent)
+        {
+        }
+
         public Task SaveChangesAsync(CancellationToken cancellationToken) => Task.CompletedTask;
     }
 
