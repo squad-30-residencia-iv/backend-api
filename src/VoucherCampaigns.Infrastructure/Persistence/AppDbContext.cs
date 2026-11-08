@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using VoucherCampaigns.Domain.Campaigns;
 using VoucherCampaigns.Domain.Catalog;
+using VoucherCampaigns.Domain.Identity;
 using VoucherCampaigns.Domain.Organization;
 using VoucherCampaigns.Domain.Entities;
 using CampaignCondition = VoucherCampaigns.Domain.Campaigns.CampaignCondition;
@@ -24,6 +25,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<AuditEntry> AuditEntries => Set<AuditEntry>();
     public DbSet<CampaignCondition> CampaignConditions => Set<CampaignCondition>();
     public DbSet<EligibilityCriterion> EligibilityCriteria => Set<EligibilityCriterion>();
+    public DbSet<User> Users => Set<User>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

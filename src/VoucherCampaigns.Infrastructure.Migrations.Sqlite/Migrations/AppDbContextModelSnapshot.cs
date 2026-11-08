@@ -515,6 +515,53 @@ namespace VoucherCampaigns.Infrastructure.Migrations.Sqlite.Migrations
                     b.ToTable("VoucherEvents");
                 });
 
+            modelBuilder.Entity("VoucherCampaigns.Domain.Identity.User", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasMaxLength(254)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("email");
+
+                    b.Property<Guid?>("NetworkId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("network_id");
+
+                    b.Property<string>("PasswordHash")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("password_hash");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("role");
+
+                    b.HasKey("Id")
+                        .HasName("pk_users");
+
+                    b.HasIndex("Email")
+                        .IsUnique()
+                        .HasDatabaseName("ix_users_email");
+
+                    b.ToTable("users", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_users_network", "(role = 'administrador' AND network_id IS NULL) OR (role <> 'administrador' AND network_id IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_users_role", "role IN ('analista', 'gestor', 'administrador')");
+                        });
+                });
+
             modelBuilder.Entity("VoucherCampaigns.Domain.Organization.Channel", b =>
                 {
                     b.Property<Guid>("Id")

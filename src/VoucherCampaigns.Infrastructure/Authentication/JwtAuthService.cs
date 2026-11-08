@@ -9,9 +9,9 @@ public class JwtAuthService(AuthOptions options, IUserCredentialStore credential
 {
     public const string SuccessMessage = "Autenticação realizada com sucesso.";
 
-    public TokenResponse? Authenticate(LoginRequest request)
+    public async Task<TokenResponse?> AuthenticateAsync(LoginRequest request, CancellationToken cancellationToken)
     {
-        var account = credentialStore.FindByCredentials(request.Email, request.Password);
+        var account = await credentialStore.FindByCredentialsAsync(request.Email, request.Password, cancellationToken);
 
         if (account is null)
         {

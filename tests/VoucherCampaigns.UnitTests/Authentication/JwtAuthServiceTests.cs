@@ -11,9 +11,10 @@ public class JwtAuthServiceTests
     private readonly AuthOptions _options = AuthOptionsTests.ValidOptions();
 
     [Fact]
-    public void Authenticate_WithValidCredentials_IssuesTokenWithClaims()
+    public async Task Authenticate_WithValidCredentials_IssuesTokenWithClaims()
     {
-        var response = CreateService().Authenticate(new LoginRequest("analista@empresa.com", "Senha123"));
+        var response = await CreateService().AuthenticateAsync(
+            new LoginRequest("analista@empresa.com", "Senha123"), CancellationToken.None);
 
         Assert.NotNull(response);
         Assert.Equal(3600, response.ExpiresIn);
@@ -31,13 +32,14 @@ public class JwtAuthServiceTests
     }
 
     [Fact]
-    public void Authenticate_AsAdministrador_IssuesTokenWithoutNetwork()
+    public async Task Authenticate_AsAdministrador_IssuesTokenWithoutNetwork()
     {
         var admin = AuthOptionsTests.ValidUser("admin@empresa.com", Roles.Administrador) with { NetworkId = "" };
         var options = _options with { MockUsers = [admin] };
-        var service = new JwtAuthService(options, new ConfigurationUserCredentialStore(options), new FixedTimeProvider(Now));
+        var service = new JwtAuthService(options, new FakeUserCredentialStore(options), new FixedTimeProvider(Now));
 
-        var response = service.Authenticate(new LoginRequest("admin@empresa.com", "Senha123"));
+        var response = await service.AuthenticateAsync(
+            new LoginRequest("admin@empresa.com", "Senha123"), CancellationToken.None);
 
         Assert.NotNull(response);
         var token = new JsonWebToken(response.Token);
@@ -46,9 +48,10 @@ public class JwtAuthServiceTests
     }
 
     [Fact]
-    public void Authenticate_IgnoresEmailCase()
+    public async Task Authenticate_IgnoresEmailCase()
     {
-        var response = CreateService().Authenticate(new LoginRequest(" Analista@Empresa.COM ", "Senha123"));
+        var response = await CreateService().AuthenticateAsync(
+            new LoginRequest(" Analista@Empresa.COM ", "Senha123"), CancellationToken.None);
 
         Assert.NotNull(response);
     }
@@ -57,15 +60,30 @@ public class JwtAuthServiceTests
     [InlineData("analista@empresa.com", "senha123")]
     [InlineData("analista@empresa.com", "")]
     [InlineData("ninguem@empresa.com", "Senha123")]
-    public void Authenticate_WithInvalidCredentials_ReturnsNull(string email, string password)
+    public async Task Authenticate_WithInvalidCredentials_ReturnsNull(string email, string password)
     {
-        var response = CreateService().Authenticate(new LoginRequest(email, password));
+        var response = await CreateService().AuthenticateAsync(new LoginRequest(email, password), CancellationToken.None);
 
         Assert.Null(response);
     }
 
     private JwtAuthService CreateService() =>
-        new(_options, new ConfigurationUserCredentialStore(_options), new FixedTimeProvider(Now));
+        new(_options, new FakeUserCredentialStore(_options), new FixedTimeProvider(Now));
+
+    /// <summary>Imita o store do banco sem abrir uma conexão: e-mail sem caixa e senha exata.</summary>
+    private sealed class FakeUserCredentialStore(AuthOptions options) : IUserCredentialStore
+    {
+        public Task<UserAccount?> FindByCredentialsAsync(
+            string email, string password, CancellationToken cancellationToken)
+        {
+            var user = options.MockUsers.FirstOrDefault(candidate =>
+                string.Equals(candidate.Email.Trim(), email.Trim(), StringComparison.OrdinalIgnoreCase));
+
+            UserAccount? account = user is not null && user.Password == password ? user.ToAccount() : null;
+
+            return Task.FromResult(account);
+        }
+    }
 
     private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
     {

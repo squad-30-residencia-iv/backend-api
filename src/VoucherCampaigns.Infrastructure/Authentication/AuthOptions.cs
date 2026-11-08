@@ -21,7 +21,7 @@ public record AuthOptions
 
     public int ExpirationMinutes { get; init; } = DefaultExpirationMinutes;
 
-    /// <summary>Usuários provisórios enquanto a origem das contas não é definida (somente para ambiente local).</summary>
+    /// <summary>Carga inicial de <c>users</c> quando a tabela está vazia. O login não lê esta lista.</summary>
     public IReadOnlyList<MockUserOptions> MockUsers { get; init; } = [];
 
     public static AuthOptions FromConfiguration(IConfiguration configuration)

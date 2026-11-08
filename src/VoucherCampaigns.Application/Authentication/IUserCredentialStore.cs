@@ -1,7 +1,7 @@
 namespace VoucherCampaigns.Application.Authentication;
 
-/// <summary>Fonte das credenciais. Hoje: configuração. Amanhã: projeção local ou sistema externo.</summary>
+/// <summary>Fonte das credenciais. A implementação atual lê a tabela <c>users</c>.</summary>
 public interface IUserCredentialStore
 {
-    UserAccount? FindByCredentials(string email, string password);
+    Task<UserAccount?> FindByCredentialsAsync(string email, string password, CancellationToken cancellationToken);
 }

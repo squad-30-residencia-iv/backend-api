@@ -520,6 +520,53 @@ namespace VoucherCampaigns.Infrastructure.Migrations.Postgres.Migrations
                     b.ToTable("VoucherEvents");
                 });
 
+            modelBuilder.Entity("VoucherCampaigns.Domain.Identity.User", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<string>("Email")
+                        .IsRequired()
+                        .HasMaxLength(254)
+                        .HasColumnType("character varying(254)")
+                        .HasColumnName("email");
+
+                    b.Property<Guid?>("NetworkId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("network_id");
+
+                    b.Property<string>("PasswordHash")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("password_hash");
+
+                    b.Property<string>("Role")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("role");
+
+                    b.HasKey("Id")
+                        .HasName("pk_users");
+
+                    b.HasIndex("Email")
+                        .IsUnique()
+                        .HasDatabaseName("ix_users_email");
+
+                    b.ToTable("users", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_users_network", "(role = 'administrador' AND network_id IS NULL) OR (role <> 'administrador' AND network_id IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_users_role", "role IN ('analista', 'gestor', 'administrador')");
+                        });
+                });
+
             modelBuilder.Entity("VoucherCampaigns.Domain.Organization.Channel", b =>
                 {
                     b.Property<Guid>("Id")

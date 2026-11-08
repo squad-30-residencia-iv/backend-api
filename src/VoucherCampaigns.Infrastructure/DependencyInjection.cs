@@ -42,13 +42,11 @@ public static class DependencyInjection
                     break;
             }
 
-            // O EF Core chama o seeding logo após aplicar as migrações (MigrateAsync no startup).
-            if (options.SeedDemoData)
-            {
-                builder
-                    .UseSeeding((context, _) => DemoDataSeeder.Seed(context))
-                    .UseAsyncSeeding((context, _, cancellationToken) => DemoDataSeeder.SeedAsync(context, cancellationToken));
-            }
+            // A carga de usuários roda sempre. O demonstrativo de rede/catálogo só com SeedDemoData.
+            builder
+                .UseSeeding((context, _) => SeedDatabase(provider, context, options))
+                .UseAsyncSeeding((context, _, cancellationToken) =>
+                    SeedDatabaseAsync(provider, context, options, cancellationToken));
         });
 
         services.AddScoped<IDatabaseStatusReader, DatabaseStatusReader>();
@@ -60,9 +58,34 @@ public static class DependencyInjection
         services.AddSingleton(provider =>
             AuthOptions.FromConfiguration(provider.GetRequiredService<IConfiguration>()));
         services.TryAddSingleton(TimeProvider.System);
-        services.AddSingleton<IUserCredentialStore, ConfigurationUserCredentialStore>();
+        services.AddScoped<IUserCredentialStore, DatabaseUserCredentialStore>();
         services.AddScoped<IAuthService, JwtAuthService>();
 
         return services;
+    }
+
+    private static void SeedDatabase(IServiceProvider provider, DbContext context, DatabaseOptions options)
+    {
+        var auth = provider.GetRequiredService<AuthOptions>();
+        var clock = provider.GetRequiredService<TimeProvider>();
+        UserAccountSeeder.Seed(context, auth, clock);
+
+        if (options.SeedDemoData)
+        {
+            DemoDataSeeder.Seed(context);
+        }
+    }
+
+    private static async Task SeedDatabaseAsync(
+        IServiceProvider provider, DbContext context, DatabaseOptions options, CancellationToken cancellationToken)
+    {
+        var auth = provider.GetRequiredService<AuthOptions>();
+        var clock = provider.GetRequiredService<TimeProvider>();
+        await UserAccountSeeder.SeedAsync(context, auth, clock, cancellationToken);
+
+        if (options.SeedDemoData)
+        {
+            await DemoDataSeeder.SeedAsync(context, cancellationToken);
+        }
     }
 }
