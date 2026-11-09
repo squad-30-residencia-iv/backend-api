@@ -1,5 +1,6 @@
 using VoucherCampaigns.Domain.Campaigns;
 using VoucherCampaigns.Domain.Common;
+using VoucherCampaigns.Domain.Organization;
 
 namespace VoucherCampaigns.UnitTests.Campaigns;
 
@@ -109,6 +110,7 @@ public class CampaignLifecycleTests
         campaign.SetQuantities(100, null, Now);
         campaign.SetRelativeValidity(30, VoucherValidityUnit.Days, null, Now);
         campaign.SetUsageRestrictions(null, null, 1, Now);
+        campaign.ReplaceScopes([new CampaignScope { ChannelType = ChannelType.Physical }], Now);
         return campaign;
     }
 
