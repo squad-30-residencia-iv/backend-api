@@ -69,24 +69,21 @@ O cálculo na emissão e a recusa no resgate continuam no EP-04 e no EP-05. A sp
 
 ### 2.4 Decisões em aberto com o cliente
 
-| # | Decisão | Bloqueia |
-|---|---|---|
-| D1 | Critério de desempate quando mais de uma campanha é satisfeita | 04.1 (cenário 5) |
-| D2 | Contador de compras do cliente: enviado pelo satélite ou persistido pela plataforma | Condição "quantidade de compras" (01.4 / 04.1) |
-| D3 | Modelo de concessão provisória (P12) | 04.9, 07.2 — **default adotado em 2026-11-07 (ver 2.5)**, falta o aceite do representante |
-| D4 | Atributos do cliente enviados pelo satélite (só CPF?) | 04.2 e critérios de perfil da EP-06 |
-| D6 | Edição de campanha agendada; motivo obrigatório na reprovação | 01.7, 01.11 |
-| D7 | Campanha com loja única inativada | 02.2 |
-| D8 | Formato da exportação | 03.5 |
-| D9 | Fim da vigência às 23:59 inclui o minuto inteiro? | Vigência (01.1 / 04.4) |
+Nenhuma das D1–D9 permanece em aberto. O aceite está na seção 2.5.
 
-### 2.5 Defaults adotados (até o aceite do cliente)
+### 2.5 Decisões aceitas
 
-| # | Default | Registrado em | Observação |
+| # | Decisão | Registrado em | Observação |
 |---|---|---|---|
-| D3 | **Concessão em duas fases, como no backlog** (PR-06, PR-17, RF14c, US-04.9): o voucher nasce **provisório** e reserva o saldo da campanha e do alvo. A confirmação da venda o torna **disponível** e consome o saldo. O desfazimento ou a expiração do prazo de reserva o descarta e devolve o saldo. | Decisão do responsável pela issue #27, 2026-11-07 | Substitui o default da spec do #36 (`GH-023-base-motor-e-decisoes.md`), que tratava de chamada síncrona contra fila, e não do voucher provisório. O `VoucherStatus` ganha `Provisional` na spec da #27. Se o representante optar por uma fase só, a mudança fica concentrada no motor (EP-04). |
+| D1 | **Uma única campanha por compra**, sem empilhamento. Se mais de uma servir, vence a de maior benefício naquela compra; no empate, a que termina primeiro; se ainda empatar, a aprovada primeiro. | 2026-11-09 | |
+| D3 | **Concessão em duas fases** (PR-06, PR-17, RF14c, US-04.9): o voucher nasce **provisório** e reserva o saldo da campanha e do alvo. A confirmação da venda o torna **disponível** e consome o saldo. O desfazimento ou a expiração do prazo de reserva o descarta e devolve o saldo. | Default em 2026-11-07; aceite em 2026-11-09 | Substitui o default da spec do #36 (`GH-023-base-motor-e-decisoes.md`), que tratava de chamada síncrona contra fila. O `VoucherStatus` ganha `Provisional` na spec da #27. |
+| D4 | O satélite envia o identificador do cliente (CPF) e só os dados que a campanha precisa para avaliar as condições dela. | 2026-11-09 | Sem cadastro de cliente na plataforma. |
 | D5 | **Projeção local.** O login confere e-mail e senha na tabela `users` (hash PBKDF2). `Auth:MockUsers` só abastece a tabela quando ela está vazia. | Implementado em 2026-11-08, spec `US-02.5-usuarios-locais.md` | Importação ou SSO, se vierem depois, trocam o `IUserCredentialStore`. |
-| D1, D2, D4, D9 | Os da spec do #36 (`GH-023-base-motor-e-decisoes.md`, seção 2) | PR #36 | Ainda sem aceite do cliente. |
+| D2 | O satélite envia a quantidade de compras do cliente na concessão. A plataforma não guarda esse histórico. | 2026-11-09 | A condição continua indisponível até essa chamada existir. |
+| D6 | Campanha agendada não se edita. A mecânica congela na aprovação. O motivo da reprovação continua opcional. | 2026-11-09 | Mudar a mecânica exige outra campanha. |
+| D7 | Loja única inativada não encerra a campanha vigente. A concessão naquela loja é recusada enquanto ela estiver inativa e volta se a loja for reativada. Campanha da rede inteira não para por uma loja inativada. | 2026-11-09 | |
+| D8 | Exportação em CSV, no formato que as telas de relatório e auditoria já baixam. | 2026-11-09 | Sem PDF e sem planilha nativa nesta fase. |
+| D9 | A campanha vale até o último segundo de 23:59 (23:59:59), no fuso da rede. | 2026-11-09 | O código ainda encerra no instante gravado (`23:59:00` é exclusivo). Aplicar na vigência e na emissão. |
 
 ---
 
@@ -99,7 +96,7 @@ O cálculo na emissão e a recusa no resgate continuam no EP-04 e no EP-05. A sp
 3. **Reduzir conflitos entre branches paralelas:**
    - cada módulo registra seus serviços em um método próprio (`AddCampaignsModule()`, `AddVouchersModule()`...), para que `Program.cs` e `DependencyInjection.cs` não entrem em conflito a cada PR;
    - migrações: uma por PR; quem rebasear depois de outra migração entrar regenera a sua com `sh scripts/add-migration.sh`.
-4. Levar a lista de decisões (2.4) ao cliente. A US-01.12 já foi implementada; o aceite do PO sobre o texto do backlog continua em aberto.
+4. Levar a lista de decisões ao cliente. D1–D9 aceitas em 2026-11-09 (seção 2.5). A US-01.12 já foi implementada; o aceite do PO sobre o texto do backlog continua em aberto.
 
 ### Onda 1 — Configuração completa (4 trilhas em paralelo)
 
@@ -185,5 +182,5 @@ Ciclo SDD já usado nas US-02.5 e US-01.1 (`docs/prompts/` e `agents.md`):
 - [x] Reconciliar o modelo de condições (GH-023): fica o da US-01.4
 - [x] Issue #26 antes da #27: US-01.6, US-01.11, status efetivo, auditoria e US-07.5
 - [ ] Issue #27: motor de concessão e resgate, em specs próprias para `Voucher` e `VoucherEvent`
-- [ ] Levar ao representante os defaults D1, D2, D3, D4 e D9 (D3 já tem default de duas fases; falta o aceite)
+- [x] D1 a D9 aceitas em 2026-11-09 (`docs/ROADMAP.md` 2.5). D1: uma campanha, maior benefício, depois a que termina primeiro, depois a aprovada primeiro. D2: contador vem do satélite. D6: agendada não se edita e o motivo da reprovação é opcional. D7: loja inativada não encerra a campanha. D8: exportação em CSV
 - [ ] US-02.3 escopo por região, loja e canal; US-02.6 herança de fuso e moeda; EP-06 público restrito
