@@ -72,7 +72,14 @@ public class ApiFactory : WebApplicationFactory<Program>
 
     public static void DeleteSqliteDatabase(string connectionString)
     {
-        SqliteConnection.ClearAllPools();
+        // Só o pool deste arquivo. ClearAllPools descarta o handle nativo dos outros
+        // testes ainda em execução e a consulta seguinte vira 500 (ObjectDisposedException).
+        using (var connection = new SqliteConnection(connectionString))
+        {
+            connection.Open();
+            SqliteConnection.ClearPool(connection);
+        }
+
         File.Delete(new SqliteConnectionStringBuilder(connectionString).DataSource);
     }
 
@@ -83,7 +90,10 @@ public class ApiFactory : WebApplicationFactory<Program>
     {
         var builder = new NpgsqlConnectionStringBuilder(connectionString);
         var database = builder.Database;
-        NpgsqlConnection.ClearAllPools();
+        using (var pooled = new NpgsqlConnection(connectionString))
+        {
+            NpgsqlConnection.ClearPool(pooled);
+        }
 
         builder.Database = "postgres";
         using var connection = new NpgsqlConnection(builder.ConnectionString);
