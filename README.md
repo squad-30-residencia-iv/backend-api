@@ -113,7 +113,7 @@ Sem nenhuma configuração extra, a API usa **SQLite** (`src/VoucherCampaigns.Ap
 
 - `/api/v1/networks`, `/regions` e `/establishments`: só o **administrador** cadastra, altera e inativa (PR-15). Analista e gestor consultam a própria rede.
 - O canal é atributo da loja (PR-11): `POST` e `PUT` de `/establishments` recebem `"channels": ["Physical", "Virtual"]` (um ou os dois).
-- `/api/v1/categories` e `/products`: analista e gestor.
+- `/api/v1/categories` e `/products`: todos os papéis consultam; só o **administrador** cadastra, altera e inativa (o catálogo é global).
 - `DELETE` inativa o registro e desce em cascata (rede → regiões → lojas; categoria → produtos).
 - Documento OpenAPI em Development: `GET /openapi/v1.json`.
 

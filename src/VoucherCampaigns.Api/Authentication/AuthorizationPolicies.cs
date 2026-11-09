@@ -17,6 +17,12 @@ public static class AuthorizationPolicies
     /// <summary>Cadastrar, alterar e inativar a hierarquia: somente administrador da plataforma (PR-15).</summary>
     public const string ManageHierarchy = "ManageHierarchy";
 
+    /// <summary>Consultar o catálogo, que é global: administrador, analista e gestor.</summary>
+    public const string ReadCatalog = "ReadCatalog";
+
+    /// <summary>Cadastrar, alterar e inativar categoria e produto: somente administrador da plataforma (frontend-web#42).</summary>
+    public const string ManageCatalog = "ManageCatalog";
+
     /// <summary>Qualquer aplicação satélite autenticada (US-07.5); token de usuário não passa.</summary>
     public const string SatelliteApp = "SatelliteApp";
 
