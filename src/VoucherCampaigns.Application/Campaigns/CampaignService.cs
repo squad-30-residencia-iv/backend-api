@@ -1,7 +1,13 @@
+using System.Text.Encodings.Web;
+using System.Text.Json;
+using System.Text.Json.Serialization;
+using System.Text.Unicode;
+using VoucherCampaigns.Application.Audit;
 using VoucherCampaigns.Application.Authentication;
 using VoucherCampaigns.Application.Common;
 using VoucherCampaigns.Application.DTOs.Organization;
 using VoucherCampaigns.Application.Ports;
+using VoucherCampaigns.Domain.Audit;
 using VoucherCampaigns.Domain.Campaigns;
 using VoucherCampaigns.Domain.Catalog;
 using VoucherCampaigns.Domain.Common;
@@ -14,8 +20,16 @@ public class CampaignService(
     ICampaignRepository campaigns,
     ICatalogRepository catalog,
     ICurrentUser currentUser,
+    IAuditTrail audit,
     TimeProvider timeProvider) : ICampaignService
 {
+    // camelCase, sem nulos e com acentos legíveis no banco.
+    private static readonly JsonSerializerOptions AuditPayloadJson = new(JsonSerializerDefaults.Web)
+    {
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+        Encoder = JavaScriptEncoder.Create(UnicodeRanges.All)
+    };
+
     public async Task<CampaignResponse> CreateAsync(CreateCampaignRequest request, CancellationToken cancellationToken)
     {
         var networkId = InputValues.RequiredId(request.NetworkId, nameof(request.NetworkId), CampaignContract.NetworkRequired);
@@ -30,6 +44,7 @@ public class CampaignService(
 
         // RN02: as datas digitadas valem no fuso da rede (US-02.6).
         var timeZone = NetworkTime.Resolve(network.TimeZone);
+        var utcNow = timeProvider.GetUtcNow().UtcDateTime;
 
         var campaign = Campaign.CreateDraft(
             network.Id,
@@ -37,11 +52,11 @@ public class CampaignService(
             request.Description,
             NetworkTime.ToUtc(request.StartsAt!.Value, timeZone, nameof(request.StartsAt)),
             NetworkTime.ToUtc(request.EndsAt!.Value, timeZone, nameof(request.EndsAt)),
-            timeProvider.GetUtcNow().UtcDateTime);
+            utcNow);
 
         await campaigns.AddAsync(campaign, cancellationToken);
 
-        return Map(campaign, network);
+        return Map(campaign, network, utcNow);
     }
 
     public async Task<IReadOnlyList<CampaignResponse>> GetAllAsync(Guid? networkId, string? status, CancellationToken cancellationToken)
@@ -55,8 +70,14 @@ public class CampaignService(
         var network = await networks.FindByIdAsync(scopedNetworkId, cancellationToken)
             ?? throw new ResourceNotFoundException(OrganizationContract.NetworkNotFound);
 
-        var items = await campaigns.GetByNetworkAsync(scopedNetworkId, statusFilter, cancellationToken);
-        return items.Select(campaign => Map(campaign, network)).ToList();
+        var utcNow = timeProvider.GetUtcNow().UtcDateTime;
+        var items = await campaigns.GetByNetworkAsync(scopedNetworkId, cancellationToken);
+
+        // O filtro olha o status efetivo (PR-04), o mesmo devolvido em "status".
+        return items
+            .Where(campaign => statusFilter is null || campaign.EffectiveStatus(utcNow) == statusFilter)
+            .Select(campaign => Map(campaign, network, utcNow))
+            .ToList();
     }
 
     public async Task<CampaignResponse> GetByIdAsync(Guid id, CancellationToken cancellationToken)
@@ -67,7 +88,7 @@ public class CampaignService(
         // A rede só é conhecida depois de carregar a campanha (US-02.5, cenário 3).
         NetworkScope.Ensure(currentUser, campaign.NetworkId);
 
-        return Map(campaign, campaign.Network!);
+        return Map(campaign, campaign.Network!, timeProvider.GetUtcNow().UtcDateTime);
     }
 
     public async Task<CampaignResponse> ReplaceItemsAsync(
@@ -92,34 +113,37 @@ public class CampaignService(
         campaign.ReplaceItems(items, utcNow.UtcDateTime);
         await campaigns.SaveChangesAsync(cancellationToken);
 
-        return Map(campaign, campaign.Network!);
+        return Map(campaign, campaign.Network!, utcNow.UtcDateTime);
     }
 
     public async Task<CampaignResponse> SubmitAsync(Guid id, CancellationToken cancellationToken)
     {
         var campaign = await RequireExistingAsync(id, cancellationToken);
-        var statusEvent = campaign.Submit(currentUser.UserId, timeProvider.GetUtcNow().UtcDateTime);
-        campaigns.AddStatusEvent(statusEvent);
+        var utcNow = timeProvider.GetUtcNow().UtcDateTime;
+        var statusEvent = campaign.Submit(currentUser.UserId, utcNow);
+        RecordStatusChange(campaign, statusEvent, AuditEventTypes.CampaignSubmitted);
         await campaigns.SaveChangesAsync(cancellationToken);
-        return Map(campaign, campaign.Network!);
+        return Map(campaign, campaign.Network!, utcNow);
     }
 
     public async Task<CampaignResponse> ApproveAsync(Guid id, CancellationToken cancellationToken)
     {
         var campaign = await RequireExistingAsync(id, cancellationToken);
-        var statusEvent = campaign.Approve(currentUser.UserId, timeProvider.GetUtcNow().UtcDateTime);
-        campaigns.AddStatusEvent(statusEvent);
+        var utcNow = timeProvider.GetUtcNow().UtcDateTime;
+        var statusEvent = campaign.Approve(currentUser.UserId, utcNow);
+        RecordStatusChange(campaign, statusEvent, AuditEventTypes.CampaignApproved);
         await campaigns.SaveChangesAsync(cancellationToken);
-        return Map(campaign, campaign.Network!);
+        return Map(campaign, campaign.Network!, utcNow);
     }
 
     public async Task<CampaignResponse> RejectAsync(Guid id, RejectCampaignRequest? request, CancellationToken cancellationToken)
     {
         var campaign = await RequireExistingAsync(id, cancellationToken);
-        var statusEvent = campaign.Reject(currentUser.UserId, request?.Reason, timeProvider.GetUtcNow().UtcDateTime);
-        campaigns.AddStatusEvent(statusEvent);
+        var utcNow = timeProvider.GetUtcNow().UtcDateTime;
+        var statusEvent = campaign.Reject(currentUser.UserId, request?.Reason, utcNow);
+        RecordStatusChange(campaign, statusEvent, AuditEventTypes.CampaignRejected);
         await campaigns.SaveChangesAsync(cancellationToken);
-        return Map(campaign, campaign.Network!);
+        return Map(campaign, campaign.Network!, utcNow);
     }
 
     public async Task<CampaignResponse> UpdateQuantitiesAsync(
@@ -128,12 +152,12 @@ public class CampaignService(
         CancellationToken cancellationToken)
     {
         var campaign = await RequireForUpdateAsync(id, cancellationToken);
+        var utcNow = timeProvider.GetUtcNow().UtcDateTime;
 
-        campaign.SetQuantities(
-            request.TotalVoucherLimit!.Value, request.PerCustomerVoucherLimit, timeProvider.GetUtcNow().UtcDateTime);
+        campaign.SetQuantities(request.TotalVoucherLimit!.Value, request.PerCustomerVoucherLimit, utcNow);
         await campaigns.SaveChangesAsync(cancellationToken);
 
-        return Map(campaign, campaign.Network!);
+        return Map(campaign, campaign.Network!, utcNow);
     }
 
     public async Task<CampaignResponse> UpdateAudienceAsync(
@@ -144,16 +168,18 @@ public class CampaignService(
         var audienceType = ParseEnum<CampaignAudienceType>(
             request.AudienceType, nameof(request.AudienceType), CampaignContract.AudienceTypeInvalid);
         var campaign = await RequireForUpdateAsync(id, cancellationToken);
+        var utcNow = timeProvider.GetUtcNow().UtcDateTime;
 
-        campaign.SetAudience(audienceType, timeProvider.GetUtcNow().UtcDateTime);
+        campaign.SetAudience(audienceType, utcNow);
         await campaigns.SaveChangesAsync(cancellationToken);
 
-        return Map(campaign, campaign.Network!);
+        return Map(campaign, campaign.Network!, utcNow);
     }
 
     public async Task<CampaignResponse> UpdateAsync(Guid id, UpdateCampaignRequest request, CancellationToken cancellationToken)
     {
         var campaign = await RequireForUpdateAsync(id, cancellationToken);
+        var utcNow = timeProvider.GetUtcNow().UtcDateTime;
 
         // RN02: as datas digitadas valem no fuso da rede (US-02.6).
         var timeZone = NetworkTime.Resolve(campaign.Network!.TimeZone);
@@ -163,10 +189,10 @@ public class CampaignService(
             request.Description,
             NetworkTime.ToUtc(request.StartsAt!.Value, timeZone, nameof(request.StartsAt)),
             NetworkTime.ToUtc(request.EndsAt!.Value, timeZone, nameof(request.EndsAt)),
-            timeProvider.GetUtcNow().UtcDateTime);
+            utcNow);
         await campaigns.SaveChangesAsync(cancellationToken);
 
-        return Map(campaign, campaign.Network);
+        return Map(campaign, campaign.Network, utcNow);
     }
 
     public async Task<CampaignResponse> UpdateVoucherValidityAsync(
@@ -198,7 +224,7 @@ public class CampaignService(
 
         await campaigns.SaveChangesAsync(cancellationToken);
 
-        return Map(campaign, campaign.Network);
+        return Map(campaign, campaign.Network, utcNow);
     }
 
     public async Task<CampaignResponse> UpdateUsageRestrictionsAsync(
@@ -210,15 +236,16 @@ public class CampaignService(
         EnsurePurchaseAmount(request.MaxPurchaseAmount, nameof(request.MaxPurchaseAmount));
 
         var campaign = await RequireForUpdateAsync(id, cancellationToken);
+        var utcNow = timeProvider.GetUtcNow().UtcDateTime;
 
         campaign.SetUsageRestrictions(
             request.MinPurchaseAmount,
             request.MaxPurchaseAmount,
             request.MaxUsesPerVoucher!.Value,
-            timeProvider.GetUtcNow().UtcDateTime);
+            utcNow);
         await campaigns.SaveChangesAsync(cancellationToken);
 
-        return Map(campaign, campaign.Network!);
+        return Map(campaign, campaign.Network!, utcNow);
     }
 
     public async Task<CampaignResponse> ReplaceConditionsAsync(
@@ -247,7 +274,7 @@ public class CampaignService(
 
         await campaigns.SaveChangesAsync(cancellationToken);
 
-        return Map(campaign, campaign.Network!);
+        return Map(campaign, campaign.Network!, utcNow.UtcDateTime);
     }
 
     /// <summary>Prazo e unidade obrigatórios e dentro do limite (D-5); data fixa não se aplica (D-4).</summary>
@@ -424,6 +451,34 @@ public class CampaignService(
         }
     }
 
+    /// <summary>
+    /// Transição no histórico de status e na trilha de auditoria, gravadas no mesmo <c>SaveChanges</c>
+    /// da campanha (spec GH-026-trilha-de-auditoria).
+    /// </summary>
+    private void RecordStatusChange(Campaign campaign, CampaignStatusEvent statusEvent, string eventType)
+    {
+        campaigns.AddStatusEvent(statusEvent);
+
+        var payload = new StatusChangePayload(
+            statusEvent.FromStatus.ToString(), statusEvent.ToStatus.ToString(), statusEvent.Reason);
+
+        audit.Append(new AuditEntry
+        {
+            Id = Guid.CreateVersion7(new DateTimeOffset(statusEvent.CreatedAt)),
+            EventType = eventType,
+            ActorType = AuditActorType.User,
+            ActorId = statusEvent.ActorUserId,
+            NetworkId = campaign.NetworkId,
+            CampaignId = campaign.Id,
+            EntityType = nameof(Campaign),
+            EntityId = campaign.Id,
+            OccurredAt = statusEvent.CreatedAt,
+            Payload = JsonSerializer.Serialize(payload, AuditPayloadJson)
+        });
+    }
+
+    private sealed record StatusChangePayload(string FromStatus, string ToStatus, string? Reason);
+
     /// <summary>Campanha existente (404) e da rede do usuário (403).</summary>
     private async Task<Campaign> RequireExistingAsync(Guid id, CancellationToken cancellationToken)
     {
@@ -536,8 +591,8 @@ public class CampaignService(
     private static CampaignStatus? ParseStatus(string? value) =>
         value is null ? null : ParseEnum<CampaignStatus>(value, "Status", CampaignContract.StatusInvalid);
 
-    // Status gravado e IssuedVouchers = 0 até existirem o status efetivo e a emissão (spec US-01.9, PA-2 a PA-4).
-    private static CampaignResponse Map(Campaign campaign, Network network)
+    // Status efetivo no instante da leitura (PR-04). IssuedVouchers = 0 até existir a emissão (spec US-01.9, PA-2).
+    private static CampaignResponse Map(Campaign campaign, Network network, DateTime utcNow)
     {
         var timeZone = NetworkTime.Resolve(network.TimeZone);
 
@@ -549,7 +604,7 @@ public class CampaignService(
             NetworkTime.ToLocal(campaign.StartsAt, timeZone),
             NetworkTime.ToLocal(campaign.EndsAt, timeZone),
             network.TimeZone,
-            campaign.Status.ToString(),
+            campaign.EffectiveStatus(utcNow).ToString(),
             campaign.TotalVoucherLimit,
             campaign.PerCustomerVoucherLimit,
             campaign.UndistributedVouchers,

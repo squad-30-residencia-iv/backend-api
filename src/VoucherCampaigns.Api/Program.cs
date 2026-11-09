@@ -42,6 +42,7 @@ var app = builder.Build();
 
 // Falha na inicialização se Auth ou Cors estiverem inválidos, em vez de na primeira requisição.
 app.Services.GetRequiredService<AuthOptions>();
+app.Services.GetRequiredService<SatelliteAuthOptions>();
 var portalCors = app.Services.GetRequiredService<PortalCorsOptions>();
 
 await app.Services.MigrateDatabaseAsync();

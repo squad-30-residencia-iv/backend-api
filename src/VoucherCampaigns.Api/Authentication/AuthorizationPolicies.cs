@@ -16,4 +16,16 @@ public static class AuthorizationPolicies
 
     /// <summary>Cadastrar, alterar e inativar a hierarquia: somente administrador da plataforma (PR-15).</summary>
     public const string ManageHierarchy = "ManageHierarchy";
+
+    /// <summary>Qualquer aplicação satélite autenticada (US-07.5); token de usuário não passa.</summary>
+    public const string SatelliteApp = "SatelliteApp";
+
+    /// <summary>Aplicação satélite com o escopo <c>campaigns:read</c> (US-07.1).</summary>
+    public const string SatelliteReadCampaigns = "SatelliteReadCampaigns";
+
+    /// <summary>Aplicação satélite com o escopo <c>vouchers:issue</c> (US-07.2, US-07.4).</summary>
+    public const string SatelliteIssueVouchers = "SatelliteIssueVouchers";
+
+    /// <summary>Aplicação satélite com o escopo <c>vouchers:redeem</c> (US-07.3).</summary>
+    public const string SatelliteRedeemVouchers = "SatelliteRedeemVouchers";
 }

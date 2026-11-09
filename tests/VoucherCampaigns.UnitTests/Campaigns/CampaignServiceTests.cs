@@ -1,7 +1,9 @@
+using VoucherCampaigns.Application.Audit;
 using VoucherCampaigns.Application.Authentication;
 using VoucherCampaigns.Application.Campaigns;
 using VoucherCampaigns.Application.Common;
 using VoucherCampaigns.Application.Ports;
+using VoucherCampaigns.Domain.Audit;
 using VoucherCampaigns.Domain.Catalog;
 using VoucherCampaigns.Domain.Campaigns;
 using VoucherCampaigns.Domain.Common;
@@ -18,6 +20,8 @@ public class CampaignServiceTests
 
     private readonly FakeCampaignRepository _campaigns = new();
     private readonly FakeCatalogRepository _catalog = new();
+    private readonly FakeAuditTrail _audit = new();
+    private readonly FakeCurrentUser _user = new(Network.Id);
 
     [Fact]
     public async Task CreateAsync_ConvertsNetworkLocalTimesAndStoresDraft()
@@ -86,6 +90,62 @@ public class CampaignServiceTests
             CreateService(Network).GetAllAsync(Network.Id, status, CancellationToken.None));
 
         Assert.Equal("Status", exception.Field);
+    }
+
+    [Fact]
+    public async Task GetAllAsync_FiltersByEffectiveStatus()
+    {
+        var campaign = StoredDraft();
+        campaign.Status = CampaignStatus.Scheduled;
+        var duringPeriod = new DateTimeOffset(2026, 10, 10, 12, 0, 0, TimeSpan.FromHours(-3));
+
+        var actives = await CreateService(Network, duringPeriod).GetAllAsync(Network.Id, "active", CancellationToken.None);
+        var scheduled = await CreateService(Network, duringPeriod).GetAllAsync(Network.Id, "Scheduled", CancellationToken.None);
+
+        Assert.Equal("Active", Assert.Single(actives).Status);
+        Assert.Empty(scheduled);
+    }
+
+    [Fact]
+    public async Task SubmitAsync_AppendsAuditEntryWithActorScopeAndPayload()
+    {
+        var campaign = StoredReadyDraft();
+
+        await CreateService(Network).SubmitAsync(campaign.Id, CancellationToken.None);
+
+        var entry = Assert.Single(_audit.Entries);
+        Assert.Equal(AuditEventTypes.CampaignSubmitted, entry.EventType);
+        Assert.Equal(AuditActorType.User, entry.ActorType);
+        Assert.Equal(_user.UserId, entry.ActorId);
+        Assert.Equal(Network.Id, entry.NetworkId);
+        Assert.Equal(campaign.Id, entry.CampaignId);
+        Assert.Equal("Campaign", entry.EntityType);
+        Assert.Equal(campaign.Id, entry.EntityId);
+        Assert.Equal(Now.UtcDateTime, entry.OccurredAt);
+        Assert.Equal("""{"fromStatus":"Draft","toStatus":"PendingApproval"}""", entry.Payload);
+    }
+
+    [Fact]
+    public async Task RejectAsync_AuditPayloadKeepsTheReasonReadable()
+    {
+        var campaign = StoredReadyDraft();
+        campaign.Status = CampaignStatus.PendingApproval;
+
+        await CreateService(Network).RejectAsync(campaign.Id, new RejectCampaignRequest(" Fora do calendário "), CancellationToken.None);
+
+        var entry = Assert.Single(_audit.Entries);
+        Assert.Equal(AuditEventTypes.CampaignRejected, entry.EventType);
+        Assert.Equal("""{"fromStatus":"PendingApproval","toStatus":"Rejected","reason":"Fora do calendário"}""", entry.Payload);
+    }
+
+    [Fact]
+    public async Task SubmitAsync_WhenIncomplete_DoesNotAppendAudit()
+    {
+        var campaign = StoredDraft();
+
+        await Assert.ThrowsAsync<BusinessRuleException>(() => CreateService(Network).SubmitAsync(campaign.Id, CancellationToken.None));
+
+        Assert.Empty(_audit.Entries);
     }
 
     [Fact]
@@ -194,8 +254,23 @@ public class CampaignServiceTests
         return campaign;
     }
 
-    private CampaignService CreateService(Network? network) =>
-        new(new FakeNetworkRepository(network), _campaigns, _catalog, new FakeCurrentUser(Network.Id), new FixedTimeProvider(Now));
+    /// <summary>Rascunho com tudo o que a submissão exige (US-01.6).</summary>
+    private Campaign StoredReadyDraft()
+    {
+        var campaign = StoredDraft();
+        var utcNow = Now.UtcDateTime;
+
+        campaign.SetAudience(CampaignAudienceType.AllCustomers, utcNow);
+        campaign.ReplaceItems([new CampaignItem { TargetType = TargetType.All, BenefitType = BenefitType.Percentage, BenefitValue = 10 }], utcNow);
+        campaign.SetQuantities(100, null, utcNow);
+        campaign.SetRelativeValidity(30, VoucherValidityUnit.Days, null, utcNow);
+        campaign.SetUsageRestrictions(null, null, 1, utcNow);
+
+        return campaign;
+    }
+
+    private CampaignService CreateService(Network? network, DateTimeOffset? now = null) =>
+        new(new FakeNetworkRepository(network), _campaigns, _catalog, _user, _audit, new FixedTimeProvider(now ?? Now));
 
     private static CreateCampaignRequest Request(DateTime startsAt, DateTime endsAt) =>
         new(Network.Id, "Volta às Aulas", null, startsAt, endsAt);
@@ -215,9 +290,8 @@ public class CampaignServiceTests
             return Task.CompletedTask;
         }
 
-        public Task<IReadOnlyList<Campaign>> GetByNetworkAsync(Guid networkId, CampaignStatus? status, CancellationToken cancellationToken) =>
-            Task.FromResult<IReadOnlyList<Campaign>>(
-                Added.Where(campaign => campaign.NetworkId == networkId && (status is null || campaign.Status == status)).ToList());
+        public Task<IReadOnlyList<Campaign>> GetByNetworkAsync(Guid networkId, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<Campaign>>(Added.Where(campaign => campaign.NetworkId == networkId).ToList());
 
         public Task<Campaign?> FindByIdAsync(Guid id, CancellationToken cancellationToken) =>
             Task.FromResult(Added.FirstOrDefault(campaign => campaign.Id == id));
@@ -267,6 +341,13 @@ public class CampaignServiceTests
 
         public Task<bool> ExistsProductByCodeAsync(string code, Guid? excludeId, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
+    }
+
+    private sealed class FakeAuditTrail : IAuditTrail
+    {
+        public List<AuditEntry> Entries { get; } = [];
+
+        public void Append(AuditEntry entry) => Entries.Add(entry);
     }
 
     private sealed class FakeCurrentUser(Guid networkId) : ICurrentUser

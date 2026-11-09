@@ -1,6 +1,6 @@
 # 🗺️ Roadmap do Backend — VoucherCampaigns
 
-> Data: 2026-10-20 (estado atualizado em 2026-11-08, a partir de `docs/PROJECT_STATE.md`)
+> Data: 2026-10-20 (estado atualizado em 2026-11-09, a partir de `docs/PROJECT_STATE.md`)
 > Autor: Iago V. R.
 > Base: backlog oficial em `D:\residenciaIV\docs` (EP-01 a EP-07) e estado atual do repositório (`docs/PROJECT_STATE.md`)
 
@@ -19,6 +19,8 @@ Objetivo: chegar o quanto antes a uma **base útil** (campanha configurada, apro
 | US-02.1 / 02.2 / 02.4 Hierarquia e catálogo | ✅ Mesclado (#22, revisão TS#9) | CRUD de rede, região, loja, categoria e produto; inativação em cascata; canais da loja; papel `administrador` |
 | EP-01 Trilha A (configuração da campanha em rascunho) | ✅ Mesclado (#30) | 01.9, 01.2, 01.3, 01.4, 01.5 ("todos"), 01.12, 01.7 (só rascunho). Público restrito segue no EP-06 |
 | GH-023 Modelo único de condições | ✅ Mesclado | Fica `Domain.Campaigns.CampaignCondition` (`campaign_conditions`). Sai o modelo do #36. Migração `RemoveMotorCampaignConditions` |
+| US-01.6 / US-01.11 Submeter, aprovar e reprovar | ✅ Mesclado (#42, #43) | Analista submete, gestor aprova (`Scheduled`/`Active`) ou reprova; histórico em `campaign_status_events` |
+| Issue #26 Auditoria, status efetivo e US-07.5 | ✅ Concluído | `audit_entries` append-only; status efetivo na leitura (PR-04); client credentials das aplicações satélites (`satellite_apps`, esquema `Satellite`) |
 
 ---
 
@@ -36,11 +38,11 @@ flowchart LR
     EP06["06.1–06.4 Critérios"] -.público restrito.-> U015
     U021["02.1 Hierarquia ✅"] --> U022["02.2 Inativação ✅"] --> U023["02.3 Escopo e canais"]
     U0112["01.12 Validade e restrições ✅"]
-    U013 & U014 & U015 & U023 & U0112 --> U016["01.6 Submeter"]
-    U016 --> U0111["01.11 Aprovar"]
-    AUD["Auditoria"] --> U0111
+    U013 & U014 & U015 & U023 & U0112 --> U016["01.6 Submeter ✅"]
+    U016 --> U0111["01.11 Aprovar ✅"]
+    AUD["Auditoria ✅"] --> U0111
     U0111 --> EP04["EP-04 Motor de concessão"]
-    U075["07.5 Auth satélite"] --> EP04
+    U075["07.5 Auth satélite ✅"] --> EP04
     EP04 --> EP05["EP-05 Resgate"]
     EP05 --> EP03["EP-03 Acompanhamento"]
 ```
@@ -51,9 +53,9 @@ flowchart LR
 
 | Peça | Quem depende | Observação |
 |---|---|---|
-| **Trilha de auditoria** (eventos imutáveis) | 01.11, 03.4, 04.7, 05.4 | Feita isoladamente em cada US, viraria 4 implementações diferentes |
-| **US-07.5** Autenticar aplicações satélites | Toda a EP-07 e o acesso ao motor via API | Independente; pode começar já |
-| **Status efetivo** (agendada → ativa → encerrada pelas datas, PR-04) | 01.9, 01.11, EP-04 | Proposta: calcular o status na leitura, sem job agendado |
+| **Trilha de auditoria** (eventos imutáveis) | 01.11, 03.4, 04.7, 05.4 | ✅ `IAuditTrail` e `audit_entries` (spec `GH-026-trilha-de-auditoria.md`); submeter, aprovar e reprovar já gravam |
+| **US-07.5** Autenticar aplicações satélites | Toda a EP-07 e o acesso ao motor via API | ✅ `POST /api/v1/satellite/token` e policies por escopo (spec `US-07.5-autenticar-aplicacoes-satelite.md`) |
+| **Status efetivo** (agendada → ativa → encerrada pelas datas, PR-04) | 01.9, 01.11, EP-04 | ✅ `Campaign.EffectiveStatus`, calculado na leitura, sem job (spec `GH-026-status-efetivo.md`) |
 | **Projeção local de usuários** | 01.6 e 01.11 (quem submeteu e quem aprovou) | Depende do cliente; até lá, gravar o `UserId` do token |
 
 ### 2.3 Validade e restrições do voucher (US-01.12)
@@ -144,9 +146,9 @@ O cálculo na emissão e a recusa no resgate continuam no EP-04 e no EP-05. A sp
 
 | Prioridade | US |
 |---|---|
-| **P0 — Fundações** | 02.5 e 01.1 já mescladas · contratos compartilhados (entidades do #36, ainda fora do padrão) · auditoria · status efetivo · 07.5 |
+| **P0 — Fundações** | 02.5 e 01.1 já mescladas · contratos compartilhados (`Voucher` e `VoucherEvent` do #36 ainda fora do padrão) · auditoria ✅ · status efetivo ✅ · 07.5 ✅ |
 | **P1 — Configuração** | 01.9 ✅, 01.2 ✅, 01.3 ✅, 01.4 ✅, 01.5 ✅ (só "todos"), 01.12 ✅, 02.4 ✅, 02.1 ✅, 02.2 ✅, 02.3, 06.1, 06.2, 06.3, 06.4 |
-| **P2 — Base útil** | 01.6, 01.11, 04.1 a 04.9, 06.5, 07.2, 07.4, 01.10, 01.8 (pausar e encerrar) |
+| **P2 — Base útil** | 01.6 ✅, 01.11 ✅, 04.1 a 04.9, 06.5, 07.2, 07.4, 01.10, 01.8 (pausar e encerrar) |
 | **P3 — Resgate** | 05.1 a 05.6, 07.3, 07.1, 01.7 (após vigor), 01.8 (cancelar) |
 | **P4 — Gestão** | 03.1 a 03.5, 02.6 completa, 06.6 |
 
@@ -181,7 +183,7 @@ Ciclo SDD já usado nas US-02.5 e US-01.1 (`docs/prompts/` e `agents.md`):
 - [x] Mesclar hierarquia e catálogo (US-02.1, 02.2, 02.4)
 - [x] Trilha A na `main` (#30): 01.9, 01.2, 01.3, 01.4, 01.5 ("todos"), 01.7 (rascunho) e 01.12
 - [x] Reconciliar o modelo de condições (GH-023): fica o da US-01.4
-- [ ] Issue #26 antes da #27: US-01.6, US-01.11, status efetivo, auditoria e US-07.5
+- [x] Issue #26 antes da #27: US-01.6, US-01.11, status efetivo, auditoria e US-07.5
 - [ ] Issue #27: motor de concessão e resgate, em specs próprias para `Voucher` e `VoucherEvent`
 - [ ] Levar ao representante os defaults D1, D2, D3, D4 e D9 (D3 já tem default de duas fases; falta o aceite)
 - [ ] US-02.3 escopo por região, loja e canal; US-02.6 herança de fuso e moeda; EP-06 público restrito

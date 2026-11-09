@@ -60,6 +60,11 @@ public class StartupTests
     [InlineData("Auth:Jwt:SigningKey", "curta-demais", "Auth:Jwt:SigningKey")]
     [InlineData("Auth:Jwt:ExpirationMinutes", "uma-hora", "Auth:Jwt:ExpirationMinutes")]
     [InlineData("Auth:MockUsers:0:Role", "admin", "Auth:MockUsers:0:Role")]
+    [InlineData("Auth:Satellite:Audience", "vouchercampaigns", "Auth:Satellite:Audience")]
+    [InlineData("Auth:Satellite:ExpirationMinutes", "0", "Auth:Satellite:ExpirationMinutes")]
+    [InlineData("Auth:Satellite:Apps:0:ClientSecret", "curto-demais", "Auth:Satellite:Apps:0:ClientSecret")]
+    [InlineData("Auth:Satellite:Apps:0:NetworkId", "rede-norte", "Auth:Satellite:Apps:0:NetworkId")]
+    [InlineData("Auth:Satellite:Apps:0:Scopes:0", "vouchers:delete", "Auth:Satellite:Apps:0:Scopes")]
     public void Startup_WithInvalidAuthConfiguration_Fails(string key, string value, string expectedKey)
     {
         var connectionString = ApiFactory.NewSqliteConnectionString();

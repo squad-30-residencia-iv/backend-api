@@ -158,9 +158,27 @@ public class Campaign
         UpdatedAt = utcNow;
     }
 
-    /// <summary>Só campanha ativa e dentro da vigência concede voucher (PR-10); rascunho nunca concede.</summary>
-    public bool CanIssueVouchers(DateTime utcNow) =>
-        Status == CampaignStatus.Active && StartsAt <= utcNow && utcNow < EndsAt;
+    /// <summary>
+    /// Status efetivo (PR-04): agendada e ativa seguem a vigência pelo relógio, sem job; o fim é exclusivo.
+    /// Os demais status valem como foram gravados (spec GH-026-status-efetivo).
+    /// </summary>
+    public CampaignStatus EffectiveStatus(DateTime utcNow)
+    {
+        if (Status is not (CampaignStatus.Scheduled or CampaignStatus.Active))
+        {
+            return Status;
+        }
+
+        if (utcNow >= EndsAt)
+        {
+            return CampaignStatus.Ended;
+        }
+
+        return utcNow >= StartsAt ? CampaignStatus.Active : CampaignStatus.Scheduled;
+    }
+
+    /// <summary>Só campanha efetivamente ativa concede voucher (PR-10); rascunho nunca concede.</summary>
+    public bool CanIssueVouchers(DateTime utcNow) => EffectiveStatus(utcNow) == CampaignStatus.Active;
 
     /// <summary>Saldo sem cota por alvo (US-01.3, cenário 2); null enquanto o total não foi definido.</summary>
     public int? UndistributedVouchers =>

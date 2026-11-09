@@ -12,20 +12,11 @@ public class CampaignRepository(AppDbContext context) : ICampaignRepository
         await context.SaveChangesAsync(cancellationToken);
     }
 
-    public async Task<IReadOnlyList<Campaign>> GetByNetworkAsync(
-        Guid networkId,
-        CampaignStatus? status,
-        CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<Campaign>> GetByNetworkAsync(Guid networkId, CancellationToken cancellationToken)
     {
-        var query = WithItems(context.Campaigns.AsNoTracking()).Where(campaign => campaign.NetworkId == networkId);
-
-        if (status is not null)
-        {
-            query = query.Where(campaign => campaign.Status == status);
-        }
-
         // O Id (Guid v7) desempata campanhas criadas no mesmo instante.
-        return await query
+        return await WithItems(context.Campaigns.AsNoTracking())
+            .Where(campaign => campaign.NetworkId == networkId)
             .OrderByDescending(campaign => campaign.CreatedAt)
             .ThenByDescending(campaign => campaign.Id)
             .AsSplitQuery()

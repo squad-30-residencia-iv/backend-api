@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using VoucherCampaigns.Application.Audit;
 using VoucherCampaigns.Application.Authentication;
 using VoucherCampaigns.Application.Campaigns;
 using VoucherCampaigns.Application.Ports;
@@ -54,12 +55,17 @@ public static class DependencyInjection
         services.AddScoped<ICampaignRepository, CampaignRepository>();
         services.AddScoped<ICatalogRepository, CatalogRepository>();
         services.AddScoped<IOrganizationRepository, OrganizationRepository>();
+        services.AddScoped<IAuditTrail, AuditTrail>();
 
         services.AddSingleton(provider =>
             AuthOptions.FromConfiguration(provider.GetRequiredService<IConfiguration>()));
+        services.AddSingleton(provider => SatelliteAuthOptions.FromConfiguration(
+            provider.GetRequiredService<IConfiguration>(), provider.GetRequiredService<AuthOptions>()));
         services.TryAddSingleton(TimeProvider.System);
         services.AddScoped<IUserCredentialStore, DatabaseUserCredentialStore>();
         services.AddScoped<IAuthService, JwtAuthService>();
+        services.AddScoped<ISatelliteCredentialStore, DatabaseSatelliteCredentialStore>();
+        services.AddScoped<ISatelliteTokenService, SatelliteTokenService>();
 
         return services;
     }
@@ -69,6 +75,7 @@ public static class DependencyInjection
         var auth = provider.GetRequiredService<AuthOptions>();
         var clock = provider.GetRequiredService<TimeProvider>();
         UserAccountSeeder.Seed(context, auth, clock);
+        SatelliteAppSeeder.Seed(context, provider.GetRequiredService<SatelliteAuthOptions>(), clock);
 
         if (options.SeedDemoData)
         {
@@ -82,6 +89,7 @@ public static class DependencyInjection
         var auth = provider.GetRequiredService<AuthOptions>();
         var clock = provider.GetRequiredService<TimeProvider>();
         await UserAccountSeeder.SeedAsync(context, auth, clock, cancellationToken);
+        await SatelliteAppSeeder.SeedAsync(context, provider.GetRequiredService<SatelliteAuthOptions>(), clock, cancellationToken);
 
         if (options.SeedDemoData)
         {

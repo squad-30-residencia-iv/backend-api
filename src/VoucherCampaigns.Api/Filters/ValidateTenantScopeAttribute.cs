@@ -1,14 +1,15 @@
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.Filters;
+using VoucherCampaigns.Api.Authentication;
 using VoucherCampaigns.Api.Errors;
 using VoucherCampaigns.Application.Authentication;
 
 namespace VoucherCampaigns.Api.Filters;
 
 /// <summary>
-/// TenantGuard: recusa a operação quando a rede dela não é a rede do usuário (US-02.5).
-/// A rede vem do argumento <c>networkId</c> (rota ou query) ou de um argumento <see cref="INetworkScopedRequest"/>.
-/// O administrador da plataforma não tem rede e passa direto.
+/// TenantGuard: recusa a operação quando a rede dela não é a rede de quem chama (US-02.5): a do usuário
+/// ou a da aplicação satélite (US-07.5). A rede vem do argumento <c>networkId</c> (rota ou query) ou de um
+/// argumento <see cref="INetworkScopedRequest"/>. O administrador da plataforma não tem rede e passa direto.
 /// </summary>
 public class ValidateTenantScopeAttribute : ActionFilterAttribute
 {
@@ -22,10 +23,10 @@ public class ValidateTenantScopeAttribute : ActionFilterAttribute
             return;
         }
 
-        var currentUser = context.HttpContext.RequestServices.GetRequiredService<ICurrentUser>();
+        var callerNetwork = CallerNetwork(context.HttpContext);
 
         // O administrador da plataforma não pertence a uma rede (PR-15); as policies decidem o que ele alcança.
-        if (currentUser.IsPlatformAdmin)
+        if (callerNetwork is null)
         {
             return;
         }
@@ -46,11 +47,24 @@ public class ValidateTenantScopeAttribute : ActionFilterAttribute
             return;
         }
 
-        if (requestedNetworks.Any(networkId => networkId != currentUser.NetworkId))
+        if (requestedNetworks.Any(networkId => networkId != callerNetwork))
         {
             context.Result = ApiProblems.Result(
                 context.HttpContext, StatusCodes.Status403Forbidden, ErrorCodes.ScopeForbidden, ApiProblems.ScopeForbiddenDetail);
         }
+    }
+
+    /// <summary>Rede da aplicação satélite ou do usuário; null para o administrador da plataforma.</summary>
+    private static Guid? CallerNetwork(HttpContext httpContext)
+    {
+        if (SatelliteAuthentication.IsSatellite(httpContext.User))
+        {
+            return httpContext.RequestServices.GetRequiredService<ICurrentSatelliteApp>().NetworkId;
+        }
+
+        var currentUser = httpContext.RequestServices.GetRequiredService<ICurrentUser>();
+
+        return currentUser.IsPlatformAdmin ? null : currentUser.NetworkId;
     }
 
     private static List<Guid> RequestedNetworks(ActionExecutingContext context)
