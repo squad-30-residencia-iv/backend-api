@@ -17,6 +17,10 @@ public static class TestAuth
     public const string AdministradorEmail = "admin@empresa.com";
     public const string Password = "Senha123";
 
+    /// <summary>Aplicação satélite da carga inicial de Development (<c>Auth:Satellite:Apps</c>).</summary>
+    public const string SatelliteClientId = "pdv-demo";
+    public const string SatelliteSecret = "segredo-local-do-pdv-demo-nao-usar-em-producao";
+
     public static readonly Guid OtherNetworkId = Guid.Parse("0199e3a0-0000-7000-8000-0000000000ff");
 
     public static async Task<string> LoginAsync(HttpClient client, string email)
@@ -35,14 +39,15 @@ public static class TestAuth
         string role = Roles.Analista,
         Guid? networkId = null,
         DateTime? expires = null,
-        string? signingKey = null)
+        string? signingKey = null,
+        Guid? userId = null)
     {
         var options = factory.Services.GetRequiredService<AuthOptions>();
         var expiresAt = expires ?? DateTime.UtcNow.AddMinutes(10);
 
         var claims = new Dictionary<string, object>
         {
-            [AuthClaimTypes.UserId] = Guid.NewGuid().ToString(),
+            [AuthClaimTypes.UserId] = (userId ?? Guid.NewGuid()).ToString(),
             [AuthClaimTypes.Role] = role
         };
 
@@ -60,6 +65,40 @@ public static class TestAuth
             NotBefore = expiresAt.AddMinutes(-20),
             Expires = expiresAt,
             Claims = claims,
+            SigningCredentials = new SigningCredentials(
+                JwtAuthService.CreateSigningKey(options with { SigningKey = signingKey ?? options.SigningKey }),
+                SecurityAlgorithms.HmacSha256)
+        };
+
+        return new JsonWebTokenHandler().CreateToken(descriptor);
+    }
+
+    /// <summary>Monta um token de aplicação satélite como o da Api, permitindo variar escopos, rede, validade e chave.</summary>
+    public static string CreateSatelliteToken(
+        ApiFactory factory,
+        string[]? scopes = null,
+        Guid? networkId = null,
+        DateTime? expires = null,
+        string? signingKey = null)
+    {
+        var options = factory.Services.GetRequiredService<AuthOptions>();
+        var satellite = factory.Services.GetRequiredService<SatelliteAuthOptions>();
+        var expiresAt = expires ?? DateTime.UtcNow.AddMinutes(10);
+
+        var descriptor = new SecurityTokenDescriptor
+        {
+            Issuer = options.Issuer,
+            Audience = satellite.Audience,
+            IssuedAt = expiresAt.AddMinutes(-20),
+            NotBefore = expiresAt.AddMinutes(-20),
+            Expires = expiresAt,
+            Claims = new Dictionary<string, object>
+            {
+                [AuthClaimTypes.UserId] = Guid.NewGuid().ToString(),
+                [AuthClaimTypes.ClientId] = SatelliteClientId,
+                [AuthClaimTypes.NetworkId] = (networkId ?? DemoDataSeeder.NetworkId).ToString(),
+                [AuthClaimTypes.Scope] = scopes ?? [.. SatelliteScopes.All]
+            },
             SigningCredentials = new SigningCredentials(
                 JwtAuthService.CreateSigningKey(options with { SigningKey = signingKey ?? options.SigningKey }),
                 SecurityAlgorithms.HmacSha256)

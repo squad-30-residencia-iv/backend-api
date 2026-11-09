@@ -33,7 +33,7 @@ public record AuthOptions
             SigningKey = jwt[nameof(SigningKey)] ?? string.Empty,
             Issuer = jwt[nameof(Issuer)] ?? string.Empty,
             Audience = jwt[nameof(Audience)] ?? string.Empty,
-            ExpirationMinutes = ParseExpirationMinutes(jwt[nameof(ExpirationMinutes)]),
+            ExpirationMinutes = ParseExpirationMinutes(jwt[nameof(ExpirationMinutes)], $"{JwtSection}:{nameof(ExpirationMinutes)}"),
             MockUsers = configuration.GetSection(MockUsersSection).GetChildren()
                 .Select(user => new MockUserOptions
                 {
@@ -91,7 +91,7 @@ public record AuthOptions
         }
     }
 
-    private static int ParseExpirationMinutes(string? value)
+    internal static int ParseExpirationMinutes(string? value, string path)
     {
         if (string.IsNullOrWhiteSpace(value))
         {
@@ -101,7 +101,7 @@ public record AuthOptions
         return int.TryParse(value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var minutes)
             ? minutes
             : throw new InvalidOperationException(
-                $"Configuração inválida: '{JwtSection}:{nameof(ExpirationMinutes)}' = '{value}'. Informe um número inteiro de minutos.");
+                $"Configuração inválida: '{path}' = '{value}'. Informe um número inteiro de minutos.");
     }
 }
 

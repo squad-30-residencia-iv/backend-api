@@ -17,6 +17,67 @@ namespace VoucherCampaigns.Infrastructure.Migrations.Sqlite.Migrations
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.12");
 
+            modelBuilder.Entity("VoucherCampaigns.Domain.Audit.AuditEntry", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("ActorId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("actor_id");
+
+                    b.Property<string>("ActorType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("actor_type");
+
+                    b.Property<Guid?>("CampaignId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("campaign_id");
+
+                    b.Property<Guid>("EntityId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("entity_id");
+
+                    b.Property<string>("EntityType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("entity_type");
+
+                    b.Property<string>("EventType")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("event_type");
+
+                    b.Property<Guid?>("NetworkId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("network_id");
+
+                    b.Property<DateTime>("OccurredAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("occurred_at");
+
+                    b.Property<string>("Payload")
+                        .HasMaxLength(2000)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("payload");
+
+                    b.HasKey("Id")
+                        .HasName("pk_audit_entries");
+
+                    b.HasIndex("CampaignId", "OccurredAt")
+                        .HasDatabaseName("ix_audit_entries_campaign_id_occurred_at");
+
+                    b.HasIndex("NetworkId", "OccurredAt")
+                        .HasDatabaseName("ix_audit_entries_network_id_occurred_at");
+
+                    b.ToTable("audit_entries", (string)null);
+                });
+
             modelBuilder.Entity("VoucherCampaigns.Domain.Campaigns.Campaign", b =>
                 {
                     b.Property<Guid>("Id")
@@ -436,48 +497,6 @@ namespace VoucherCampaigns.Infrastructure.Migrations.Sqlite.Migrations
                     b.ToTable("products", (string)null);
                 });
 
-            modelBuilder.Entity("VoucherCampaigns.Domain.Entities.AuditEntry", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("TEXT")
-                        .HasColumnName("id");
-
-                    b.Property<string>("Action")
-                        .IsRequired()
-                        .HasColumnType("TEXT")
-                        .HasColumnName("action");
-
-                    b.Property<string>("Changes")
-                        .IsRequired()
-                        .HasColumnType("jsonb")
-                        .HasColumnName("changes");
-
-                    b.Property<string>("EntityId")
-                        .IsRequired()
-                        .HasColumnType("TEXT")
-                        .HasColumnName("entity_id");
-
-                    b.Property<string>("EntityName")
-                        .IsRequired()
-                        .HasColumnType("TEXT")
-                        .HasColumnName("entity_name");
-
-                    b.Property<DateTime>("Timestamp")
-                        .HasColumnType("TEXT")
-                        .HasColumnName("timestamp");
-
-                    b.Property<string>("UserId")
-                        .IsRequired()
-                        .HasColumnType("TEXT")
-                        .HasColumnName("user_id");
-
-                    b.HasKey("Id")
-                        .HasName("pk_audit_entries");
-
-                    b.ToTable("AuditEntries");
-                });
-
             modelBuilder.Entity("VoucherCampaigns.Domain.Entities.EligibilityCriterion", b =>
                 {
                     b.Property<Guid>("Id")
@@ -578,6 +597,58 @@ namespace VoucherCampaigns.Infrastructure.Migrations.Sqlite.Migrations
                         .HasDatabaseName("ix_voucher_events_voucher_id");
 
                     b.ToTable("VoucherEvents");
+                });
+
+            modelBuilder.Entity("VoucherCampaigns.Domain.Identity.SatelliteApp", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<string>("ClientId")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("client_id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("created_at");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("is_active");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("name");
+
+                    b.Property<Guid>("NetworkId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("network_id");
+
+                    b.Property<string>("Scopes")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("scopes");
+
+                    b.Property<string>("SecretHash")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("secret_hash");
+
+                    b.HasKey("Id")
+                        .HasName("pk_satellite_apps");
+
+                    b.HasIndex("ClientId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_satellite_apps_client_id");
+
+                    b.ToTable("satellite_apps", (string)null);
                 });
 
             modelBuilder.Entity("VoucherCampaigns.Domain.Identity.User", b =>

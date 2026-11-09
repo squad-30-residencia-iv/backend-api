@@ -130,6 +130,19 @@ Fora de Development, defina `Auth__Jwt__SigningKey` (mínimo de 32 caracteres); 
 
 Resposta `201` com as datas no offset da rede (`"2026-12-01T08:00:00-03:00"`). Regras de negócio violadas respondem `422` com `code` (`CAMPAIGN_INVALID_PERIOD`, `CAMPAIGN_START_IN_PAST`, `NETWORK_UNAVAILABLE`).
 
+O `status` devolvido é o **efetivo** (PR-04). Uma campanha aprovada como `Scheduled` aparece `Active` a partir do início e `Ended` depois do fim, sem job; o banco guarda o status da decisão. O filtro `?status=` do `GET /api/v1/campaigns` usa o mesmo cálculo. Submeter, aprovar e reprovar também gravam um registro em `audit_entries`, que só aceita inclusão.
+
+### Aplicações satélites (US-07.5)
+
+PDV, e-commerce e app usam credencial própria, separada do login de usuário:
+
+1. `POST /api/v1/satellite/token` com `{ "clientId": "...", "clientSecret": "..." }` devolve `accessToken` (60 min), `tokenType` `Bearer` e `scopes`.
+2. As chamadas seguintes enviam `Authorization: Bearer <accessToken>`. `GET /api/v1/satellite/me` mostra a aplicação, a rede e os escopos do token.
+
+Em Development já existe a aplicação `pdv-demo` (segredo `segredo-local-do-pdv-demo-nao-usar-em-producao`), da rede de demonstração, com os escopos `campaigns:read`, `vouchers:issue` e `vouchers:redeem`. As aplicações ficam na tabela `satellite_apps`, com o segredo só como hash; `Auth:Satellite:Apps` só faz a carga inicial quando a tabela está vazia.
+
+Credencial errada → `401 AUTH_INVALID_CLIENT`; escopo ausente → `403 AUTH_FORBIDDEN_SCOPE`; outra rede → `403 SCOPE_FORBIDDEN`. O token de usuário não abre rota de satélite, e o de aplicação não abre rota de usuário.
+
 ### Estrutura da Solution (`VoucherCampaigns.slnx`)
 
 | Projeto | Responsabilidade |
@@ -179,6 +192,8 @@ TEST_POSTGRES_CONNECTION="Host=localhost;Port=5432;Username=postgres;Password=po
 | Hierarquia organizacional | `networks` → `regions` → `establishments` → `channels` |
 | Catálogo | `categories` → `products` |
 | Campanhas | `campaigns`, `campaign_items` (alvo, benefício e quantidade), `campaign_scopes` (rede, região ou loja + canal) |
+| Governança | `campaign_status_events` (histórico de status), `audit_entries` (trilha de auditoria, só inclusão) |
+| Acesso | `users` (portal), `satellite_apps` (aplicações satélites) |
 
 Nomes em `snake_case`; enums gravados como texto. A especificação completa (chaves, índices e `CHECK`s) está em `docs/specs/completed/GH-008-banco-de-dados.md`.
 

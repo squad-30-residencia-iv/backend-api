@@ -99,6 +99,14 @@ Qualquer assistente que iniciar uma sessão de desenvolvimento deve seguir estri
 - Erros: use `ApiProblems` e `ErrorCodes` (`Api/Errors/ApiProblems.cs`). Erro de contrato → `400 VALIDATION_ERROR` (automático pelo `[ApiController]`); regra de negócio → `422` com `code` próprio; recurso ausente → `ResourceNotFoundException` (`404 NOT_FOUND`); rede descoberta só no serviço (filho cujo pai está em outra rede) → `ScopeForbiddenException` (`403 SCOPE_FORBIDDEN`). O filtro `[ValidateTenantScope]` continua obrigatório quando a rede já está na rota, na query ou no request.
 - Cadastros de hierarquia e catálogo: `DELETE` inativa (`is_active`) e a cascata para os descendentes ocorre na mesma `SaveChanges` (rede → regiões → lojas; categoria → produtos). O canal é atributo da loja (PR-11), sem rota própria: `Establishment.EnableChannels` liga e desliga as linhas de `channels`, reaproveitando a linha do mesmo tipo. Pai inexistente informado no corpo → `422` com `code` e a mensagem do backlog; `404` só para o id da URL ou o pai da query. Violação de índice único vira `BusinessRuleException` em `Persistence/ConstraintSave.cs`. Categoria e produto não têm rede. `bool?` e `Guid?` nos contratos obrigatórios, para que o campo omitido seja `400` e não um valor padrão.
 - Testes: `tests/VoucherCampaigns.IntegrationTests/Authentication/TestAuth.cs` faz login (`LoginAsync`) ou monta tokens com papel, rede e validade variáveis (`CreateToken`; com `Roles.Administrador` e sem rede, o token sai sem `escopoId`).
+- Aplicações satélites (US-07.5): esquema `Satellite` (audiência `Auth:Satellite:Audience`), separado do JWT de usuário. Rotas de satélite ficam em `/api/v1/satellite` e usam `[Authorize(Policy = AuthorizationPolicies.SatelliteApp)]` ou a policy do escopo (`SatelliteReadCampaigns`, `SatelliteIssueVouchers`, `SatelliteRedeemVouchers`). Para saber qual aplicação chama, injete `ICurrentSatelliteApp`; `ICurrentUser` não vale para satélite. `[ValidateTenantScope]` usa a rede da aplicação. Nos testes, `TestAuth.CreateSatelliteToken` varia escopos, rede, validade e chave; a aplicação `pdv-demo` vem da carga de Development.
+
+### [Skill] CORS do portal
+
+- O portal e a API ficam em origens diferentes. A allowlist é `Cors:AllowedOrigins` (`Api/Cors/PortalCorsOptions.cs`), validada no startup. Em Development: `http://localhost:5173`. Em produção: `Cors__AllowedOrigins__0`, `Cors__AllowedOrigins__1`, etc.
+- Origem válida é `http` ou `https` absoluta, sem caminho, consulta, fragmento ou barra final. Entrada inválida sobe com `Configuração inválida`. Lista vazia não registra a policy.
+- `UseCors` fica antes de `UseAuthentication`. Métodos `GET`, `POST`, `PUT` e `DELETE`. Cabeçalhos `Authorization` e `Content-Type`. Não usar `AllowCredentials`: o JWT vai no cabeçalho, não em cookie.
+- A lista é da origem do portal, não do usuário. O navegador em `http://127.0.0.1:5173` não é a mesma origem de `http://localhost:5173`.
 
 ### [Skill] CORS do portal
 
@@ -113,6 +121,12 @@ Qualquer assistente que iniciar uma sessão de desenvolvimento deve seguir estri
 - Mensagens de validação de campo (`[Required]`, `[StringLength]`...) sempre com `ErrorMessage` em português.
 - Datas de negócio digitadas pelo usuário chegam **sem fuso** (`[LocalDateTime]`) e são convertidas com `NetworkTime` usando `Network.TimeZone`; no banco ficam em UTC e voltam com o offset da rede.
 - "Agora" sempre via `TimeProvider` injetado, nunca `DateTime.UtcNow` em regra de negócio. Nos testes de integração, fixe `factory.Clock.UtcNow`; como o JWT é validado com a hora real, use `TestAuth.CreateToken` (e não o login) nesses testes.
+- Status da campanha para leitura ou decisão: `Campaign.EffectiveStatus(utcNow)` (PR-04), nunca `campaign.Status` direto. Agendada e ativa seguem a vigência pelo relógio; o banco guarda o status da decisão. A concessão usa `CanIssueVouchers`, que já olha o efetivo.
+
+### [Skill] Trilha de Auditoria
+
+- Ação relevante (submeter, aprovar, reprovar; depois emitir e resgatar): monte um `AuditEntry` (`Domain/Audit`) e chame `IAuditTrail.Append` antes do `SaveChanges` da operação, que grava os dois juntos. Tipo do evento em `AuditEventTypes`; autor `AuditActorType.User` (`sub` do token) ou `Application` (id da aplicação satélite); payload JSON curto.
+- `AuditEntry` e `CampaignStatusEvent` implementam `IAppendOnly`: o `AppDbContext` recusa alterar ou apagar esses registros. Não crie rota de alteração para eles.
 
 ### [Skill] Dependências entre Camadas
 

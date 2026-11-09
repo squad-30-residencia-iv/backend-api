@@ -72,6 +72,9 @@ public class GetCampaignsEndpointTests : IClassFixture<ApiFactory>
         var draft = await CreateAsync(Client(networkId: networkId), networkId, "Rascunho");
         var active = await AddCampaignAsync(networkId, CampaignStatus.Active);
 
+        // Na vigência: o filtro olha o status efetivo (PR-04), e a ativa antes do início apareceria agendada.
+        _factory.Clock.UtcNow = new DateTimeOffset(2026, 10, 15, 12, 0, 0, TimeSpan.FromHours(-3));
+
         var drafts = await GetListAsync(networkId, $"&status={status}");
         var actives = await GetListAsync(networkId, "&status=Active");
         var paused = await GetListAsync(networkId, "&status=Paused");

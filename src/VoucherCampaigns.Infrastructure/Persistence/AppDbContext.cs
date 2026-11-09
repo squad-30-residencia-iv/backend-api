@@ -1,6 +1,8 @@
 using Microsoft.EntityFrameworkCore;
+using VoucherCampaigns.Domain.Audit;
 using VoucherCampaigns.Domain.Campaigns;
 using VoucherCampaigns.Domain.Catalog;
+using VoucherCampaigns.Domain.Common;
 using VoucherCampaigns.Domain.Identity;
 using VoucherCampaigns.Domain.Organization;
 using VoucherCampaigns.Domain.Entities;
@@ -27,6 +29,35 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<CampaignCondition> CampaignConditions => Set<CampaignCondition>();
     public DbSet<EligibilityCriterion> EligibilityCriteria => Set<EligibilityCriterion>();
     public DbSet<User> Users => Set<User>();
+    public DbSet<SatelliteApp> SatelliteApps => Set<SatelliteApp>();
+
+    public override int SaveChanges(bool acceptAllChangesOnSuccess)
+    {
+        EnsureAppendOnly();
+        return base.SaveChanges(acceptAllChangesOnSuccess);
+    }
+
+    public override Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = default)
+    {
+        EnsureAppendOnly();
+        return base.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+    }
+
+    /// <summary>
+    /// Auditoria e histórico de status só aceitam inclusão (spec GH-026-trilha-de-auditoria, D-4).
+    /// Alterar ou apagar um desses registros é erro de programação: nada é gravado.
+    /// </summary>
+    private void EnsureAppendOnly()
+    {
+        var changed = ChangeTracker.Entries<IAppendOnly>()
+            .FirstOrDefault(entry => entry.State is EntityState.Modified or EntityState.Deleted);
+
+        if (changed is not null)
+        {
+            throw new InvalidOperationException(
+                $"{changed.Metadata.ClrType.Name} só aceita inclusão; o registro não pode ser alterado nem apagado.");
+        }
+    }
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -46,12 +77,6 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         {
             entity.HasKey(e => e.Id);
             entity.Property(e => e.Details).HasColumnType("jsonb");
-        });
-
-        modelBuilder.Entity<AuditEntry>(entity =>
-        {
-            entity.HasKey(e => e.Id);
-            entity.Property(e => e.Changes).HasColumnType("jsonb");
         });
 
         modelBuilder.Entity<EligibilityCriterion>(entity => entity.HasKey(e => e.Id));
