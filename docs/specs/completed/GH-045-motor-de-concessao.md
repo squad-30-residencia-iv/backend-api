@@ -40,7 +40,7 @@
 7. **Escolhida:** a primeira apta pela ordem D1 (D-9).
 8. Reserva atômica do saldo da campanha e do alvo (D-4); se a reserva falhar por corrida, a campanha vira bloqueada por esgotamento e a avaliação segue para a próxima apta.
 9. Voucher provisório, evento `Issued`, auditoria `VoucherIssued` e concessão `Provisional`, no mesmo `SaveChanges`.
-10. Sem apta: concessão `NotGranted` com o motivo da satisfeita melhor colocada na ordem D1 (`CampaignNotActive`, `CampaignSoldOut`, `TargetSoldOut`, `CustomerLimitReached`) ou `NoCampaignMatched`.
+10. Sem apta: concessão `NotGranted` com o motivo da satisfeita melhor colocada na ordem D1 (`CampaignSoldOut`, `TargetSoldOut`, `CustomerLimitReached`) ou, só se nenhuma satisfeita estava efetivamente ativa, `CampaignNotActive`; sem satisfeita, `NoCampaignMatched`. Uma pausada ou encerrada continua candidata pelo histórico, mas não esconde o motivo de uma ativa que esgotou (ajuste após a verificação do PR #53).
 
 Antes do passo 4, as reservas vencidas das campanhas da rede são liberadas (D-6), para que o saldo delas conte.
 

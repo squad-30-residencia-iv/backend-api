@@ -236,6 +236,21 @@ public class ConcessionEvaluatorTests
     }
 
     [Fact]
+    public void Evaluate_PrefersTheRefusalOfAnActiveCampaignOverAnInactiveOne()
+    {
+        var paused = ActiveCampaign("Pausada", items: Item(TargetType.All, BenefitType.FixedAmount, 50));
+        paused.Status = CampaignStatus.Paused;
+        var soldOut = ActiveCampaign("Esgotada", totalVoucherLimit: 1, items: Item(TargetType.All, BenefitType.FixedAmount, 5));
+        soldOut.IssuedVouchers = 1;
+
+        var result = ConcessionEvaluator.Evaluate([paused, soldOut], Purchase(), NoVouchers, DuringPeriod);
+
+        Assert.Empty(result.Eligible);
+        Assert.Equal(ConcessionRefusal.CampaignSoldOut, result.Refusal);
+        Assert.Equal(soldOut.Id, result.RefusedCampaignId);
+    }
+
+    [Fact]
     public void Evaluate_ReportsTheBestRankedBlockedCampaign_OnlyWhenNoneIsEligible()
     {
         var blocked = ActiveCampaign("Pausada", items: Item(TargetType.All, BenefitType.FixedAmount, 50));

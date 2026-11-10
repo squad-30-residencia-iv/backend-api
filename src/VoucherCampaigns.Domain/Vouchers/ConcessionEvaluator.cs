@@ -7,7 +7,8 @@ public sealed record EligibleConcession(Campaign Campaign, CampaignItem Target, 
 
 /// <summary>
 /// Resultado da avaliação: as aptas na ordem de desempate D1 e, quando nenhuma é apta, o motivo da
-/// satisfeita melhor colocada (ou <see cref="ConcessionRefusal.NoCampaignMatched"/>).
+/// satisfeita melhor colocada, preferindo o bloqueio de uma campanha ativa ao de uma inativa
+/// (ou <see cref="ConcessionRefusal.NoCampaignMatched"/>).
 /// </summary>
 public sealed record EvaluationResult(
     IReadOnlyList<EligibleConcession> Eligible,
@@ -59,8 +60,10 @@ public static class ConcessionEvaluator
             {
                 eligible.Add(new EligibleConcession(campaign, target, benefit));
             }
-            else if (refusal is null)
+            else if (refusal is null || (refusal == ConcessionRefusal.CampaignNotActive && block != ConcessionRefusal.CampaignNotActive))
             {
+                // O motivo é o da satisfeita melhor colocada, mas uma campanha efetivamente ativa que esgotou (ou o
+                // cliente no limite) explica mais do que uma pausada ou encerrada que só continua candidata pelo histórico.
                 refusal = block;
                 refusedCampaignId = campaign.Id;
             }
