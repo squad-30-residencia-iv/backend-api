@@ -672,6 +672,12 @@ namespace VoucherCampaigns.Infrastructure.Migrations.Postgres.Migrations
                         .HasColumnType("character varying(254)")
                         .HasColumnName("email");
 
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)")
+                        .HasColumnName("name");
+
                     b.Property<Guid?>("NetworkId")
                         .HasColumnType("uuid")
                         .HasColumnName("network_id");

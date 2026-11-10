@@ -10,9 +10,9 @@ namespace VoucherCampaigns.IntegrationTests.Authentication;
 public class LoginEndpointTests(ApiFactory factory) : IClassFixture<ApiFactory>
 {
     [Theory]
-    [InlineData(TestAuth.AnalistaEmail, Roles.Analista)]
-    [InlineData(TestAuth.GestorEmail, Roles.Gestor)]
-    public async Task Login_WithValidCredentials_ReturnsTokenWithUserRoleAndNetwork(string email, string role)
+    [InlineData(TestAuth.AnalistaEmail, Roles.Analista, "Ana Lima")]
+    [InlineData(TestAuth.GestorEmail, Roles.Gestor, "Bruno Costa")]
+    public async Task Login_WithValidCredentials_ReturnsTokenWithUserRoleAndNetwork(string email, string role, string name)
     {
         var client = factory.CreateClient();
 
@@ -34,6 +34,7 @@ public class LoginEndpointTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.NotNull(body.Profile);
         Assert.True(body.Profile.UserId != Guid.Empty);
         Assert.Equal(email, body.Profile.Email);
+        Assert.Equal(name, body.Profile.Name);
         Assert.Equal(role, body.Profile.Role);
         Assert.Equal(DemoDataSeeder.NetworkId, body.Profile.NetworkId);
     }
@@ -55,6 +56,7 @@ public class LoginEndpointTests(ApiFactory factory) : IClassFixture<ApiFactory>
         Assert.False(token.TryGetClaim(AuthClaimTypes.NetworkId, out _));
 
         Assert.NotNull(body.Profile);
+        Assert.Equal("Admin Plataforma", body.Profile.Name);
         Assert.Equal(Roles.Administrador, body.Profile.Role);
         Assert.Null(body.Profile.NetworkId);
     }

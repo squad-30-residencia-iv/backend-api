@@ -667,6 +667,12 @@ namespace VoucherCampaigns.Infrastructure.Migrations.Sqlite.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("email");
 
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("name");
+
                     b.Property<Guid?>("NetworkId")
                         .HasColumnType("TEXT")
                         .HasColumnName("network_id");

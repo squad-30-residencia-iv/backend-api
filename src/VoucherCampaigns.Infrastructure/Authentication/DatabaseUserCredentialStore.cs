@@ -19,6 +19,6 @@ public class DatabaseUserCredentialStore(AppDbContext db) : IUserCredentialStore
             return null;
         }
 
-        return new UserAccount(user.Id, user.Email, user.Role, user.NetworkId);
+        return new UserAccount(user.Id, user.Email, user.Name, user.Role, user.NetworkId);
     }
 }

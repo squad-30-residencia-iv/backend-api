@@ -24,6 +24,8 @@ public class JwtAuthServiceTests
         var user = _options.MockUsers[0];
 
         Assert.Equal(user.UserId, token.Subject);
+        Assert.Equal(user.Name, response.Profile!.Name);
+        Assert.False(token.TryGetClaim("name", out _));
         Assert.Equal(Roles.Analista, token.GetClaim(AuthClaimTypes.Role).Value);
         Assert.Equal(user.NetworkId, token.GetClaim(AuthClaimTypes.NetworkId).Value);
         Assert.Equal(_options.Issuer, token.Issuer);
@@ -34,7 +36,11 @@ public class JwtAuthServiceTests
     [Fact]
     public async Task Authenticate_AsAdministrador_IssuesTokenWithoutNetwork()
     {
-        var admin = AuthOptionsTests.ValidUser("admin@empresa.com", Roles.Administrador) with { NetworkId = "" };
+        var admin = AuthOptionsTests.ValidUser("admin@empresa.com", Roles.Administrador) with
+        {
+            NetworkId = "",
+            Name = "Admin Plataforma"
+        };
         var options = _options with { MockUsers = [admin] };
         var service = new JwtAuthService(options, new FakeUserCredentialStore(options), new FixedTimeProvider(Now));
 
@@ -43,6 +49,7 @@ public class JwtAuthServiceTests
 
         Assert.NotNull(response);
         var token = new JsonWebToken(response.Token);
+        Assert.Equal("Admin Plataforma", response.Profile!.Name);
         Assert.Equal(Roles.Administrador, token.GetClaim(AuthClaimTypes.Role).Value);
         Assert.False(token.TryGetClaim(AuthClaimTypes.NetworkId, out _));
     }

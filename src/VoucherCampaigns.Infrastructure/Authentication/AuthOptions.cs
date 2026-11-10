@@ -38,6 +38,7 @@ public record AuthOptions
                 .Select(user => new MockUserOptions
                 {
                     Email = user[nameof(MockUserOptions.Email)] ?? string.Empty,
+                    Name = user[nameof(MockUserOptions.Name)] ?? string.Empty,
                     Password = user[nameof(MockUserOptions.Password)] ?? string.Empty,
                     UserId = user[nameof(MockUserOptions.UserId)] ?? string.Empty,
                     Role = user[nameof(MockUserOptions.Role)] ?? string.Empty,
@@ -107,7 +108,11 @@ public record AuthOptions
 
 public record MockUserOptions
 {
+    public const int MaxNameLength = 150;
+
     public string Email { get; init; } = string.Empty;
+
+    public string Name { get; init; } = string.Empty;
 
     public string Password { get; init; } = string.Empty;
 
@@ -119,13 +124,24 @@ public record MockUserOptions
 
     /// <summary>Converte após <see cref="Validate"/>; os IDs já foram conferidos.</summary>
     public UserAccount ToAccount() =>
-        new(Guid.Parse(UserId), Email.Trim(), Role, Role == Roles.Administrador ? null : Guid.Parse(NetworkId));
+        new(
+            Guid.Parse(UserId),
+            Email.Trim(),
+            Name.Trim(),
+            Role,
+            Role == Roles.Administrador ? null : Guid.Parse(NetworkId));
 
     public void Validate(string path)
     {
         if (string.IsNullOrWhiteSpace(Email) || string.IsNullOrWhiteSpace(Password))
         {
             throw new InvalidOperationException($"Configuração inválida: '{path}' precisa de {nameof(Email)} e {nameof(Password)}.");
+        }
+
+        if (string.IsNullOrWhiteSpace(Name) || Name.Trim().Length > MaxNameLength)
+        {
+            throw new InvalidOperationException(
+                $"Configuração inválida: '{path}:{nameof(Name)}' deve ter de 1 a {MaxNameLength} caracteres.");
         }
 
         if (!Guid.TryParse(UserId, out _))

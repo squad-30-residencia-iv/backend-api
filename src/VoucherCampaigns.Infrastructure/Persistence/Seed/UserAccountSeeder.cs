@@ -45,6 +45,7 @@ public static class UserAccountSeeder
             {
                 Id = account.UserId,
                 Email = account.Email.Trim().ToLowerInvariant(),
+                Name = account.Name,
                 PasswordHash = PasswordHasher.Hash(mock.Password),
                 Role = account.Role,
                 NetworkId = account.NetworkId,
