@@ -175,7 +175,7 @@ public class CampaignCycleEndpointTests : IClassFixture<ApiFactory>
         _factory.Clock.UtcNow = DuringPeriod;
         (await Client().PostAsync($"{Route}/{id}/pause", null)).EnsureSuccessStatusCode();
 
-        _factory.Clock.UtcNow = ReadyCampaign.EndsAt;
+        _factory.Clock.UtcNow = ReadyCampaign.EndsAt.AddMinutes(1);
 
         Assert.Equal("Ended", (await Client().GetFromJsonAsync<CampaignResponse>($"{Route}/{id}"))!.Status);
     }

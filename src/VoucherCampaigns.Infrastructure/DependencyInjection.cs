@@ -7,6 +7,7 @@ using VoucherCampaigns.Application.Authentication;
 using VoucherCampaigns.Application.Campaigns;
 using VoucherCampaigns.Application.Ports;
 using VoucherCampaigns.Application.SystemStatus;
+using VoucherCampaigns.Application.Vouchers;
 using VoucherCampaigns.Infrastructure.Authentication;
 using VoucherCampaigns.Infrastructure.Persistence;
 using VoucherCampaigns.Infrastructure.Persistence.Repositories;
@@ -56,6 +57,9 @@ public static class DependencyInjection
         services.AddScoped<ICatalogRepository, CatalogRepository>();
         services.AddScoped<IOrganizationRepository, OrganizationRepository>();
         services.AddScoped<IAuditTrail, AuditTrail>();
+        services.AddScoped<IConcessionRepository, ConcessionRepository>();
+        services.AddScoped<IReservationReleaser, ReservationReleaser>();
+        services.AddSingleton(provider => ReadVoucherOptions(provider.GetRequiredService<IConfiguration>()));
 
         services.AddSingleton(provider =>
             AuthOptions.FromConfiguration(provider.GetRequiredService<IConfiguration>()));
@@ -68,6 +72,35 @@ public static class DependencyInjection
         services.AddScoped<ISatelliteTokenService, SatelliteTokenService>();
 
         return services;
+    }
+
+    /// <summary>Seção <c>Vouchers</c> (spec GH-045, D-6); ausente = padrões; valor não numérico = configuração inválida.</summary>
+    private static VoucherOptions ReadVoucherOptions(IConfiguration configuration)
+    {
+        var section = configuration.GetSection(VoucherOptions.SectionName);
+        var options = new VoucherOptions
+        {
+            ReservationMinutes = ReadInt(section, nameof(VoucherOptions.ReservationMinutes), VoucherOptions.DefaultReservationMinutes),
+            ReservationSweepSeconds = ReadInt(section, nameof(VoucherOptions.ReservationSweepSeconds), VoucherOptions.DefaultReservationSweepSeconds)
+        };
+
+        options.Validate();
+
+        return options;
+    }
+
+    private static int ReadInt(IConfigurationSection section, string key, int fallback)
+    {
+        var raw = section[key];
+
+        if (string.IsNullOrWhiteSpace(raw))
+        {
+            return fallback;
+        }
+
+        return int.TryParse(raw, out var value)
+            ? value
+            : throw new InvalidOperationException($"Configuração inválida: '{VoucherOptions.SectionName}:{key}' deve ser um número inteiro.");
     }
 
     private static void SeedDatabase(IServiceProvider provider, DbContext context, DatabaseOptions options)

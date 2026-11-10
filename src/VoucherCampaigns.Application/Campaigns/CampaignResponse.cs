@@ -4,7 +4,8 @@ namespace VoucherCampaigns.Application.Campaigns;
 /// <param name="TotalVoucherLimit">Quantidade total de vouchers (RF06); null enquanto não configurada (US-01.3).</param>
 /// <param name="PerCustomerVoucherLimit">Limite por cliente (RF06c); null = sem limite.</param>
 /// <param name="UndistributedVouchers">Total menos a soma das cotas por alvo; null sem total definido.</param>
-/// <param name="IssuedVouchers">Vouchers emitidos; sempre 0 até a emissão existir (EP-04).</param>
+/// <param name="IssuedVouchers">Vouchers confirmados pelo motor (EP-04).</param>
+/// <param name="ReservedVouchers">Vouchers provisórios vivos, que contam para o esgotamento (US-04.9).</param>
 /// <param name="AudienceType">Público elegível (US-01.5); null enquanto não definido.</param>
 /// <param name="VoucherValidity">Validade do voucher (US-01.12); null enquanto não definida.</param>
 /// <param name="MinPurchaseAmount">Valor mínimo da compra para o uso (US-01.12); null = sem mínimo.</param>
@@ -37,7 +38,8 @@ public record CampaignResponse(
     IReadOnlyList<CampaignConditionResponse> Conditions,
     bool AllowUseInSamePurchase,
     string? RejectionReason,
-    IReadOnlyList<CampaignScopeResponse> Scopes);
+    IReadOnlyList<CampaignScopeResponse> Scopes,
+    int ReservedVouchers);
 
 /// <summary>Local do escopo: região ou loja (as duas nulas = rede inteira), com os canais em ordem fixa.</summary>
 /// <param name="Name">Nome da região ou da loja; nulo para a rede inteira.</param>

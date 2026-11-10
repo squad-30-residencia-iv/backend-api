@@ -319,6 +319,10 @@ public class CampaignServiceTests
         public Task<Product?> GetProductByIdAsync(Guid id, CancellationToken cancellationToken) =>
             Task.FromResult(Products.FirstOrDefault(product => product.Id == id));
 
+        public Task<IReadOnlyList<Product>> GetProductsByCodesAsync(IReadOnlyCollection<string> codes, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<Product>>(
+                Products.Where(product => codes.Contains(product.Code, StringComparer.OrdinalIgnoreCase)).ToList());
+
         public Task<IReadOnlyList<Category>> GetAllCategoriesAsync(bool? activeOnly, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
 

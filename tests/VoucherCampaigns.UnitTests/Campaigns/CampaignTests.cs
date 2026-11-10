@@ -119,7 +119,10 @@ public class CampaignTests
         Assert.False(campaign.CanIssueVouchers(campaign.StartsAt.AddTicks(-1)));
         Assert.True(campaign.CanIssueVouchers(campaign.StartsAt));
         Assert.True(campaign.CanIssueVouchers(Utc(2026, 10, 10, 12, 0)));
-        Assert.False(campaign.CanIssueVouchers(campaign.EndsAt));
+        // D9: o minuto do fim conta inteiro.
+        Assert.True(campaign.CanIssueVouchers(campaign.EndsAt));
+        Assert.True(campaign.CanIssueVouchers(campaign.EndsAt.AddSeconds(59)));
+        Assert.False(campaign.CanIssueVouchers(campaign.EndsAt.AddMinutes(1)));
     }
 
     [Fact]
@@ -129,14 +132,15 @@ public class CampaignTests
 
         Assert.False(campaign.CanIssueVouchers(campaign.StartsAt.AddTicks(-1)));
         Assert.True(campaign.CanIssueVouchers(campaign.StartsAt));
-        Assert.False(campaign.CanIssueVouchers(campaign.EndsAt));
+        Assert.False(campaign.CanIssueVouchers(campaign.EndsAt.AddMinutes(1)));
     }
 
-    // Vigência de 01/10 11:00 a 01/11 02:59 (UTC). Tabela 1.1 da spec GH-026-status-efetivo.
+    // Vigência de 01/10 11:00 a 01/11 02:59 (UTC). Tabela 1.1 da spec GH-026-status-efetivo, com o fim inclusivo (D9).
     [Theory]
     [InlineData(CampaignStatus.Scheduled, "2026-09-30T12:00:00Z", CampaignStatus.Scheduled)]
     [InlineData(CampaignStatus.Scheduled, "2026-10-01T11:00:00Z", CampaignStatus.Active)]
-    [InlineData(CampaignStatus.Scheduled, "2026-11-01T02:59:00Z", CampaignStatus.Ended)]
+    [InlineData(CampaignStatus.Scheduled, "2026-11-01T02:59:59Z", CampaignStatus.Active)]
+    [InlineData(CampaignStatus.Scheduled, "2026-11-01T03:00:00Z", CampaignStatus.Ended)]
     [InlineData(CampaignStatus.Active, "2026-09-30T12:00:00Z", CampaignStatus.Scheduled)]
     [InlineData(CampaignStatus.Active, "2026-10-10T12:00:00Z", CampaignStatus.Active)]
     [InlineData(CampaignStatus.Active, "2026-11-05T12:00:00Z", CampaignStatus.Ended)]

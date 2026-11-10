@@ -1,10 +1,10 @@
 # 📋 Especificação Técnica: GH-045 - Motor de concessão de vouchers (EP-04, US-07.2 e US-07.4)
 
-> Status: Draft (aguardando aprovação)
+> Status: Completed
 > História de Usuário Relacionada: issue #45 "Motor de concessão [1P]", fatia da issue #27. Regras de origem: US-04.1 a US-04.9 (`D:\residenciaIV\docs\epico_04.md`), US-07.2 e US-07.4 (`epico_07.md`), US-06.5 só para o público "todos" (`epico_06.md`).
 > Responsável: Iago V. R.
 > Data: 2026-11-10
-> Branch: `feat/GH-045-motor-de-concessao` (a partir de `staging`) → PR para `staging`
+> Branch: `feat/GH-045-motor-de-concessao` (a partir de `staging`, com o PR #51 mesclado nela) → PR para `staging`
 > Depende de: issue #26 (status efetivo, auditoria e US-07.5) ✅ na `staging`; **PR #51** (escopo `campaign_scopes`, pausar e encerrar), ainda aberto.
 > Fora desta spec: verificação de aplicáveis e resgate (issue #49), público restrito (#47), cadastro de aplicações, trava no banco e limite de tentativas (#48), acompanhamento e exportação (#50), US-07.1 (campanhas vigentes por API).
 
@@ -331,16 +331,16 @@ Todas as rotas: policy `SatelliteIssueVouchers`; `401 AUTH_UNAUTHENTICATED` sem 
 
 ## 4. Checklist de Implementação
 
-- [ ] 1. Enums, `Concession`, `Voucher`, `VoucherEvent` e `VoucherEventTypes` em `Domain/Vouchers`; `AuditEventTypes` ganha `VoucherIssued`, `VoucherConfirmed`, `VoucherCancelled` e `VoucherIssuanceRefused`; remoção de `Domain/Entities/Voucher.cs`, `VoucherEvent.cs`, `Enums/VoucherStatus.cs` e `Enums/VoucherEventType.cs`.
-- [ ] 2. `Campaign`: contadores, `EffectiveStatus` com `SoldOut` (D-5) e fim inclusivo (D-7, também em `Approve`), `IsInScope`, `IsSatisfiedBy`, `ChooseTarget`; `CustomerPurchaseCount` habilitado em `ReplaceConditions`; `CampaignItem` com contadores. `VoucherValidity`, `ConcessionEvaluator` e `Purchase`.
-- [ ] 3. Contratos, `ConcessionContract` (mensagens), `IConcessionService`, `IConcessionRepository`, `IReservationReleaser`, `VoucherOptions` (`Vouchers:*`) validado no startup.
-- [ ] 4. `ConcessionService`: fluxo 1.2 com transação, `ExecuteUpdateAsync` condicional para reservar, confirmar, desfazer e liberar; catálogo por `productCode`; auditoria e eventos; `GetCustomerVouchersAsync`. `ReservationReleaser` e o `HostedService` do sweep.
-- [ ] 5. Configurações EF (`concessions`, `vouchers`, `voucher_events`, contadores, `CHECK`), `DbSet`s, `AppDbContext` sem `Domain.Entities` de voucher, migração `VoucherConcessions` via `scripts/add-migration.sh` (depois do PR #51).
-- [ ] 6. `SatelliteConcessionsController` (5 rotas) e `CampaignService.Map` com `SoldOut`, `issuedVouchers` e `reservedVouchers`.
-- [ ] 7. Testes unitários (`ConcessionEvaluatorTests`, `VoucherValidityTests`, `CampaignSoldOutTests`, D9) e de integração (`SatelliteConcessionsEndpointTests`, `ConcessionConcurrencyTests`, `CustomerVouchersEndpointTests`, auditoria e append-only).
-- [ ] 8. `appsettings.json` (`Vouchers`), `.env.example`, `README.md` (fluxo do integrador), `agents.md` (skill do motor), `ROADMAP.md` (2.4/2.5: D1, D2, D4, D7 e D9 decididos na issue #45), `PROJECT_STATE.md`.
-- [ ] 9. `dotnet test` verde sem warnings (inclui `MigrationsModelTests`); smoke test com a API: token do `pdv-demo` → campanha aprovada → conceder → confirmar; em PostgreSQL se houver Docker.
-- [ ] 10. `staging` no `standard.yml` (D-23).
+- [x] 1. Enums, `Concession`, `Voucher`, `VoucherEvent` e `VoucherEventTypes` em `Domain/Vouchers`; `AuditEventTypes` ganha `VoucherIssued`, `VoucherConfirmed`, `VoucherCancelled` e `VoucherIssuanceRefused`; remoção de `Domain/Entities/Voucher.cs`, `VoucherEvent.cs`, `Enums/VoucherStatus.cs` e `Enums/VoucherEventType.cs`.
+- [x] 2. `Campaign`: contadores, `EffectiveStatus` com `SoldOut` (D-5) e fim inclusivo (D-7, também em `Approve`), `IsInScope`, `IsSatisfiedBy`, `ChooseTarget`; `CustomerPurchaseCount` habilitado em `ReplaceConditions`; `CampaignItem` com contadores. `VoucherValidity`, `ConcessionEvaluator` e `Purchase`.
+- [x] 3. Contratos, `ConcessionContract` (mensagens), `IConcessionService`, `IConcessionRepository`, `IReservationReleaser`, `VoucherOptions` (`Vouchers:*`) validado no startup.
+- [x] 4. `ConcessionService`: fluxo 1.2 com transação, `ExecuteUpdateAsync` condicional para reservar, confirmar, desfazer e liberar; catálogo por `productCode`; auditoria e eventos; `GetCustomerVouchersAsync`. `ReservationReleaser` e o `HostedService` do sweep.
+- [x] 5. Configurações EF (`concessions`, `vouchers`, `voucher_events`, contadores, `CHECK`), `DbSet`s, `AppDbContext` sem `Domain.Entities` de voucher, migração `VoucherConcessions` via `scripts/add-migration.sh` (depois do PR #51).
+- [x] 6. `SatelliteConcessionsController` (5 rotas) e `CampaignService.Map` com `SoldOut`, `issuedVouchers` e `reservedVouchers`.
+- [x] 7. Testes unitários (`ConcessionEvaluatorTests`, `VoucherValidityTests`, `CampaignSoldOutTests`, D9) e de integração (`SatelliteConcessionsEndpointTests`, `ConcessionConcurrencyTests`, `CustomerVouchersEndpointTests`, auditoria e append-only).
+- [x] 8. `appsettings.json` (`Vouchers`), `.env.example`, `README.md` (fluxo do integrador), `agents.md` (skill do motor), `ROADMAP.md` (2.4/2.5: D1, D2, D4, D7 e D9 decididos na issue #45), `PROJECT_STATE.md`.
+- [x] 9. `dotnet test` verde sem warnings (inclui `MigrationsModelTests`); smoke test com a API: token do `pdv-demo` → campanha aprovada → conceder → confirmar; em PostgreSQL se houver Docker.
+- [x] 10. `staging` no `standard.yml` (D-23).
 
 ---
 
@@ -348,34 +348,48 @@ Todas as rotas: policy `SatelliteIssueVouchers`; `401 AUTH_UNAUTHENTICATED` sem 
 
 **Unidade (domínio, relógio fixo):**
 
-- [ ] Esquema da US-04.1: valor total 180 / 149,99 com `PurchaseTotal 150`; 12 / 9 itens com `ItemQuantity 10`; categoria presente / ausente → satisfeita ou não. Cenários 1 e 2 (cumulativas).
-- [ ] `CustomerPurchaseCount 3`: pedido com 3 → satisfeita; com 2 ou sem o campo → não.
-- [ ] D-9: duas campanhas satisfeitas, 10% sobre R$ 200 (20) contra R$ 15 fixo → vence a de 20; empate → menor `EndsAt`; empate → menor `DecidedAt`; repetição escolhe a mesma.
-- [ ] D-10: compra com produto do alvo `Product` e da categoria do alvo `Category` → `Product`; sem nenhum → `All`; sem `All` → primeiro alvo.
-- [ ] US-04.3: 30 dias a partir de 01/10/2026 14:30 → 31/10/2026 14:30; data fixa 15/11/2026 23:59 → 23:59:59; 60 dias com teto 31/10/2026 23:59 emitido em 25/10 → 31/10 23:59:59; 48 horas.
-- [ ] D-7: campanha com fim 31/10 23:59: às 23:59:30 ainda `Active`; às 00:00:00 de 01/11 `Ended`. `Approve` às 23:59:30 do fim ainda aprova.
-- [ ] D-5: total 5, `issued 3 + reserved 2` → `SoldOut`; `reserved 1` → `Active`; sem total → nunca `SoldOut`.
-- [ ] `Voucher.EffectiveStatus`: provisório com reserva vencida → `Discarded`; disponível com validade vencida → `Expired`; no último segundo da validade → `Available`.
-- [ ] Escopo: rede inteira, região da loja, a própria loja, canal diferente, loja de outra região → casa / não casa.
+- [x] Esquema da US-04.1: valor total 180 / 149,99 com `PurchaseTotal 150`; 12 / 9 itens com `ItemQuantity 10`; categoria presente / ausente → satisfeita ou não. Cenários 1 e 2 (cumulativas).
+- [x] `CustomerPurchaseCount 3`: pedido com 3 → satisfeita; com 2 ou sem o campo → não.
+- [x] D-9: duas campanhas satisfeitas, 10% sobre R$ 200 (20) contra R$ 15 fixo → vence a de 20; empate → menor `EndsAt`; empate → menor `DecidedAt`; repetição escolhe a mesma.
+- [x] D-10: compra com produto do alvo `Product` e da categoria do alvo `Category` → `Product`; sem nenhum → `All`; sem `All` → primeiro alvo.
+- [x] US-04.3: 30 dias a partir de 01/10/2026 14:30 → 31/10/2026 14:30; data fixa 15/11/2026 23:59 → 23:59:59; 60 dias com teto 31/10/2026 23:59 emitido em 25/10 → 31/10 23:59:59; 48 horas.
+- [x] D-7: campanha com fim 31/10 23:59: às 23:59:30 ainda `Active`; às 00:00:00 de 01/11 `Ended`. `Approve` às 23:59:30 do fim ainda aprova.
+- [x] D-5: total 5, `issued 3 + reserved 2` → `SoldOut`; `reserved 1` → `Active`; sem total → nunca `SoldOut`.
+- [x] `Voucher.EffectiveStatus`: provisório com reserva vencida → `Discarded`; disponível com validade vencida → `Expired`; no último segundo da validade → `Available`.
+- [x] Escopo: rede inteira, região da loja, a própria loja, canal diferente, loja de outra região → casa / não casa.
 
 **Integração (`TestAuth.CreateSatelliteToken`, `ReadyCampaign` aprovada, relógio fixo dentro da vigência):**
 
-- [ ] US-07.2 cenário 1: compra que satisfaz → `200 Provisional`, voucher com código de 12 caracteres, `reservedUntil = agora + 15 min`, `validUntil` de 30 dias com o offset da rede; `campaigns.reserved_vouchers = 1`; `voucher_events` com `Issued`; `audit_entries` com `VoucherIssued` e o id da aplicação.
-- [ ] Cenário 4: `confirm` → `Confirmed`, voucher `Available`, `issued 1 / reserved 0`; segundo `confirm` → `200` igual.
-- [ ] Cenário 5: `cancel` → `Cancelled`, voucher `Discarded`, saldo devolvido; `confirm` depois → `422 CONCESSION_ALREADY_CANCELLED`. Reserva vencida (relógio adiantado 16 min) → `confirm` → `422 CONCESSION_RESERVATION_EXPIRED` e saldo devolvido; `GET` mostra `Expired`.
-- [ ] Cenário 6 / US-04.6: mesma `transactionId` duas vezes → mesmo `concessionId` e código, `reserved_vouchers` continua 1; transações distintas → dois vouchers.
-- [ ] Cenário 2: compra que não satisfaz nenhuma → `200 NotGranted NoCampaignMatched`, sem linha em `vouchers` nem em `audit_entries`; a repetição devolve o mesmo `concessionId`.
-- [ ] US-04.4 (esquema): `Draft`, `PendingApproval`, `Scheduled` (antes do início), `Paused`, `Ended`, `Rejected` → `NotGranted CampaignNotActive`; agendada com vigência começada → concede. Cenário 1: voucher emitido sobrevive ao encerramento (`GET` continua `Available`).
-- [ ] US-04.5: total 1 → segunda compra `CampaignSoldOut` e `GET /campaigns/{id}` com `status = SoldOut`; cota do alvo esgotada com saldo no outro → `TargetSoldOut`, contadores do outro alvo intactos; limite por cliente 2 → terceira compra do mesmo CPF `CustomerLimitReached`, outro CPF concede.
-- [ ] Cenário 3 (concorrência): 20 requisições simultâneas, total 1 → exatamente uma `Provisional`, 19 `CampaignSoldOut`, `issued + reserved = 1` (SQLite e, com `TEST_POSTGRES_CONNECTION`, PostgreSQL).
-- [ ] Liberação ao conceder: reserva vencida de outra transação libera o saldo e a nova compra concede; `voucher_events` da antiga com `ReservationExpired`.
-- [ ] Escopo: campanha só da Loja Centro → compra na Loja Shopping `NotGranted NoCampaignMatched`; canal virtual na loja física → `422 ISSUANCE_CHANNEL_NOT_ENABLED`; loja inativada → `422 ISSUANCE_ESTABLISHMENT_INACTIVE`; loja de outra rede ou inexistente → `422 ISSUANCE_ESTABLISHMENT_NOT_FOUND`.
-- [ ] Contrato: sem transação, CPF com 10 dígitos, canal inválido, total 0, itens vazios, quantidade 0 → `400` com o campo.
-- [ ] Segurança: sem token → `401`; token de usuário → `401`; aplicação sem `vouchers:issue` → `403 AUTH_FORBIDDEN_SCOPE`; concessão de outra rede → `404`.
-- [ ] US-07.4: `GET /customers/{cpf}/vouchers` lista provisório e disponível com `remainingUses`; `?status=Available` filtra; CPF sem voucher → `[]`; CPF inválido → `400`; o voucher descartado só aparece com `?status=`... (não aparece: `Discarded` não é filtro).
-- [ ] Append-only: alterar um `voucher_events` pelo `AppDbContext` lança e o registro fica igual.
-- [ ] `PUT /conditions` com `CustomerPurchaseCount` `minQuantity 3` → `200`; `minQuantity 0` → `422`.
-- [ ] Suíte anterior: testes de status efetivo e ciclo ajustados ao fim inclusivo (D-7).
+- [x] US-07.2 cenário 1: compra que satisfaz → `200 Provisional`, voucher com código de 12 caracteres, `reservedUntil = agora + 15 min`, `validUntil` de 30 dias com o offset da rede; `campaigns.reserved_vouchers = 1`; `voucher_events` com `Issued`; `audit_entries` com `VoucherIssued` e o id da aplicação.
+- [x] Cenário 4: `confirm` → `Confirmed`, voucher `Available`, `issued 1 / reserved 0`; segundo `confirm` → `200` igual.
+- [x] Cenário 5: `cancel` → `Cancelled`, voucher `Discarded`, saldo devolvido; `confirm` depois → `422 CONCESSION_ALREADY_CANCELLED`. Reserva vencida (relógio adiantado 16 min) → `confirm` → `422 CONCESSION_RESERVATION_EXPIRED` e saldo devolvido; `GET` mostra `Expired`.
+- [x] Cenário 6 / US-04.6: mesma `transactionId` duas vezes → mesmo `concessionId` e código, `reserved_vouchers` continua 1; transações distintas → dois vouchers.
+- [x] Cenário 2: compra que não satisfaz nenhuma → `200 NotGranted NoCampaignMatched`, sem linha em `vouchers` nem em `audit_entries`; a repetição devolve o mesmo `concessionId`.
+- [x] US-04.4 (esquema): `Draft`, `PendingApproval`, `Scheduled` (antes do início), `Paused`, `Ended`, `Rejected` → `NotGranted CampaignNotActive`; agendada com vigência começada → concede. Cenário 1: voucher emitido sobrevive ao encerramento (`GET` continua `Available`).
+- [x] US-04.5: total 1 → segunda compra `CampaignSoldOut` e `GET /campaigns/{id}` com `status = SoldOut`; cota do alvo esgotada com saldo no outro → `TargetSoldOut`, contadores do outro alvo intactos; limite por cliente 2 → terceira compra do mesmo CPF `CustomerLimitReached`, outro CPF concede.
+- [x] Cenário 3 (concorrência): 20 requisições simultâneas, total 1 → exatamente uma `Provisional`, 19 `CampaignSoldOut`, `issued + reserved = 1` (SQLite e, com `TEST_POSTGRES_CONNECTION`, PostgreSQL).
+- [x] Liberação ao conceder: reserva vencida de outra transação libera o saldo e a nova compra concede; `voucher_events` da antiga com `ReservationExpired`.
+- [x] Escopo: campanha só da Loja Centro → compra na Loja Shopping `NotGranted NoCampaignMatched`; canal virtual na loja física → `422 ISSUANCE_CHANNEL_NOT_ENABLED`; loja inativada → `422 ISSUANCE_ESTABLISHMENT_INACTIVE`; loja de outra rede ou inexistente → `422 ISSUANCE_ESTABLISHMENT_NOT_FOUND`.
+- [x] Contrato: sem transação, CPF com 10 dígitos, canal inválido, total 0, itens vazios, quantidade 0 → `400` com o campo.
+- [x] Segurança: sem token → `401`; token de usuário → `401`; aplicação sem `vouchers:issue` → `403 AUTH_FORBIDDEN_SCOPE`; concessão de outra rede → `404`.
+- [x] US-07.4: `GET /customers/{cpf}/vouchers` lista provisório e disponível com `remainingUses`; `?status=Available` filtra; CPF sem voucher → `[]`; CPF inválido → `400`; o voucher descartado só aparece com `?status=`... (não aparece: `Discarded` não é filtro).
+- [x] Append-only: alterar um `voucher_events` pelo `AppDbContext` lança e o registro fica igual.
+- [x] `PUT /conditions` com `CustomerPurchaseCount` `minQuantity 3` → `200`; `minQuantity 0` → `422`.
+- [x] Suíte anterior: testes de status efetivo e ciclo ajustados ao fim inclusivo (D-7).
+
+---
+
+### Notas da implementação
+
+- `concessions` não tem `voucher_id`: a relação 1:1 fica em `vouchers.concession_id` (índice único), e `Concession.Voucher` é a navegação. Evita a referência circular na gravação.
+- A cota do alvo é reservada sempre (`campaign_items.reserved_vouchers`/`issued_vouchers`), mesmo sem `voucher_limit`: os contadores por alvo ficam completos para o EP-03.
+- A migração `VoucherConcessions` gerada pelo EF renomeava `Vouchers` para `vouchers` e alterava colunas; foi reescrita à mão para apagar `Vouchers` e `VoucherEvents` (vazias) e criar `vouchers` do zero, nos dois conjuntos (SQLite `20261110141616`, PostgreSQL `20261110141622`), como a GH-023 fez com a PK repetida.
+- `valid_until` guarda o último instante válido (inclusivo); a comparação trunca o "agora" ao segundo. A data fixa e o teto entram como `23:59:59`.
+- A liberação das reservas vencidas (`ReservationReleaser`) fica na camada de aplicação sobre o `IConcessionRepository`; a varredura (`ReservationSweepService`) é um `BackgroundService` da Api com `PeriodicTimer` e o `TimeProvider` injetado.
+- No `ConfirmAsync`/`CancelAsync`, se o comando condicional não pegar a linha (outro pedido chegou antes), a concessão é relida e reavaliada uma vez; a resposta é sempre o estado gravado.
+- Os testes de integração criam uma loja por cenário (`MotorScenario`): a fábrica é compartilhada na classe e campanhas de rede inteira dos outros testes seriam candidatas na mesma compra.
+- Testes: 36 unitários novos (`ConcessionEvaluatorTests`, `VoucherValidityTests`) e 41 de integração (`SatelliteConcessionsEndpointTests`, `ConcessionConcurrencyTests`, `CustomerVouchersEndpointTests`); os de status efetivo e ciclo foram ajustados ao fim inclusivo (D-7). Smoke: `scripts/smoke/motor.py`.
+- PostgreSQL não foi exercitado nesta máquina (sem Docker): a migração só foi compilada e o teste de concorrência rodou em SQLite.
 
 ---
 

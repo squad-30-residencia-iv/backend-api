@@ -152,6 +152,16 @@ Em Development já existe a aplicação `pdv-demo` (segredo `segredo-local-do-pd
 
 Credencial errada → `401 AUTH_INVALID_CLIENT`; escopo ausente → `403 AUTH_FORBIDDEN_SCOPE`; outra rede → `403 SCOPE_FORBIDDEN`. O token de usuário não abre rota de satélite, e o de aplicação não abre rota de usuário.
 
+### Motor de concessão (EP-04, US-07.2 e US-07.4)
+
+Com o carrinho fechado e antes do pagamento, o satélite pede a concessão; depois do pagamento, confirma ou desfaz. Todas as rotas exigem o token de aplicação com o escopo `vouchers:issue`; a rede é a da aplicação.
+
+1. `POST /api/v1/satellite/concessions` com a compra: `transactionId` (único por rede, chave de idempotência), `customer.document` (CPF), `establishmentId`, `channel` (`Physical` ou `Virtual`), `totalAmount` (bruto), `items[]` (`productCode`, `quantity`, `unitPrice`) e, opcional, `customerPurchaseCount`. Resposta `200` sempre que a compra foi avaliada: `status` `Provisional` com `voucher` e `reservedUntil`, ou `NotGranted` com `reason` (`NoCampaignMatched`, `CampaignNotActive`, `CampaignSoldOut`, `TargetSoldOut`, `CustomerLimitReached`). Não haver concessão não é erro: a venda segue. Repetir a mesma `transactionId` devolve a concessão original.
+2. `POST /api/v1/satellite/concessions/{id}/confirm` depois do pagamento: o voucher passa a `Available` e o saldo é consumido. `POST .../cancel` se a venda não se concluir: o voucher é descartado e o saldo devolvido. Os dois são idempotentes. Sem confirmação em `Vouchers:ReservationMinutes` (padrão 15), a reserva expira sozinha e a confirmação responde `422 CONCESSION_RESERVATION_EXPIRED`.
+3. `GET /api/v1/satellite/concessions/{id}` mostra o estado atual; `GET /api/v1/satellite/customers/{cpf}/vouchers?status=` lista os vouchers do cliente com o status efetivo (`Provisional`, `Available`, `Redeemed`, `Expired`, `Cancelled`).
+
+Regras aplicadas: só campanha efetivamente ativa, cujo escopo contempla a loja e o canal, com as condições de geração satisfeitas; uma compra gera no máximo um voucher (maior benefício nesta compra, depois a que termina primeiro, depois a aprovada primeiro); saldo da campanha, cota do alvo e limite por cliente; validade calculada na emissão (prazo relativo com teto, ou data fixa, até 23:59:59). Loja inativa, inexistente ou que não opera o canal → `422` com `code` `ISSUANCE_*`. O smoke test `python -I scripts/smoke/motor.py http://localhost:5026` percorre o fluxo com a API no ar.
+
 ### Estrutura da Solution (`VoucherCampaigns.slnx`)
 
 | Projeto | Responsabilidade |

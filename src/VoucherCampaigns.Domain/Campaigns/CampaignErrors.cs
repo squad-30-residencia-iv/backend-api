@@ -59,6 +59,9 @@ public static class CampaignErrors
     public const string ConditionMinQuantityNotPositiveCode = "CAMPAIGN_CONDITION_MIN_QUANTITY_NOT_POSITIVE";
     public const string ConditionMinQuantityNotPositiveMessage = "A quantidade mínima de itens deve ser maior que zero";
 
+    public const string ConditionMinPurchasesNotPositiveCode = "CAMPAIGN_CONDITION_MIN_PURCHASES_NOT_POSITIVE";
+    public const string ConditionMinPurchasesNotPositiveMessage = "A quantidade mínima de compras deve ser maior que zero";
+
     public const string ConditionMinAmountNotPositiveCode = "CAMPAIGN_CONDITION_MIN_AMOUNT_NOT_POSITIVE";
     public const string ConditionMinAmountNotPositiveMessage = "O valor mínimo da compra deve ser maior que zero";
 

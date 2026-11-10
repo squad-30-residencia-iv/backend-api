@@ -71,6 +71,7 @@ public static class CampaignContract
     public const string ConditionMinAmountScale = "O valor mínimo da compra deve ter no máximo 2 casas decimais.";
     public const string ConditionMinAmountTooLarge = "O valor mínimo da compra deve ser no máximo 99.999.999,99.";
     public const string ConditionMinQuantityRequired = "Informe a quantidade mínima de itens.";
+    public const string ConditionMinPurchasesRequired = "Informe a quantidade mínima de compras do cliente.";
     public const string ConditionCategoryRequired = "Informe a categoria da condição.";
     public const string ConditionProductRequired = "Informe o produto da condição.";
     public const string ConditionUnexpectedField = "Este campo não se aplica ao tipo de condição informado.";

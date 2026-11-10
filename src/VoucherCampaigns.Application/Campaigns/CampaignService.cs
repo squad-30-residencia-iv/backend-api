@@ -1,7 +1,3 @@
-using System.Text.Encodings.Web;
-using System.Text.Json;
-using System.Text.Json.Serialization;
-using System.Text.Unicode;
 using VoucherCampaigns.Application.Audit;
 using VoucherCampaigns.Application.Authentication;
 using VoucherCampaigns.Application.Common;
@@ -24,13 +20,6 @@ public class CampaignService(
     IAuditTrail audit,
     TimeProvider timeProvider) : ICampaignService
 {
-    // camelCase, sem nulos e com acentos legíveis no banco.
-    private static readonly JsonSerializerOptions AuditPayloadJson = new(JsonSerializerDefaults.Web)
-    {
-        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
-        Encoder = JavaScriptEncoder.Create(UnicodeRanges.All)
-    };
-
     public async Task<CampaignResponse> CreateAsync(CreateCampaignRequest request, CancellationToken cancellationToken)
     {
         var networkId = InputValues.RequiredId(request.NetworkId, nameof(request.NetworkId), CampaignContract.NetworkRequired);
@@ -470,6 +459,11 @@ public class CampaignService(
                 condition.MinQuantity = request.MinQuantity
                     ?? throw new RequestValidationException($"{field}.MinQuantity", CampaignContract.ConditionMinQuantityRequired);
                 break;
+            case ConditionType.CustomerPurchaseCount:
+                EnsureOnly(request, field, nameof(request.MinQuantity));
+                condition.MinQuantity = request.MinQuantity
+                    ?? throw new RequestValidationException($"{field}.MinQuantity", CampaignContract.ConditionMinPurchasesRequired);
+                break;
             case ConditionType.Category:
                 EnsureOnly(request, field, nameof(request.CategoryId));
                 condition.CategoryId = NonEmpty(request.CategoryId)
@@ -576,7 +570,7 @@ public class CampaignService(
             EntityType = nameof(Campaign),
             EntityId = campaign.Id,
             OccurredAt = occurredAt,
-            Payload = JsonSerializer.Serialize(payload, AuditPayloadJson)
+            Payload = AuditJson.Serialize(payload)
         });
     }
 
@@ -818,7 +812,7 @@ public class CampaignService(
             campaign.TotalVoucherLimit,
             campaign.PerCustomerVoucherLimit,
             campaign.UndistributedVouchers,
-            IssuedVouchers: 0,
+            campaign.IssuedVouchers,
             campaign.Items.OrderBy(item => item.Id).Select(MapItem).ToList(),
             // O banco devolve o DateTime sem Kind; sem isso o GET sairia sem "Z", diferente do POST.
             DateTime.SpecifyKind(campaign.CreatedAt, DateTimeKind.Utc),
@@ -830,7 +824,8 @@ public class CampaignService(
             campaign.Conditions.OrderBy(condition => condition.Id).Select(MapCondition).ToList(),
             campaign.AllowUseInSamePurchase,
             campaign.RejectionReason,
-            MapScopes(campaign.Scopes));
+            MapScopes(campaign.Scopes),
+            campaign.ReservedVouchers);
     }
 
     /// <summary>Junta as linhas de cada local (uma por canal), na ordem em que o local foi informado.</summary>

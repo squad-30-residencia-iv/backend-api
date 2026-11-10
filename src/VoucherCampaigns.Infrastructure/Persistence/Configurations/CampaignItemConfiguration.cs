@@ -23,6 +23,7 @@ public class CampaignItemConfiguration : IEntityTypeConfiguration<CampaignItem>
                 + " AND (benefit_type <> 'Percentage' OR CAST(benefit_value AS REAL) <= 100)");
 
             table.HasCheckConstraint("ck_campaign_items_voucher_limit", "voucher_limit IS NULL OR voucher_limit > 0");
+            table.HasCheckConstraint("ck_campaign_items_voucher_counters", "issued_vouchers >= 0 AND reserved_vouchers >= 0");
         });
 
         builder.HasKey(item => item.Id);
@@ -34,6 +35,8 @@ public class CampaignItemConfiguration : IEntityTypeConfiguration<CampaignItem>
         builder.Property(item => item.TargetType).HasConversion<string>().HasMaxLength(20);
         builder.Property(item => item.BenefitType).HasConversion<string>().HasMaxLength(20);
         builder.Property(item => item.BenefitValue).HasPrecision(10, 2);
+        builder.Property(item => item.IssuedVouchers).HasDefaultValue(0);
+        builder.Property(item => item.ReservedVouchers).HasDefaultValue(0);
 
         builder.HasOne(item => item.Campaign)
             .WithMany(campaign => campaign.Items)
