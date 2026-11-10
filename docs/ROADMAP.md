@@ -36,7 +36,7 @@ flowchart LR
     U011 --> U014["01.4 Condições de geração ✅"]
     U011 --> U015["01.5 Público todos ✅"]
     EP06["06.1–06.4 Critérios"] -.público restrito.-> U015
-    U021["02.1 Hierarquia ✅"] --> U022["02.2 Inativação ✅"] --> U023["02.3 Escopo e canais"]
+    U021["02.1 Hierarquia ✅"] --> U022["02.2 Inativação ✅"] --> U023["02.3 Escopo e canais ✅"]
     U0112["01.12 Validade e restrições ✅"]
     U013 & U014 & U015 & U023 & U0112 --> U016["01.6 Submeter ✅"]
     U016 --> U0111["01.11 Aprovar ✅"]
@@ -123,7 +123,7 @@ O cálculo na emissão e a recusa no resgate continuam no EP-04 e no EP-05. A sp
 
 | Trilha | Sequência |
 |---|---|
-| **A** | 01.10 duplicar → 01.8 pausar e encerrar (efeito sobre vouchers vem na onda 3) |
+| **A** | 01.10 duplicar ✅ → 01.8 pausar e encerrar ✅ (efeito sobre vouchers vem na onda 3) |
 | **C** | 01.6 submeter (RN01) → 01.11 aprovar (alçada e auditoria) |
 | **E — Motor (EP-04 + 07.2 / 07.4)** | Quem terminar a trilha B ou D: 04.3 emissão e validade → 04.4 bloqueio por status → 04.1 condições (valor total e categoria primeiro) → 04.5 saldo e concorrência → 04.6 idempotência → 04.9 provisório → 04.7 histórico → 04.8 + 07.2 / 07.4 como fachada HTTP |
 | **D** | 06.5 elegibilidade na emissão (junto da 04.2, com a trilha E) → 06.6 simulação |
@@ -151,8 +151,8 @@ O cálculo na emissão e a recusa no resgate continuam no EP-04 e no EP-05. A sp
 | Prioridade | US |
 |---|---|
 | **P0 — Fundações** | 02.5 e 01.1 já mescladas · contratos compartilhados (`Voucher` e `VoucherEvent` do #36 ainda fora do padrão) · auditoria ✅ · status efetivo ✅ · 07.5 ✅ |
-| **P1 — Configuração** | 01.9 ✅, 01.2 ✅, 01.3 ✅, 01.4 ✅, 01.5 ✅ (só "todos"), 01.12 ✅, 02.4 ✅, 02.1 ✅, 02.2 ✅, 02.3, 06.1, 06.2, 06.3, 06.4 |
-| **P2 — Base útil** | 01.6 ✅, 01.11 ✅, 04.1 a 04.9, 06.5, 07.2, 07.4, 01.10, 01.8 (pausar e encerrar) |
+| **P1 — Configuração** | 01.9 ✅, 01.2 ✅, 01.3 ✅, 01.4 ✅, 01.5 ✅ (só "todos"), 01.12 ✅, 02.4 ✅, 02.1 ✅, 02.2 ✅, 02.3 ✅, 06.1, 06.2, 06.3, 06.4 |
+| **P2 — Base útil** | 01.6 ✅, 01.11 ✅, 04.1 a 04.9, 06.5, 07.2, 07.4, 01.10 ✅, 01.8 (pausar e encerrar) ✅ |
 | **P3 — Resgate** | 05.1 a 05.6, 07.3, 07.1, 01.7 (após vigor), 01.8 (cancelar) |
 | **P4 — Gestão** | 03.1 a 03.5, 02.6 completa, 06.6 |
 
@@ -190,4 +190,5 @@ Ciclo SDD já usado nas US-02.5 e US-01.1 (`docs/prompts/` e `agents.md`):
 - [x] Issue #26 antes da #27: US-01.6, US-01.11, status efetivo, auditoria e US-07.5
 - [ ] Issue #27: motor de concessão e resgate, em specs próprias para `Voucher` e `VoucherEvent`
 - [x] D1, D2, D3, D4, D7 e D9 decididos na issue #45 (2026-11-09)
-- [ ] US-02.3 escopo por região, loja e canal; US-02.6 herança de fuso e moeda; EP-06 público restrito
+- [x] US-02.3 escopo por região, loja e canal (issue #46, com 01.10 duplicar e 01.8 pausar e encerrar)
+- [ ] US-02.6 herança de fuso e moeda; EP-06 público restrito

@@ -5,6 +5,8 @@
 > Responsável: Gabriel Torres
 > Data: 2026-11-09
 
+> **Nota (US-01.8, issue #46):** a pausada passou a ser `Ended` depois do fim da vigência. Vale a D-1 da spec `US-01.8-pausar-e-encerrar-campanha.md`, que substitui a D-3 abaixo.
+
 ---
 
 ## 1. Contexto & Regras de Negócio

@@ -121,11 +121,12 @@ Qualquer assistente que iniciar uma sessão de desenvolvimento deve seguir estri
 - Mensagens de validação de campo (`[Required]`, `[StringLength]`...) sempre com `ErrorMessage` em português.
 - Datas de negócio digitadas pelo usuário chegam **sem fuso** (`[LocalDateTime]`) e são convertidas com `NetworkTime` usando `Network.TimeZone`; no banco ficam em UTC e voltam com o offset da rede.
 - "Agora" sempre via `TimeProvider` injetado, nunca `DateTime.UtcNow` em regra de negócio. Nos testes de integração, fixe `factory.Clock.UtcNow`; como o JWT é validado com a hora real, use `TestAuth.CreateToken` (e não o login) nesses testes.
-- Status da campanha para leitura ou decisão: `Campaign.EffectiveStatus(utcNow)` (PR-04), nunca `campaign.Status` direto. Agendada e ativa seguem a vigência pelo relógio; o banco guarda o status da decisão. A concessão usa `CanIssueVouchers`, que já olha o efetivo.
+- Status da campanha para leitura ou decisão: `Campaign.EffectiveStatus(utcNow)` (PR-04), nunca `campaign.Status` direto. Agendada, ativa e pausada seguem a vigência pelo relógio; o banco guarda o status da decisão. Transição nova (como `Pause` e `End`, US-01.8) parte do status efetivo, devolve um `CampaignStatusEvent` e passa pelo `RecordStatusChange` do serviço, que grava o histórico e a auditoria. A concessão usa `CanIssueVouchers`, que já olha o efetivo.
 
 ### [Skill] Trilha de Auditoria
 
-- Ação relevante (submeter, aprovar, reprovar; depois emitir e resgatar): monte um `AuditEntry` (`Domain/Audit`) e chame `IAuditTrail.Append` antes do `SaveChanges` da operação, que grava os dois juntos. Tipo do evento em `AuditEventTypes`; autor `AuditActorType.User` (`sub` do token) ou `Application` (id da aplicação satélite); payload JSON curto.
+- Escopo da campanha (US-02.3): `campaign_scopes` tem uma linha por local e canal; região e loja nulas = rede inteira, e a campanha vale na união dos locais. Uma coleção da campanha substituída por inteiro (itens, condições, escopo) usa `ValueGeneratedNever` na chave e ids v7 em sequência para manter a ordem informada.
+- Ação relevante (submeter, aprovar, reprovar, pausar, encerrar, duplicar; depois emitir e resgatar): monte um `AuditEntry` (`Domain/Audit`) e chame `IAuditTrail.Append` antes do `SaveChanges` da operação, que grava os dois juntos. Tipo do evento em `AuditEventTypes`; autor `AuditActorType.User` (`sub` do token) ou `Application` (id da aplicação satélite); payload JSON curto.
 - `AuditEntry` e `CampaignStatusEvent` implementam `IAppendOnly`: o `AppDbContext` recusa alterar ou apagar esses registros. Não crie rota de alteração para eles.
 
 ### [Skill] Dependências entre Camadas

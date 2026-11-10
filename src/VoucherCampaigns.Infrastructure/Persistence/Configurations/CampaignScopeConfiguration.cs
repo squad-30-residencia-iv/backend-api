@@ -15,6 +15,9 @@ public class CampaignScopeConfiguration : IEntityTypeConfiguration<CampaignScope
 
         builder.HasKey(scope => scope.Id);
 
+        // Ids gerados pelo serviço, como nos itens: a substituição da lista grava linhas novas (US-02.3).
+        builder.Property(scope => scope.Id).ValueGeneratedNever();
+
         builder.Property(scope => scope.ChannelType).HasConversion<string>().HasMaxLength(20);
 
         builder.HasOne(scope => scope.Campaign)

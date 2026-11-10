@@ -338,7 +338,6 @@ namespace VoucherCampaigns.Infrastructure.Migrations.Sqlite.Migrations
             modelBuilder.Entity("VoucherCampaigns.Domain.Campaigns.CampaignScope", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("TEXT")
                         .HasColumnName("id");
 
