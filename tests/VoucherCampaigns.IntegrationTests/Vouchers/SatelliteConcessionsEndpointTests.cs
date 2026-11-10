@@ -100,8 +100,9 @@ public class SatelliteConcessionsEndpointTests : IClassFixture<ApiFactory>
         Assert.Equal(1, stored.IssuedVouchers);
         Assert.Equal(0, stored.ReservedVouchers);
         Assert.Equal(1, Assert.Single(stored.Items).IssuedVouchers);
-        var events = await QueryAsync(_factory, context => context.VoucherEvents.Where(item => item.VoucherId == granted.Voucher!.Id).OrderBy(item => item.Id).ToListAsync());
-        Assert.Equal([VoucherEventTypes.Issued, VoucherEventTypes.Confirmed], events.Select(item => item.EventType));
+        // Os dois eventos têm o mesmo instante (relógio fixo), então a ordem pelo id v7 não é determinística.
+        var events = await QueryAsync(_factory, context => context.VoucherEvents.Where(item => item.VoucherId == granted.Voucher!.Id).ToListAsync());
+        Assert.Equal([VoucherEventTypes.Confirmed, VoucherEventTypes.Issued], events.Select(item => item.EventType).Order());
         Assert.Equal(1, await QueryAsync(_factory, context => context.AuditEntries.CountAsync(entry => entry.EventType == AuditEventTypes.VoucherConfirmed && entry.EntityId == granted.Voucher!.Id)));
         Assert.Equal("Active", await CampaignStatusAsync(_factory, scenario.CampaignId));
     }
