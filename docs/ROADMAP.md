@@ -71,22 +71,26 @@ O cálculo na emissão e a recusa no resgate continuam no EP-04 e no EP-05. A sp
 
 | # | Decisão | Bloqueia |
 |---|---|---|
-| D1 | Critério de desempate quando mais de uma campanha é satisfeita | 04.1 (cenário 5) |
-| D2 | Contador de compras do cliente: enviado pelo satélite ou persistido pela plataforma | Condição "quantidade de compras" (01.4 / 04.1) |
-| D3 | Modelo de concessão provisória (P12) | 04.9, 07.2 — **default adotado em 2026-11-07 (ver 2.5)**, falta o aceite do representante |
-| D4 | Atributos do cliente enviados pelo satélite (só CPF?) | 04.2 e critérios de perfil da EP-06 |
+| D1 | Critério de desempate quando mais de uma campanha é satisfeita | 04.1 (cenário 5) — **decidido na issue #45 (2026-11-09), ver 2.5** |
+| D2 | Contador de compras do cliente: enviado pelo satélite ou persistido pela plataforma | Condição "quantidade de compras" (01.4 / 04.1) — **decidido na issue #45, ver 2.5** |
+| D3 | Modelo de concessão provisória (P12) | 04.9, 07.2 — **decidido na issue #45 (duas fases), ver 2.5** |
+| D4 | Atributos do cliente enviados pelo satélite (só CPF?) | 04.2 e critérios de perfil da EP-06 — **decidido na issue #45, ver 2.5** |
 | D6 | Edição de campanha agendada; motivo obrigatório na reprovação | 01.7, 01.11 |
-| D7 | Campanha com loja única inativada | 02.2 |
+| D7 | Campanha com loja única inativada | 02.2 — **decidido na issue #45, ver 2.5** |
 | D8 | Formato da exportação | 03.5 |
-| D9 | Fim da vigência às 23:59 inclui o minuto inteiro? | Vigência (01.1 / 04.4) |
+| D9 | Fim da vigência às 23:59 inclui o minuto inteiro? | Vigência (01.1 / 04.4) — **decidido na issue #45, ver 2.5** |
 
-### 2.5 Defaults adotados (até o aceite do cliente)
+### 2.5 Decisões tomadas e defaults adotados
 
 | # | Default | Registrado em | Observação |
 |---|---|---|---|
-| D3 | **Concessão em duas fases, como no backlog** (PR-06, PR-17, RF14c, US-04.9): o voucher nasce **provisório** e reserva o saldo da campanha e do alvo. A confirmação da venda o torna **disponível** e consome o saldo. O desfazimento ou a expiração do prazo de reserva o descarta e devolve o saldo. | Decisão do responsável pela issue #27, 2026-11-07 | Substitui o default da spec do #36 (`GH-023-base-motor-e-decisoes.md`), que tratava de chamada síncrona contra fila, e não do voucher provisório. O `VoucherStatus` ganha `Provisional` na spec da #27. Se o representante optar por uma fase só, a mudança fica concentrada no motor (EP-04). |
+| D3 | **Concessão em duas fases, como no backlog** (PR-06, PR-17, RF14c, US-04.9): o voucher nasce **provisório** e reserva o saldo da campanha e do alvo. A confirmação da venda o torna **disponível** e consome o saldo. O desfazimento ou a expiração do prazo de reserva o descarta e devolve o saldo. | Default de 2026-11-07; confirmado pela issue #45 (2026-11-09) | Substitui o default da spec do #36 (`GH-023-base-motor-e-decisoes.md`), que tratava de chamada síncrona contra fila, e não do voucher provisório. O `VoucherStatus` ganha `Provisional` na spec da #27. Se o representante optar por uma fase só, a mudança fica concentrada no motor (EP-04). |
 | D5 | **Projeção local.** O login confere e-mail e senha na tabela `users` (hash PBKDF2). `Auth:MockUsers` só abastece a tabela quando ela está vazia. | Implementado em 2026-11-08, spec `US-02.5-usuarios-locais.md` | Importação ou SSO, se vierem depois, trocam o `IUserCredentialStore`. |
-| D1, D2, D4, D9 | Os da spec do #36 (`GH-023-base-motor-e-decisoes.md`, seção 2) | PR #36 | Ainda sem aceite do cliente. |
+| D1 | **Uma compra usa uma única campanha.** Se mais de uma servir, vence a de maior benefício naquela compra; no empate, a que termina primeiro; se ainda empatar, a aprovada primeiro. | Issue #45 (2026-11-09); aceita como decisão em 2026-11-10 | Substitui o default do #36. Implementação na spec `GH-045-motor-de-concessao.md` (D-9). |
+| D2 | **O satélite envia a quantidade de compras do cliente.** A plataforma não grava o histórico de compras. | Issue #45 | Libera a condição `CustomerPurchaseCount` (US-01.4, D-2). |
+| D4 | **A chamada de concessão recebe o CPF e só os dados que a condição da campanha exige.** | Issue #45 | — |
+| D7 | **Loja inativada não encerra a campanha:** a concessão naquela loja é recusada até a loja voltar; campanha da rede inteira não para. | Issue #45 | Spec `GH-045` (D-13). |
+| D9 | **Fim de vigência às 23:59 vale até 23:59:59, no fuso da rede.** | Issue #45 | Altera a D-4 da spec `GH-026-status-efetivo.md` (fim exclusivo). Spec `GH-045` (D-7). |
 
 ---
 
@@ -185,5 +189,5 @@ Ciclo SDD já usado nas US-02.5 e US-01.1 (`docs/prompts/` e `agents.md`):
 - [x] Reconciliar o modelo de condições (GH-023): fica o da US-01.4
 - [x] Issue #26 antes da #27: US-01.6, US-01.11, status efetivo, auditoria e US-07.5
 - [ ] Issue #27: motor de concessão e resgate, em specs próprias para `Voucher` e `VoucherEvent`
-- [ ] Levar ao representante os defaults D1, D2, D3, D4 e D9 (D3 já tem default de duas fases; falta o aceite)
+- [x] D1, D2, D3, D4, D7 e D9 decididos na issue #45 (2026-11-09)
 - [ ] US-02.3 escopo por região, loja e canal; US-02.6 herança de fuso e moeda; EP-06 público restrito
