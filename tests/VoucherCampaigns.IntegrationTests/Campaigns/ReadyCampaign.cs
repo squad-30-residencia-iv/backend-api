@@ -4,7 +4,7 @@ using VoucherCampaigns.Infrastructure.Persistence.Seed;
 
 namespace VoucherCampaigns.IntegrationTests.Campaigns;
 
-/// <summary>Rascunho com tudo o que a submissão exige (US-01.6), vigência de 01/10/2026 08:00 a 31/10/2026 23:59 em Brasília.</summary>
+/// <summary>Rascunho com tudo o que a submissão exige (US-01.6, escopo da US-02.3: rede inteira), vigência de 01/10/2026 08:00 a 31/10/2026 23:59 em Brasília.</summary>
 internal static class ReadyCampaign
 {
     public const string Route = "/api/v1/campaigns";
@@ -32,6 +32,7 @@ internal static class ReadyCampaign
         (await analista.PutAsJsonAsync($"{Route}/{id}/audience", new { audienceType = "AllCustomers" })).EnsureSuccessStatusCode();
         (await analista.PutAsJsonAsync($"{Route}/{id}/voucher-validity", new { type = "Relative", amount = 30, unit = "Days" })).EnsureSuccessStatusCode();
         (await analista.PutAsJsonAsync($"{Route}/{id}/usage-restrictions", new { maxUsesPerVoucher = 1 })).EnsureSuccessStatusCode();
+        (await analista.PutAsJsonAsync($"{Route}/{id}/scopes", new { scopes = new[] { new { channels = new[] { "Physical", "Virtual" } } } })).EnsureSuccessStatusCode();
 
         return id;
     }

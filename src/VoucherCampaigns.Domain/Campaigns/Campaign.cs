@@ -160,11 +160,11 @@ public class Campaign
 
     /// <summary>
     /// Status efetivo (PR-04): agendada e ativa seguem a vigência pelo relógio, sem job; o fim é exclusivo.
-    /// Os demais status valem como foram gravados (spec GH-026-status-efetivo).
+    /// A pausada vira encerrada no fim (US-01.8). Os demais status valem como foram gravados (spec GH-026-status-efetivo).
     /// </summary>
     public CampaignStatus EffectiveStatus(DateTime utcNow)
     {
-        if (Status is not (CampaignStatus.Scheduled or CampaignStatus.Active))
+        if (Status is not (CampaignStatus.Scheduled or CampaignStatus.Active or CampaignStatus.Paused))
         {
             return Status;
         }
@@ -172,6 +172,11 @@ public class Campaign
         if (utcNow >= EndsAt)
         {
             return CampaignStatus.Ended;
+        }
+
+        if (Status == CampaignStatus.Paused)
+        {
+            return CampaignStatus.Paused;
         }
 
         return utcNow >= StartsAt ? CampaignStatus.Active : CampaignStatus.Scheduled;
@@ -320,6 +325,11 @@ public class Campaign
             throw new BusinessRuleException(CampaignErrors.SubmitMaxUsesRequiredCode, CampaignErrors.SubmitMaxUsesRequiredMessage);
         }
 
+        if (Scopes.Count == 0)
+        {
+            throw new BusinessRuleException(CampaignErrors.SubmitScopeRequiredCode, CampaignErrors.SubmitScopeRequiredMessage);
+        }
+
         SubmittedByUserId = actorUserId;
         SubmittedAt = utcNow;
         return MoveTo(CampaignStatus.PendingApproval, actorUserId, null, utcNow);
@@ -358,6 +368,142 @@ public class Campaign
         DecidedAt = utcNow;
         RejectionReason = trimmed;
         return MoveTo(CampaignStatus.Rejected, actorUserId, trimmed, utcNow);
+    }
+
+    /// <summary>
+    /// Substitui onde a campanha vale (US-02.3): uma linha por local (rede, região ou loja) e canal.
+    /// A existência, a rede e os canais da loja são conferidos pelo serviço.
+    /// </summary>
+    /// <exception cref="BusinessRuleException">Campanha fora de rascunho ou local repetido com o mesmo canal.</exception>
+    public void ReplaceScopes(IReadOnlyList<CampaignScope> scopes, DateTime utcNow)
+    {
+        EnsureDraft();
+
+        if (scopes.DistinctBy(scope => (scope.RegionId, scope.EstablishmentId, scope.ChannelType)).Count() != scopes.Count)
+        {
+            throw new BusinessRuleException(CampaignErrors.ScopeDuplicatedCode, CampaignErrors.ScopeDuplicatedMessage);
+        }
+
+        Scopes.Clear();
+
+        foreach (var scope in scopes)
+        {
+            scope.CampaignId = Id;
+            Scopes.Add(scope);
+        }
+
+        UpdatedAt = utcNow;
+    }
+
+    /// <summary>Pausa a campanha efetivamente ativa (US-01.8). Não há retomada: a pausada só pode ser encerrada.</summary>
+    /// <exception cref="BusinessRuleException">Campanha que não está ativa.</exception>
+    public CampaignStatusEvent Pause(Guid actorUserId, DateTime utcNow)
+    {
+        EnsureUtc(utcNow, nameof(utcNow));
+
+        if (EffectiveStatus(utcNow) != CampaignStatus.Active)
+        {
+            throw new BusinessRuleException(CampaignErrors.PauseNotActiveCode, CampaignErrors.PauseNotActiveMessage);
+        }
+
+        // A agendada que já começou é ativa: o histórico registra o status efetivo.
+        Status = CampaignStatus.Active;
+        return MoveTo(CampaignStatus.Paused, actorUserId, null, utcNow);
+    }
+
+    /// <summary>Encerra a campanha ativa ou pausada antes do fim da vigência (US-01.8).</summary>
+    /// <exception cref="BusinessRuleException">Campanha que não está ativa nem pausada.</exception>
+    public CampaignStatusEvent End(Guid actorUserId, DateTime utcNow)
+    {
+        EnsureUtc(utcNow, nameof(utcNow));
+
+        var current = EffectiveStatus(utcNow);
+
+        if (current is not (CampaignStatus.Active or CampaignStatus.Paused))
+        {
+            throw new BusinessRuleException(CampaignErrors.EndNotAllowedCode, CampaignErrors.EndNotAllowedMessage);
+        }
+
+        Status = current;
+        return MoveTo(CampaignStatus.Ended, actorUserId, null, utcNow);
+    }
+
+    /// <summary>
+    /// Rascunho novo com a configuração desta campanha, de qualquer status (US-01.10), na mesma rede e com a RN02.
+    /// Teto e data fixa da validade só vêm se continuarem coerentes com a nova vigência (spec US-01.10, D-2).
+    /// </summary>
+    /// <exception cref="BusinessRuleException">Período inválido ou início no passado.</exception>
+    public Campaign Duplicate(string name, DateTime startsAtUtc, DateTime endsAtUtc, DateTime utcNow)
+    {
+        var copy = CreateDraft(NetworkId, name, Description, startsAtUtc, endsAtUtc, utcNow);
+
+        copy.TotalVoucherLimit = TotalVoucherLimit;
+        copy.PerCustomerVoucherLimit = PerCustomerVoucherLimit;
+        copy.AudienceType = AudienceType;
+        copy.MinPurchaseAmount = MinPurchaseAmount;
+        copy.MaxPurchaseAmount = MaxPurchaseAmount;
+        copy.MaxUsesPerVoucher = MaxUsesPerVoucher;
+        copy.AllowUseInSamePurchase = AllowUseInSamePurchase;
+
+        if (VoucherValidityType == Campaigns.VoucherValidityType.Relative)
+        {
+            copy.VoucherValidityType = VoucherValidityType;
+            copy.VoucherValidityAmount = VoucherValidityAmount;
+            copy.VoucherValidityUnit = VoucherValidityUnit;
+            copy.VoucherValidityCap = VoucherValidityCap > copy.StartsAt ? VoucherValidityCap : null;
+        }
+        else if (VoucherValidityType == Campaigns.VoucherValidityType.FixedDate && VoucherValidUntil >= copy.EndsAt)
+        {
+            copy.VoucherValidityType = VoucherValidityType;
+            copy.VoucherValidUntil = VoucherValidUntil;
+        }
+
+        // Ids em sequência para itens, condições e locais manterem a ordem da origem.
+        var sequence = 0;
+        Guid NextId() => Guid.CreateVersion7(new DateTimeOffset(utcNow).AddMilliseconds(sequence++));
+
+        foreach (var item in Items.OrderBy(item => item.Id))
+        {
+            copy.Items.Add(new CampaignItem
+            {
+                Id = NextId(),
+                CampaignId = copy.Id,
+                TargetType = item.TargetType,
+                CategoryId = item.CategoryId,
+                ProductId = item.ProductId,
+                BenefitType = item.BenefitType,
+                BenefitValue = item.BenefitValue,
+                VoucherLimit = item.VoucherLimit
+            });
+        }
+
+        foreach (var condition in Conditions.OrderBy(condition => condition.Id))
+        {
+            copy.Conditions.Add(new CampaignCondition
+            {
+                Id = NextId(),
+                CampaignId = copy.Id,
+                Type = condition.Type,
+                MinAmount = condition.MinAmount,
+                MinQuantity = condition.MinQuantity,
+                CategoryId = condition.CategoryId,
+                ProductId = condition.ProductId
+            });
+        }
+
+        foreach (var scope in Scopes.OrderBy(scope => scope.Id))
+        {
+            copy.Scopes.Add(new CampaignScope
+            {
+                Id = NextId(),
+                CampaignId = copy.Id,
+                RegionId = scope.RegionId,
+                EstablishmentId = scope.EstablishmentId,
+                ChannelType = scope.ChannelType
+            });
+        }
+
+        return copy;
     }
 
     private void EnsurePending()

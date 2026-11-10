@@ -343,7 +343,6 @@ namespace VoucherCampaigns.Infrastructure.Migrations.Postgres.Migrations
             modelBuilder.Entity("VoucherCampaigns.Domain.Campaigns.CampaignScope", b =>
                 {
                     b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
                         .HasColumnType("uuid")
                         .HasColumnName("id");
 

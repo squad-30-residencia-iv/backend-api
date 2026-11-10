@@ -142,10 +142,11 @@ public class CampaignTests
     [InlineData(CampaignStatus.Active, "2026-11-05T12:00:00Z", CampaignStatus.Ended)]
     [InlineData(CampaignStatus.Draft, "2026-11-05T12:00:00Z", CampaignStatus.Draft)]
     [InlineData(CampaignStatus.PendingApproval, "2026-11-05T12:00:00Z", CampaignStatus.PendingApproval)]
-    [InlineData(CampaignStatus.Paused, "2026-11-05T12:00:00Z", CampaignStatus.Paused)]
+    [InlineData(CampaignStatus.Paused, "2026-10-10T12:00:00Z", CampaignStatus.Paused)]
+    [InlineData(CampaignStatus.Paused, "2026-11-05T12:00:00Z", CampaignStatus.Ended)]
     [InlineData(CampaignStatus.Rejected, "2026-10-10T12:00:00Z", CampaignStatus.Rejected)]
     [InlineData(CampaignStatus.Cancelled, "2026-10-10T12:00:00Z", CampaignStatus.Cancelled)]
-    public void EffectiveStatus_FollowsPeriodOnlyForScheduledAndActive(CampaignStatus stored, string instant, CampaignStatus expected)
+    public void EffectiveStatus_FollowsPeriodForScheduledActiveAndPaused(CampaignStatus stored, string instant, CampaignStatus expected)
     {
         var campaign = StartedCampaign(stored);
         var utcNow = DateTime.Parse(instant, null, System.Globalization.DateTimeStyles.AdjustToUniversal);

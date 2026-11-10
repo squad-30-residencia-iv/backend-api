@@ -6,4 +6,7 @@ public static class AuditEventTypes
     public const string CampaignSubmitted = "CampaignSubmitted";
     public const string CampaignApproved = "CampaignApproved";
     public const string CampaignRejected = "CampaignRejected";
+    public const string CampaignPaused = "CampaignPaused";
+    public const string CampaignEnded = "CampaignEnded";
+    public const string CampaignDuplicated = "CampaignDuplicated";
 }

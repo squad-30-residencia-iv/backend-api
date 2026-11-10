@@ -130,7 +130,16 @@ Fora de Development, defina `Auth__Jwt__SigningKey` (mínimo de 32 caracteres); 
 
 Resposta `201` com as datas no offset da rede (`"2026-12-01T08:00:00-03:00"`). Regras de negócio violadas respondem `422` com `code` (`CAMPAIGN_INVALID_PERIOD`, `CAMPAIGN_START_IN_PAST`, `NETWORK_UNAVAILABLE`).
 
-O `status` devolvido é o **efetivo** (PR-04). Uma campanha aprovada como `Scheduled` aparece `Active` a partir do início e `Ended` depois do fim, sem job; o banco guarda o status da decisão. O filtro `?status=` do `GET /api/v1/campaigns` usa o mesmo cálculo. Submeter, aprovar e reprovar também gravam um registro em `audit_entries`, que só aceita inclusão.
+Onde a campanha vale vai em `PUT /api/v1/campaigns/{id}/scopes`, ainda em rascunho. Cada local tem região **ou** loja (sem nenhuma, a rede inteira) e os canais; na loja, só canal que ela opera:
+
+```json
+{ "scopes": [ { "establishmentId": "0199e3a0-0000-7000-8000-000000000201", "channels": ["Physical"] },
+              { "regionId": "0199e3a0-0000-7000-8000-000000000101", "channels": ["Physical", "Virtual"] } ] }
+```
+
+A submissão exige o escopo. Depois da aprovação a mecânica não muda (D6): para mudar, `POST /api/v1/campaigns/{id}/duplicate` cria um rascunho com a mesma configuração (nome e vigência opcionais no corpo). `POST .../pause` pausa a ativa e `POST .../end` encerra a ativa ou a pausada (analista e gestor, sem retomada).
+
+O `status` devolvido é o **efetivo** (PR-04). Uma campanha aprovada como `Scheduled` aparece `Active` a partir do início e `Ended` depois do fim (a pausada também), sem job; o banco guarda o status da decisão. O filtro `?status=` do `GET /api/v1/campaigns` usa o mesmo cálculo. Submeter, aprovar, reprovar, pausar, encerrar e duplicar também gravam um registro em `audit_entries`, que só aceita inclusão.
 
 ### Aplicações satélites (US-07.5)
 
