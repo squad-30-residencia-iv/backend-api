@@ -108,7 +108,9 @@ public class ApiFactory : WebApplicationFactory<Program>
         var settings = new Dictionary<string, string?>
         {
             ["Database:Provider"] = Provider,
-            ["Database:ConnectionString"] = ConnectionString
+            ["Database:ConnectionString"] = ConnectionString,
+            // A varredura de reservas roda por relógio real; nos testes a liberação é chamada pelo próprio fluxo.
+            ["Vouchers:ReservationSweepSeconds"] = "0"
         };
 
         if (_seedDemoData is not null)

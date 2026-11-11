@@ -21,6 +21,7 @@ Objetivo: chegar o quanto antes a uma **base útil** (campanha configurada, apro
 | GH-023 Modelo único de condições | ✅ Mesclado | Fica `Domain.Campaigns.CampaignCondition` (`campaign_conditions`). Sai o modelo do #36. Migração `RemoveMotorCampaignConditions` |
 | US-01.6 / US-01.11 Submeter, aprovar e reprovar | ✅ Mesclado (#42, #43) | Analista submete, gestor aprova (`Scheduled`/`Active`) ou reprova; histórico em `campaign_status_events` |
 | Issue #26 Auditoria, status efetivo e US-07.5 | ✅ Concluído | `audit_entries` append-only; status efetivo na leitura (PR-04); client credentials das aplicações satélites (`satellite_apps`, esquema `Satellite`) |
+| Issue #45 Motor de concessão (EP-04, 07.2, 07.4) | ✅ Em PR para a `staging` | Concessão em duas fases (`concessions`, `vouchers`, `voucher_events`), saldo atômico, esgotada derivada, idempotência, rotas `/api/v1/satellite/concessions` e `/customers/{cpf}/vouchers` (spec `GH-045-motor-de-concessao.md`) |
 
 ---
 
@@ -36,7 +37,7 @@ flowchart LR
     U011 --> U014["01.4 Condições de geração ✅"]
     U011 --> U015["01.5 Público todos ✅"]
     EP06["06.1–06.4 Critérios"] -.público restrito.-> U015
-    U021["02.1 Hierarquia ✅"] --> U022["02.2 Inativação ✅"] --> U023["02.3 Escopo e canais"]
+    U021["02.1 Hierarquia ✅"] --> U022["02.2 Inativação ✅"] --> U023["02.3 Escopo e canais ✅"]
     U0112["01.12 Validade e restrições ✅"]
     U013 & U014 & U015 & U023 & U0112 --> U016["01.6 Submeter ✅"]
     U016 --> U0111["01.11 Aprovar ✅"]
@@ -75,15 +76,15 @@ Nenhuma das D1–D9 permanece em aberto. O aceite está na seção 2.5.
 
 | # | Decisão | Registrado em | Observação |
 |---|---|---|---|
-| D1 | **Uma única campanha por compra**, sem empilhamento. Se mais de uma servir, vence a de maior benefício naquela compra; no empate, a que termina primeiro; se ainda empatar, a aprovada primeiro. | 2026-11-09 | |
-| D3 | **Concessão em duas fases** (PR-06, PR-17, RF14c, US-04.9): o voucher nasce **provisório** e reserva o saldo da campanha e do alvo. A confirmação da venda o torna **disponível** e consome o saldo. O desfazimento ou a expiração do prazo de reserva o descarta e devolve o saldo. | Default em 2026-11-07; aceite em 2026-11-09 | Substitui o default da spec do #36 (`GH-023-base-motor-e-decisoes.md`), que tratava de chamada síncrona contra fila. O `VoucherStatus` ganha `Provisional` na spec da #27. |
-| D4 | O satélite envia o identificador do cliente (CPF) e só os dados que a campanha precisa para avaliar as condições dela. | 2026-11-09 | Sem cadastro de cliente na plataforma. |
+| D1 | **Uma compra usa uma única campanha.** Se mais de uma servir, vence a de maior benefício naquela compra; no empate, a que termina primeiro; se ainda empatar, a aprovada primeiro. | Issue #45 (2026-11-09); aceita como decisão em 2026-11-10 | Substitui o default do #36. Implementação na spec `GH-045-motor-de-concessao.md` (D-9). |
+| D2 | **O satélite envia a quantidade de compras do cliente.** A plataforma não grava o histórico de compras. | Issue #45 | Libera a condição `CustomerPurchaseCount` (US-01.4, D-2). |
+| D3 | **Concessão em duas fases, como no backlog** (PR-06, PR-17, RF14c, US-04.9): o voucher nasce **provisório** e reserva o saldo da campanha e do alvo. A confirmação da venda o torna **disponível** e consome o saldo. O desfazimento ou a expiração do prazo de reserva o descarta e devolve o saldo. | Default de 2026-11-07; confirmado pela issue #45 (2026-11-09) | Substitui o default da spec do #36 (`GH-023-base-motor-e-decisoes.md`), que tratava de chamada síncrona contra fila, e não do voucher provisório. O `VoucherStatus` ganha `Provisional` na spec da #27. Se o representante optar por uma fase só, a mudança fica concentrada no motor (EP-04). |
+| D4 | **A chamada de concessão recebe o CPF e só os dados que a condição da campanha exige.** | Issue #45 | Sem cadastro de cliente na plataforma. |
 | D5 | **Projeção local.** O login confere e-mail e senha na tabela `users` (hash PBKDF2). `Auth:MockUsers` só abastece a tabela quando ela está vazia. | Implementado em 2026-11-08, spec `US-02.5-usuarios-locais.md` | Importação ou SSO, se vierem depois, trocam o `IUserCredentialStore`. |
-| D2 | O satélite envia a quantidade de compras do cliente na concessão. A plataforma não guarda esse histórico. | 2026-11-09 | A condição continua indisponível até essa chamada existir. |
 | D6 | Campanha agendada não se edita. A mecânica congela na aprovação. O motivo da reprovação continua opcional. | 2026-11-09 | Mudar a mecânica exige outra campanha. |
-| D7 | Loja única inativada não encerra a campanha vigente. A concessão naquela loja é recusada enquanto ela estiver inativa e volta se a loja for reativada. Campanha da rede inteira não para por uma loja inativada. | 2026-11-09 | |
+| D7 | **Loja inativada não encerra a campanha:** a concessão naquela loja é recusada até a loja voltar; campanha da rede inteira não para. | Issue #45 | Spec `GH-045` (D-13). |
 | D8 | Exportação em CSV, no formato que as telas de relatório e auditoria já baixam. | 2026-11-09 | Sem PDF e sem planilha nativa nesta fase. |
-| D9 | A campanha vale até o último segundo de 23:59 (23:59:59), no fuso da rede. | 2026-11-09 | O código ainda encerra no instante gravado (`23:59:00` é exclusivo). Aplicar na vigência e na emissão. |
+| D9 | **Fim de vigência às 23:59 vale até 23:59:59, no fuso da rede.** | Issue #45 | Altera a D-4 da spec `GH-026-status-efetivo.md` (fim exclusivo). Spec `GH-045` (D-7). |
 
 ---
 
@@ -116,9 +117,9 @@ Nenhuma das D1–D9 permanece em aberto. O aceite está na seção 2.5.
 
 | Trilha | Sequência |
 |---|---|
-| **A** | 01.10 duplicar → 01.8 pausar e encerrar (efeito sobre vouchers vem na onda 3) |
+| **A** | 01.10 duplicar ✅ → 01.8 pausar e encerrar ✅ (efeito sobre vouchers vem na onda 3) |
 | **C** | 01.6 submeter (RN01) → 01.11 aprovar (alçada e auditoria) |
-| **E — Motor (EP-04 + 07.2 / 07.4)** | Quem terminar a trilha B ou D: 04.3 emissão e validade → 04.4 bloqueio por status → 04.1 condições (valor total e categoria primeiro) → 04.5 saldo e concorrência → 04.6 idempotência → 04.9 provisório → 04.7 histórico → 04.8 + 07.2 / 07.4 como fachada HTTP |
+| **E — Motor (EP-04 + 07.2 / 07.4)** | ✅ Issue #45 (spec `GH-045`): 04.3, 04.4, 04.1 (valor total, itens, categoria, produto e quantidade de compras), 04.5, 04.6, 04.9, 04.7, 04.8 + 07.2 / 07.4. Falta 04.2 com critérios (#47) |
 | **D** | 06.5 elegibilidade na emissão (junto da 04.2, com a trilha E) → 06.6 simulação |
 
 > **Marco 1:** o analista configura e submete, o gestor aprova, a campanha fica ativa e uma aplicação satélite autenticada recebe o voucher por API.
@@ -144,8 +145,8 @@ Nenhuma das D1–D9 permanece em aberto. O aceite está na seção 2.5.
 | Prioridade | US |
 |---|---|
 | **P0 — Fundações** | 02.5 e 01.1 já mescladas · contratos compartilhados (`Voucher` e `VoucherEvent` do #36 ainda fora do padrão) · auditoria ✅ · status efetivo ✅ · 07.5 ✅ |
-| **P1 — Configuração** | 01.9 ✅, 01.2 ✅, 01.3 ✅, 01.4 ✅, 01.5 ✅ (só "todos"), 01.12 ✅, 02.4 ✅, 02.1 ✅, 02.2 ✅, 02.3, 06.1, 06.2, 06.3, 06.4 |
-| **P2 — Base útil** | 01.6 ✅, 01.11 ✅, 04.1 a 04.9, 06.5, 07.2, 07.4, 01.10, 01.8 (pausar e encerrar) |
+| **P1 — Configuração** | 01.9 ✅, 01.2 ✅, 01.3 ✅, 01.4 ✅, 01.5 ✅ (só "todos"), 01.12 ✅, 02.4 ✅, 02.1 ✅, 02.2 ✅, 02.3 ✅, 06.1, 06.2, 06.3, 06.4 |
+| **P2 — Base útil** | 01.6 ✅, 01.11 ✅, 04.1 a 04.9 ✅ (04.2 só público "todos"), 06.5 (só "todos"), 07.2 ✅, 07.4 ✅, 01.10 ✅, 01.8 (pausar e encerrar) ✅ |
 | **P3 — Resgate** | 05.1 a 05.6, 07.3, 07.1, 01.7 (após vigor), 01.8 (cancelar) |
 | **P4 — Gestão** | 03.1 a 03.5, 02.6 completa, 06.6 |
 
@@ -181,6 +182,8 @@ Ciclo SDD já usado nas US-02.5 e US-01.1 (`docs/prompts/` e `agents.md`):
 - [x] Trilha A na `main` (#30): 01.9, 01.2, 01.3, 01.4, 01.5 ("todos"), 01.7 (rascunho) e 01.12
 - [x] Reconciliar o modelo de condições (GH-023): fica o da US-01.4
 - [x] Issue #26 antes da #27: US-01.6, US-01.11, status efetivo, auditoria e US-07.5
-- [ ] Issue #27: motor de concessão e resgate, em specs próprias para `Voucher` e `VoucherEvent`
-- [x] D1 a D9 aceitas em 2026-11-09 (`docs/ROADMAP.md` 2.5). D1: uma campanha, maior benefício, depois a que termina primeiro, depois a aprovada primeiro. D2: contador vem do satélite. D6: agendada não se edita e o motivo da reprovação é opcional. D7: loja inativada não encerra a campanha. D8: exportação em CSV
-- [ ] US-02.3 escopo por região, loja e canal; US-02.6 herança de fuso e moeda; EP-06 público restrito
+- [x] Issue #45 (fatia da #27): motor de concessão, com `Concession`, `Voucher` e `VoucherEvent` em `Domain/Vouchers`
+- [ ] Issue #49 (fatia da #27): verificação de aplicáveis e resgate (EP-05, US-07.3) sobre o `Voucher` da #45
+- [x] D1 a D9 aceitas (`docs/ROADMAP.md` 2.5). D1, D2, D3, D4, D7 e D9 estão no código da issue #45. D6: agendada não se edita e o motivo da reprovação é opcional. D8: exportação em CSV
+- [x] US-02.3 escopo por região, loja e canal (issue #46, com 01.10 duplicar e 01.8 pausar e encerrar)
+- [ ] US-02.6 herança de fuso e moeda; EP-06 público restrito

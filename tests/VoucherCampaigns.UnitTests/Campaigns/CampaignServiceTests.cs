@@ -265,12 +265,13 @@ public class CampaignServiceTests
         campaign.SetQuantities(100, null, utcNow);
         campaign.SetRelativeValidity(30, VoucherValidityUnit.Days, null, utcNow);
         campaign.SetUsageRestrictions(null, null, 1, utcNow);
+        campaign.ReplaceScopes([new CampaignScope { ChannelType = ChannelType.Physical }], utcNow);
 
         return campaign;
     }
 
     private CampaignService CreateService(Network? network, DateTimeOffset? now = null) =>
-        new(new FakeNetworkRepository(network), _campaigns, _catalog, _user, _audit, new FixedTimeProvider(now ?? Now));
+        new(new FakeNetworkRepository(network), _campaigns, _catalog, new FakeOrganizationRepository(), _user, _audit, new FixedTimeProvider(now ?? Now));
 
     private static CreateCampaignRequest Request(DateTime startsAt, DateTime endsAt) =>
         new(Network.Id, "Volta às Aulas", null, startsAt, endsAt);
@@ -318,6 +319,10 @@ public class CampaignServiceTests
         public Task<Product?> GetProductByIdAsync(Guid id, CancellationToken cancellationToken) =>
             Task.FromResult(Products.FirstOrDefault(product => product.Id == id));
 
+        public Task<IReadOnlyList<Product>> GetProductsByCodesAsync(IReadOnlyCollection<string> codes, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<Product>>(
+                Products.Where(product => codes.Contains(product.Code, StringComparer.OrdinalIgnoreCase)).ToList());
+
         public Task<IReadOnlyList<Category>> GetAllCategoriesAsync(bool? activeOnly, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
 
@@ -341,6 +346,26 @@ public class CampaignServiceTests
 
         public Task<bool> ExistsProductByCodeAsync(string code, Guid? excludeId, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
+    }
+
+    /// <summary>A validação do escopo é coberta nos testes de integração; aqui nenhuma consulta é usada.</summary>
+    private sealed class FakeOrganizationRepository : IOrganizationRepository
+    {
+        public Task<IReadOnlyList<Network>> GetNetworksAsync(bool? activeOnly, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<Network?> GetNetworkByIdAsync(Guid id, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<Network> CreateNetworkAsync(Network network, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<Network> UpdateNetworkAsync(Network network, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<bool> ExistsNetworkByNameAsync(string name, Guid? excludeId, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<IReadOnlyList<Region>> GetRegionsAsync(Guid networkId, bool? activeOnly, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<Region?> GetRegionByIdAsync(Guid id, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<Region> CreateRegionAsync(Region region, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<Region> UpdateRegionAsync(Region region, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<bool> ExistsRegionByNameInNetworkAsync(Guid networkId, string name, Guid? excludeId, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<IReadOnlyList<Establishment>> GetEstablishmentsAsync(Guid regionId, bool? activeOnly, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<Establishment?> GetEstablishmentByIdAsync(Guid id, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<Establishment> CreateEstablishmentAsync(Establishment establishment, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<Establishment> UpdateEstablishmentAsync(Establishment establishment, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<bool> ExistsEstablishmentByCodeInRegionAsync(Guid regionId, string code, Guid? excludeId, CancellationToken cancellationToken) => throw new NotSupportedException();
     }
 
     private sealed class FakeAuditTrail : IAuditTrail

@@ -168,7 +168,6 @@ public class CampaignVoucherRulesTests
     }
 
     [Theory]
-    [InlineData(ConditionType.CustomerPurchaseCount)]
     [InlineData(ConditionType.ProductCombination)]
     [InlineData(ConditionType.PurchasePeriod)]
     public void ReplaceConditions_UnavailableType_Throws(ConditionType type)
@@ -177,6 +176,20 @@ public class CampaignVoucherRulesTests
             () => Draft().ReplaceConditions([new CampaignCondition { Type = type }], false, Now));
 
         Assert.Equal(CampaignErrors.ConditionTypeUnavailableCode, exception.Code);
+    }
+
+    // Decisão D2 (spec GH-045, D-11): a quantidade de compras do cliente passou a ser configurável.
+    [Fact]
+    public void ReplaceConditions_CustomerPurchaseCount_RequiresAPositiveMinimum()
+    {
+        var campaign = Draft();
+
+        campaign.ReplaceConditions([new CampaignCondition { Type = ConditionType.CustomerPurchaseCount, MinQuantity = 3 }], false, Now);
+        var exception = Assert.Throws<BusinessRuleException>(
+            () => Draft().ReplaceConditions([new CampaignCondition { Type = ConditionType.CustomerPurchaseCount, MinQuantity = 0 }], false, Now));
+
+        Assert.Equal(3, Assert.Single(campaign.Conditions).MinQuantity);
+        Assert.Equal(CampaignErrors.ConditionMinPurchasesNotPositiveCode, exception.Code);
     }
 
     [Fact]

@@ -8,7 +8,8 @@ public class CampaignConditionConfiguration : IEntityTypeConfiguration<CampaignC
 {
     public void Configure(EntityTypeBuilder<CampaignCondition> builder)
     {
-        // Cada tipo com só o seu parâmetro, positivo. Os tipos indisponíveis (D-2) ficam fora até terem semântica.
+        // Cada tipo com só o seu parâmetro, positivo. Os tipos indisponíveis (US-01.4, D-2) ficam fora até terem semântica;
+        // a quantidade de compras do cliente entrou com a decisão D2 (spec GH-045, D-11).
         // O CAST evita a comparação como texto no SQLite, onde decimal é gravado como TEXT.
         builder.ToTable("campaign_conditions", table => table.HasCheckConstraint(
             "ck_campaign_conditions_parameters",
@@ -19,7 +20,9 @@ public class CampaignConditionConfiguration : IEntityTypeConfiguration<CampaignC
             + " OR (type = 'Category' AND category_id IS NOT NULL"
             + " AND min_amount IS NULL AND min_quantity IS NULL AND product_id IS NULL)"
             + " OR (type = 'Product' AND product_id IS NOT NULL"
-            + " AND min_amount IS NULL AND min_quantity IS NULL AND category_id IS NULL)"));
+            + " AND min_amount IS NULL AND min_quantity IS NULL AND category_id IS NULL)"
+            + " OR (type = 'CustomerPurchaseCount' AND min_quantity IS NOT NULL AND min_quantity > 0"
+            + " AND min_amount IS NULL AND category_id IS NULL AND product_id IS NULL)"));
 
         builder.HasKey(condition => condition.Id);
 

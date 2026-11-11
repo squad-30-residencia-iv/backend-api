@@ -71,9 +71,23 @@ public static class CampaignContract
     public const string ConditionMinAmountScale = "O valor mínimo da compra deve ter no máximo 2 casas decimais.";
     public const string ConditionMinAmountTooLarge = "O valor mínimo da compra deve ser no máximo 99.999.999,99.";
     public const string ConditionMinQuantityRequired = "Informe a quantidade mínima de itens.";
+    public const string ConditionMinPurchasesRequired = "Informe a quantidade mínima de compras do cliente.";
     public const string ConditionCategoryRequired = "Informe a categoria da condição.";
     public const string ConditionProductRequired = "Informe o produto da condição.";
     public const string ConditionUnexpectedField = "Este campo não se aplica ao tipo de condição informado.";
+
+    public const int MaxScopes = 100;
+    public const int MaxNameLength = 150;
+
+    public const string ScopesRequired = "Informe ao menos um local do escopo.";
+    public const string ScopesTooMany = "O escopo pode ter no máximo 100 locais.";
+    public const string ScopeEntryRequired = "Informe o local do escopo.";
+    public const string ScopeRegionAndEstablishment = "Informe a região ou a loja, não as duas. Sem nenhuma, vale a rede inteira.";
+    public const string ScopeChannelsRequired = "Informe ao menos um canal do local.";
+    public const string ScopeChannelInvalid = "Canal inválido. Use Physical ou Virtual.";
+    public const string ScopeChannelsRepeated = "Os canais do local não podem se repetir.";
+
+    public const string DuplicateNamePrefix = "Cópia de ";
 
     public const string CampaignNotFound = "Campanha não encontrada.";
 }

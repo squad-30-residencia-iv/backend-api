@@ -18,6 +18,9 @@ public interface ICatalogRepository
 
     Task<Product?> GetProductByIdAsync(Guid id, CancellationToken cancellationToken);
 
+    /// <summary>Produtos pelos códigos (sem diferenciar maiúsculas), ativos ou não; códigos desconhecidos ficam de fora.</summary>
+    Task<IReadOnlyList<Product>> GetProductsByCodesAsync(IReadOnlyCollection<string> codes, CancellationToken cancellationToken);
+
     Task<Product> CreateProductAsync(Product product, CancellationToken cancellationToken);
 
     Task<Product> UpdateProductAsync(Product product, CancellationToken cancellationToken);

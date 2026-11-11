@@ -5,8 +5,8 @@ using VoucherCampaigns.Domain.Catalog;
 using VoucherCampaigns.Domain.Common;
 using VoucherCampaigns.Domain.Identity;
 using VoucherCampaigns.Domain.Organization;
+using VoucherCampaigns.Domain.Vouchers;
 using VoucherCampaigns.Domain.Entities;
-using CampaignCondition = VoucherCampaigns.Domain.Campaigns.CampaignCondition;
 
 namespace VoucherCampaigns.Infrastructure.Persistence;
 
@@ -23,6 +23,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<CampaignScope> CampaignScopes => Set<CampaignScope>();
     public DbSet<CampaignStatusEvent> CampaignStatusEvents => Set<CampaignStatusEvent>();
     
+    public DbSet<Concession> Concessions => Set<Concession>();
     public DbSet<Voucher> Vouchers => Set<Voucher>();
     public DbSet<VoucherEvent> VoucherEvents => Set<VoucherEvent>();
     public DbSet<AuditEntry> AuditEntries => Set<AuditEntry>();
@@ -44,7 +45,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     }
 
     /// <summary>
-    /// Auditoria e histórico de status só aceitam inclusão (spec GH-026-trilha-de-auditoria, D-4).
+    /// Auditoria, histórico de status e histórico do voucher só aceitam inclusão (spec GH-026-trilha-de-auditoria, D-4).
     /// Alterar ou apagar um desses registros é erro de programação: nada é gravado.
     /// </summary>
     private void EnsureAppendOnly()
@@ -65,20 +66,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
 
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);
 
-        modelBuilder.Entity<Voucher>(entity =>
-        {
-            entity.HasKey(e => e.Id);
-            entity.HasIndex(e => e.Code).IsUnique();
-            entity.Property(e => e.Code).IsRequired().HasMaxLength(50);
-            entity.HasMany(e => e.Events).WithOne(e => e.Voucher).HasForeignKey(e => e.VoucherId);
-        });
-
-        modelBuilder.Entity<VoucherEvent>(entity =>
-        {
-            entity.HasKey(e => e.Id);
-            entity.Property(e => e.Details).HasColumnType("jsonb");
-        });
-
+        // EligibilityCriterion do #36 fica até a issue #47 (público restrito) definir o modelo.
         modelBuilder.Entity<EligibilityCriterion>(entity => entity.HasKey(e => e.Id));
 
         modelBuilder.ApplySnakeCaseNames();

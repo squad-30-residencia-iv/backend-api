@@ -38,7 +38,11 @@ public class CampaignEffectiveStatusEndpointTests : IClassFixture<ApiFactory>
         _factory.Clock.UtcNow = ReadyCampaign.StartsAt;
         Assert.Equal("Active", await StatusAsync(campaignId));
 
-        _factory.Clock.UtcNow = ReadyCampaign.EndsAt;
+        // D9: às 23:59:59 do fim ainda vale; a partir de 00:00 está encerrada.
+        _factory.Clock.UtcNow = ReadyCampaign.EndsAt.AddSeconds(59);
+        Assert.Equal("Active", await StatusAsync(campaignId));
+
+        _factory.Clock.UtcNow = ReadyCampaign.EndsAt.AddMinutes(1);
         Assert.Equal("Ended", await StatusAsync(campaignId));
 
         await using var scope = _factory.Services.CreateAsyncScope();

@@ -27,4 +27,12 @@ public interface ICampaignService
     Task<CampaignResponse> ApproveAsync(Guid id, CancellationToken cancellationToken);
 
     Task<CampaignResponse> RejectAsync(Guid id, RejectCampaignRequest? request, CancellationToken cancellationToken);
+
+    Task<CampaignResponse> ReplaceScopesAsync(Guid id, ReplaceCampaignScopesRequest request, CancellationToken cancellationToken);
+
+    Task<CampaignResponse> DuplicateAsync(Guid id, DuplicateCampaignRequest? request, CancellationToken cancellationToken);
+
+    Task<CampaignResponse> PauseAsync(Guid id, CancellationToken cancellationToken);
+
+    Task<CampaignResponse> EndAsync(Guid id, CancellationToken cancellationToken);
 }
