@@ -171,7 +171,6 @@ public class CampaignConditionsEndpointTests : IClassFixture<ApiFactory>
     }
 
     [Theory]
-    [InlineData("CustomerPurchaseCount")]
     [InlineData("ProductCombination")]
     [InlineData("PurchasePeriod")]
     public async Task Put_UnavailableType_IsRejected(string type)
@@ -182,6 +181,22 @@ public class CampaignConditionsEndpointTests : IClassFixture<ApiFactory>
 
         await AssertBusinessRuleAsync(
             response, "CAMPAIGN_CONDITION_TYPE_UNAVAILABLE", "Este tipo de condição ainda não está disponível.");
+    }
+
+    // Decisão D2 (spec GH-045, D-11): a quantidade de compras do cliente é enviada pelo satélite.
+    [Fact]
+    public async Task Put_CustomerPurchaseCount_RequiresAPositiveMinimum()
+    {
+        var campaign = await CreateCampaignAsync();
+
+        var accepted = await Client().PutAsJsonAsync(ConditionsRoute(campaign), Conditions(false, new { type = "CustomerPurchaseCount", minQuantity = 3 }));
+        var rejected = await Client().PutAsJsonAsync(ConditionsRoute(campaign), Conditions(false, new { type = "CustomerPurchaseCount", minQuantity = 0 }));
+
+        accepted.EnsureSuccessStatusCode();
+        var body = await accepted.Content.ReadFromJsonAsync<CampaignResponse>();
+        Assert.Equal(3, Assert.Single(body!.Conditions).MinQuantity);
+        await AssertBusinessRuleAsync(
+            rejected, "CAMPAIGN_CONDITION_MIN_PURCHASES_NOT_POSITIVE", "A quantidade mínima de compras deve ser maior que zero");
     }
 
     [Theory]

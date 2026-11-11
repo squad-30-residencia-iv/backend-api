@@ -16,6 +16,7 @@ public class AuthOptionsTests
     public static MockUserOptions ValidUser(string email, string role = "analista") => new()
     {
         Email = email,
+        Name = "Ana Lima",
         Password = "Senha123",
         UserId = "0199e3a0-0000-7000-8000-000000000901",
         Role = role,
@@ -67,6 +68,29 @@ public class AuthOptionsTests
         var exception = Assert.Throws<InvalidOperationException>(options.Validate);
 
         Assert.Contains("Auth:Jwt:ExpirationMinutes", exception.Message);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void Validate_ThrowsWhenMockUserNameIsMissing(string name)
+    {
+        var user = ValidUser("analista@empresa.com") with { Name = name };
+
+        var exception = Assert.Throws<InvalidOperationException>((ValidOptions() with { MockUsers = [user] }).Validate);
+
+        Assert.Contains("Auth:MockUsers:0:Name", exception.Message);
+        Assert.Contains("Configuração inválida", exception.Message);
+    }
+
+    [Fact]
+    public void Validate_ThrowsWhenMockUserNameExceeds150Characters()
+    {
+        var user = ValidUser("analista@empresa.com") with { Name = new string('a', MockUserOptions.MaxNameLength + 1) };
+
+        var exception = Assert.Throws<InvalidOperationException>((ValidOptions() with { MockUsers = [user] }).Validate);
+
+        Assert.Contains("Auth:MockUsers:0:Name", exception.Message);
     }
 
     [Theory]

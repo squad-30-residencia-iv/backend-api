@@ -1,6 +1,6 @@
 namespace VoucherCampaigns.Application.Authentication;
 
-public record UserProfileResponse(Guid UserId, string Email, string Role, Guid? NetworkId);
+public record UserProfileResponse(Guid UserId, string Email, string Name, string Role, Guid? NetworkId);
 
 public record TokenResponse(
     string Token,

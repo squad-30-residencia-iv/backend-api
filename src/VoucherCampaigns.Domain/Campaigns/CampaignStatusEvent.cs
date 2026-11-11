@@ -1,7 +1,9 @@
+using VoucherCampaigns.Domain.Common;
+
 namespace VoucherCampaigns.Domain.Campaigns;
 
 /// <summary>Transição de status da campanha, gravada no mesmo momento da decisão (US-01.6, US-01.11).</summary>
-public class CampaignStatusEvent
+public class CampaignStatusEvent : IAppendOnly
 {
     public Guid Id { get; set; }
 

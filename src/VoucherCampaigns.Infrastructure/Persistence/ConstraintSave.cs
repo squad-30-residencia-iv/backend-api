@@ -20,7 +20,7 @@ internal static class ConstraintSave
         }
     }
 
-    private static bool IsUniqueViolation(Exception exception)
+    internal static bool IsUniqueViolation(Exception exception)
     {
         for (var current = exception; current is not null; current = current.InnerException)
         {

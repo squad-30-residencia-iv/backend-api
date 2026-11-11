@@ -7,7 +7,8 @@ using VoucherCampaigns.Application.DTOs.Catalog;
 namespace VoucherCampaigns.Api.Controllers;
 
 [ApiController]
-[Authorize(Policy = AuthorizationPolicies.ManageCampaigns)]
+// Leitura para todos os papéis; escrita só para o administrador da plataforma (o catálogo é global).
+[Authorize(Policy = AuthorizationPolicies.ReadCatalog)]
 [Route("api/v1/categories")]
 public class CategoriesController(ICategoryService categoryService) : ControllerBase
 {
@@ -25,6 +26,8 @@ public class CategoriesController(ICategoryService categoryService) : Controller
         Ok(await categoryService.GetByIdAsync(id, cancellationToken));
 
     [HttpPost]
+    [Authorize(Policy = AuthorizationPolicies.ManageCatalog)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
     [ProducesResponseType<CategoryResponse>(StatusCodes.Status201Created)]
     [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status422UnprocessableEntity)]
@@ -35,6 +38,8 @@ public class CategoriesController(ICategoryService categoryService) : Controller
     }
 
     [HttpPut("{id:guid}")]
+    [Authorize(Policy = AuthorizationPolicies.ManageCatalog)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
     [ProducesResponseType<CategoryResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
@@ -43,6 +48,8 @@ public class CategoriesController(ICategoryService categoryService) : Controller
         Ok(await categoryService.UpdateAsync(id, request, cancellationToken));
 
     [HttpDelete("{id:guid}")]
+    [Authorize(Policy = AuthorizationPolicies.ManageCatalog)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)

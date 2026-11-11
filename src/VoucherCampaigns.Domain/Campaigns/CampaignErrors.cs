@@ -59,6 +59,9 @@ public static class CampaignErrors
     public const string ConditionMinQuantityNotPositiveCode = "CAMPAIGN_CONDITION_MIN_QUANTITY_NOT_POSITIVE";
     public const string ConditionMinQuantityNotPositiveMessage = "A quantidade mínima de itens deve ser maior que zero";
 
+    public const string ConditionMinPurchasesNotPositiveCode = "CAMPAIGN_CONDITION_MIN_PURCHASES_NOT_POSITIVE";
+    public const string ConditionMinPurchasesNotPositiveMessage = "A quantidade mínima de compras deve ser maior que zero";
+
     public const string ConditionMinAmountNotPositiveCode = "CAMPAIGN_CONDITION_MIN_AMOUNT_NOT_POSITIVE";
     public const string ConditionMinAmountNotPositiveMessage = "O valor mínimo da compra deve ser maior que zero";
 
@@ -96,4 +99,32 @@ public static class CampaignErrors
 
     public const string ApprovePeriodEndedCode = "CAMPAIGN_APPROVE_PERIOD_ENDED";
     public const string ApprovePeriodEndedMessage = "A vigência da campanha já terminou.";
+
+    public const string SubmitScopeRequiredCode = "CAMPAIGN_SUBMIT_SCOPE_REQUIRED";
+    public const string SubmitScopeRequiredMessage = "Defina onde a campanha vale (rede, região ou loja e canais) antes de submetê-la.";
+
+    public const string ScopeDuplicatedCode = "CAMPAIGN_SCOPE_DUPLICATED";
+    public const string ScopeDuplicatedMessage = "O mesmo local foi informado mais de uma vez com o mesmo canal.";
+
+    public const string ScopeRegionNotFoundCode = "CAMPAIGN_SCOPE_REGION_NOT_FOUND";
+    public const string ScopeRegionInactiveCode = "CAMPAIGN_SCOPE_REGION_INACTIVE";
+
+    public const string ScopeEstablishmentNotFoundCode = "CAMPAIGN_SCOPE_ESTABLISHMENT_NOT_FOUND";
+    public const string ScopeEstablishmentNotFoundMessage = "Loja informada não encontrada";
+
+    public const string ScopeEstablishmentInactiveCode = "CAMPAIGN_SCOPE_ESTABLISHMENT_INACTIVE";
+    public const string ScopeEstablishmentInactiveMessage = "Loja informada está inativa";
+
+    public const string ScopeOutsideNetworkCode = "CAMPAIGN_SCOPE_OUTSIDE_NETWORK";
+    public const string ScopeOutsideNetworkMessage = "O local informado não pertence à rede da campanha.";
+
+    /// <summary>PR-11: o canal é atributo da loja. Parâmetros: código da loja e nome do canal.</summary>
+    public const string ScopeChannelNotEnabledCode = "CAMPAIGN_SCOPE_CHANNEL_NOT_ENABLED";
+    public const string ScopeChannelNotEnabledMessage = "A loja {0} não opera o canal {1}.";
+
+    public const string PauseNotActiveCode = "CAMPAIGN_PAUSE_NOT_ACTIVE";
+    public const string PauseNotActiveMessage = "Somente uma campanha ativa pode ser pausada.";
+
+    public const string EndNotAllowedCode = "CAMPAIGN_END_NOT_ALLOWED";
+    public const string EndNotAllowedMessage = "Somente uma campanha ativa ou pausada pode ser encerrada.";
 }

@@ -45,7 +45,7 @@ public class JwtAuthService(AuthOptions options, IUserCredentialStore credential
         };
 
         var token = new JsonWebTokenHandler().CreateToken(descriptor);
-        var profile = new UserProfileResponse(account.UserId, account.Email, account.Role, account.NetworkId);
+        var profile = new UserProfileResponse(account.UserId, account.Email, account.Name, account.Role, account.NetworkId);
 
         return new TokenResponse(token, (int)lifetime.TotalSeconds, SuccessMessage, profile);
     }

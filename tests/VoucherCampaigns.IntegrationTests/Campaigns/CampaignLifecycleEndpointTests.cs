@@ -192,6 +192,7 @@ public class CampaignLifecycleEndpointTests : IClassFixture<ApiFactory>
         (await Client().PutAsJsonAsync($"{Route}/{id}/audience", new { audienceType = "AllCustomers" })).EnsureSuccessStatusCode();
         (await Client().PutAsJsonAsync($"{Route}/{id}/voucher-validity", new { type = "Relative", amount = 30, unit = "Days" })).EnsureSuccessStatusCode();
         (await Client().PutAsJsonAsync($"{Route}/{id}/usage-restrictions", new { maxUsesPerVoucher = 1 })).EnsureSuccessStatusCode();
+        (await Client().PutAsJsonAsync($"{Route}/{id}/scopes", new { scopes = new[] { new { channels = new[] { "Physical" } } } })).EnsureSuccessStatusCode();
         return id;
     }
 

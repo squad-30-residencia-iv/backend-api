@@ -170,6 +170,57 @@ public class CampaignsController(ICampaignService campaignService) : ControllerB
         CancellationToken cancellationToken) =>
         Ok(await campaignService.RejectAsync(id, request, cancellationToken));
 
+    /// <summary>Substitui onde a campanha em rascunho vale: rede, regiões ou lojas, com os canais (US-02.3).</summary>
+    [HttpPut("{id:guid}/scopes")]
+    [ProducesResponseType<CampaignResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<ActionResult<CampaignResponse>> ReplaceScopes(
+        Guid id,
+        ReplaceCampaignScopesRequest request,
+        CancellationToken cancellationToken) =>
+        Ok(await campaignService.ReplaceScopesAsync(id, request, cancellationToken));
+
+    /// <summary>Cria um rascunho com a configuração da campanha, de qualquer status (US-01.10). Corpo opcional.</summary>
+    [HttpPost("{id:guid}/duplicate")]
+    [ProducesResponseType<CampaignResponse>(StatusCodes.Status201Created)]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<ActionResult<CampaignResponse>> Duplicate(
+        Guid id,
+        DuplicateCampaignRequest? request,
+        CancellationToken cancellationToken)
+    {
+        var copy = await campaignService.DuplicateAsync(id, request, cancellationToken);
+        return Created($"/api/v1/campaigns/{copy.Id}", copy);
+    }
+
+    /// <summary>Pausa a campanha ativa (US-01.8). Analista e gestor; não há retomada.</summary>
+    [HttpPost("{id:guid}/pause")]
+    [ProducesResponseType<CampaignResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<ActionResult<CampaignResponse>> Pause(Guid id, CancellationToken cancellationToken) =>
+        Ok(await campaignService.PauseAsync(id, cancellationToken));
+
+    /// <summary>Encerra a campanha ativa ou pausada (US-01.8). Analista e gestor.</summary>
+    [HttpPost("{id:guid}/end")]
+    [ProducesResponseType<CampaignResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<ActionResult<CampaignResponse>> End(Guid id, CancellationToken cancellationToken) =>
+        Ok(await campaignService.EndAsync(id, cancellationToken));
+
     /// <summary>Cadastra a campanha em rascunho (US-01.1). Datas na hora local da rede, sem fuso.</summary>
     [HttpPost]
     [ValidateTenantScope]

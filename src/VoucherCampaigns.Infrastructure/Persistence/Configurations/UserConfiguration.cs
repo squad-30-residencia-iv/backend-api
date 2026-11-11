@@ -23,6 +23,7 @@ public class UserConfiguration : IEntityTypeConfiguration<User>
 
         builder.Property(user => user.Email).HasMaxLength(254).IsRequired();
         builder.HasIndex(user => user.Email).IsUnique();
+        builder.Property(user => user.Name).HasMaxLength(150).IsRequired();
 
         builder.Property(user => user.PasswordHash).HasMaxLength(200).IsRequired();
         builder.Property(user => user.Role).HasMaxLength(20).IsRequired();

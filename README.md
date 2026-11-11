@@ -113,7 +113,7 @@ Sem nenhuma configuração extra, a API usa **SQLite** (`src/VoucherCampaigns.Ap
 
 - `/api/v1/networks`, `/regions` e `/establishments`: só o **administrador** cadastra, altera e inativa (PR-15). Analista e gestor consultam a própria rede.
 - O canal é atributo da loja (PR-11): `POST` e `PUT` de `/establishments` recebem `"channels": ["Physical", "Virtual"]` (um ou os dois).
-- `/api/v1/categories` e `/products`: analista e gestor.
+- `/api/v1/categories` e `/products`: todos os papéis consultam; só o **administrador** cadastra, altera e inativa (o catálogo é global).
 - `DELETE` inativa o registro e desce em cascata (rede → regiões → lojas; categoria → produtos).
 - Documento OpenAPI em Development: `GET /openapi/v1.json`.
 
@@ -129,6 +129,38 @@ Fora de Development, defina `Auth__Jwt__SigningKey` (mínimo de 32 caracteres); 
 ```
 
 Resposta `201` com as datas no offset da rede (`"2026-12-01T08:00:00-03:00"`). Regras de negócio violadas respondem `422` com `code` (`CAMPAIGN_INVALID_PERIOD`, `CAMPAIGN_START_IN_PAST`, `NETWORK_UNAVAILABLE`).
+
+Onde a campanha vale vai em `PUT /api/v1/campaigns/{id}/scopes`, ainda em rascunho. Cada local tem região **ou** loja (sem nenhuma, a rede inteira) e os canais; na loja, só canal que ela opera:
+
+```json
+{ "scopes": [ { "establishmentId": "0199e3a0-0000-7000-8000-000000000201", "channels": ["Physical"] },
+              { "regionId": "0199e3a0-0000-7000-8000-000000000101", "channels": ["Physical", "Virtual"] } ] }
+```
+
+A submissão exige o escopo. Depois da aprovação a mecânica não muda (D6): para mudar, `POST /api/v1/campaigns/{id}/duplicate` cria um rascunho com a mesma configuração (nome e vigência opcionais no corpo). `POST .../pause` pausa a ativa e `POST .../end` encerra a ativa ou a pausada (analista e gestor, sem retomada).
+
+O `status` devolvido é o **efetivo** (PR-04). Uma campanha aprovada como `Scheduled` aparece `Active` a partir do início e `Ended` depois do fim (a pausada também), sem job; o banco guarda o status da decisão. O filtro `?status=` do `GET /api/v1/campaigns` usa o mesmo cálculo. Submeter, aprovar, reprovar, pausar, encerrar e duplicar também gravam um registro em `audit_entries`, que só aceita inclusão.
+
+### Aplicações satélites (US-07.5)
+
+PDV, e-commerce e app usam credencial própria, separada do login de usuário:
+
+1. `POST /api/v1/satellite/token` com `{ "clientId": "...", "clientSecret": "..." }` devolve `accessToken` (60 min), `tokenType` `Bearer` e `scopes`.
+2. As chamadas seguintes enviam `Authorization: Bearer <accessToken>`. `GET /api/v1/satellite/me` mostra a aplicação, a rede e os escopos do token.
+
+Em Development já existe a aplicação `pdv-demo` (segredo `segredo-local-do-pdv-demo-nao-usar-em-producao`), da rede de demonstração, com os escopos `campaigns:read`, `vouchers:issue` e `vouchers:redeem`. As aplicações ficam na tabela `satellite_apps`, com o segredo só como hash; `Auth:Satellite:Apps` só faz a carga inicial quando a tabela está vazia.
+
+Credencial errada → `401 AUTH_INVALID_CLIENT`; escopo ausente → `403 AUTH_FORBIDDEN_SCOPE`; outra rede → `403 SCOPE_FORBIDDEN`. O token de usuário não abre rota de satélite, e o de aplicação não abre rota de usuário.
+
+### Motor de concessão (EP-04, US-07.2 e US-07.4)
+
+Com o carrinho fechado e antes do pagamento, o satélite pede a concessão; depois do pagamento, confirma ou desfaz. Todas as rotas exigem o token de aplicação com o escopo `vouchers:issue`; a rede é a da aplicação.
+
+1. `POST /api/v1/satellite/concessions` com a compra: `transactionId` (único por rede, chave de idempotência), `customer.document` (CPF), `establishmentId`, `channel` (`Physical` ou `Virtual`), `totalAmount` (bruto), `items[]` (`productCode`, `quantity`, `unitPrice`) e, opcional, `customerPurchaseCount`. Resposta `200` sempre que a compra foi avaliada: `status` `Provisional` com `voucher` e `reservedUntil`, ou `NotGranted` com `reason` (`NoCampaignMatched`, `CampaignNotActive`, `CampaignSoldOut`, `TargetSoldOut`, `CustomerLimitReached`). Não haver concessão não é erro: a venda segue. Repetir a mesma `transactionId` devolve a concessão original.
+2. `POST /api/v1/satellite/concessions/{id}/confirm` depois do pagamento: o voucher passa a `Available` e o saldo é consumido. `POST .../cancel` se a venda não se concluir: o voucher é descartado e o saldo devolvido. Os dois são idempotentes. Sem confirmação em `Vouchers:ReservationMinutes` (padrão 15), a reserva expira sozinha e a confirmação responde `422 CONCESSION_RESERVATION_EXPIRED`.
+3. `GET /api/v1/satellite/concessions/{id}` mostra o estado atual; `GET /api/v1/satellite/customers/{cpf}/vouchers?status=` lista os vouchers do cliente com o status efetivo (`Provisional`, `Available`, `Redeemed`, `Expired`, `Cancelled`).
+
+Regras aplicadas: só campanha efetivamente ativa, cujo escopo contempla a loja e o canal, com as condições de geração satisfeitas; uma compra gera no máximo um voucher (maior benefício nesta compra, depois a que termina primeiro, depois a aprovada primeiro); saldo da campanha, cota do alvo e limite por cliente; validade calculada na emissão (prazo relativo com teto, ou data fixa, até 23:59:59). Loja inativa, inexistente ou que não opera o canal → `422` com `code` `ISSUANCE_*`. O smoke test `python -I scripts/smoke/motor.py http://localhost:5026` percorre o fluxo com a API no ar.
 
 ### Estrutura da Solution (`VoucherCampaigns.slnx`)
 
@@ -179,6 +211,8 @@ TEST_POSTGRES_CONNECTION="Host=localhost;Port=5432;Username=postgres;Password=po
 | Hierarquia organizacional | `networks` → `regions` → `establishments` → `channels` |
 | Catálogo | `categories` → `products` |
 | Campanhas | `campaigns`, `campaign_items` (alvo, benefício e quantidade), `campaign_scopes` (rede, região ou loja + canal) |
+| Governança | `campaign_status_events` (histórico de status), `audit_entries` (trilha de auditoria, só inclusão) |
+| Acesso | `users` (portal), `satellite_apps` (aplicações satélites) |
 
 Nomes em `snake_case`; enums gravados como texto. A especificação completa (chaves, índices e `CHECK`s) está em `docs/specs/completed/GH-008-banco-de-dados.md`.
 

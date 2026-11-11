@@ -6,8 +6,11 @@ public interface ICampaignRepository
 {
     Task AddAsync(Campaign campaign, CancellationToken cancellationToken);
 
-    /// <summary>Campanhas da rede com os itens, das mais recentes para as mais antigas.</summary>
-    Task<IReadOnlyList<Campaign>> GetByNetworkAsync(Guid networkId, CampaignStatus? status, CancellationToken cancellationToken);
+    /// <summary>
+    /// Campanhas da rede com os itens, das mais recentes para as mais antigas. Sem filtro de status:
+    /// o filtro é pelo status efetivo, calculado com o relógio (PR-04).
+    /// </summary>
+    Task<IReadOnlyList<Campaign>> GetByNetworkAsync(Guid networkId, CancellationToken cancellationToken);
 
     /// <summary>Campanha com a rede (para o fuso) e os itens, ou null. Sem rastreamento.</summary>
     Task<Campaign?> FindByIdAsync(Guid id, CancellationToken cancellationToken);

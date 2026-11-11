@@ -24,6 +24,7 @@ public class CampaignConfiguration : IEntityTypeConfiguration<Campaign>
             table.HasCheckConstraint(
                 "ck_campaigns_max_purchase_amount", "max_purchase_amount IS NULL OR CAST(max_purchase_amount AS REAL) > 0");
             table.HasCheckConstraint("ck_campaigns_max_uses_per_voucher", "max_uses_per_voucher IS NULL OR max_uses_per_voucher > 0");
+            table.HasCheckConstraint("ck_campaigns_voucher_counters", "issued_vouchers >= 0 AND reserved_vouchers >= 0");
         });
 
         builder.HasKey(campaign => campaign.Id);
@@ -37,6 +38,8 @@ public class CampaignConfiguration : IEntityTypeConfiguration<Campaign>
         builder.Property(campaign => campaign.VoucherValidityUnit).HasConversion<string>().HasMaxLength(10);
         builder.Property(campaign => campaign.MinPurchaseAmount).HasPrecision(10, 2);
         builder.Property(campaign => campaign.MaxPurchaseAmount).HasPrecision(10, 2);
+        builder.Property(campaign => campaign.IssuedVouchers).HasDefaultValue(0);
+        builder.Property(campaign => campaign.ReservedVouchers).HasDefaultValue(0);
 
         builder.HasIndex(campaign => campaign.Status);
 

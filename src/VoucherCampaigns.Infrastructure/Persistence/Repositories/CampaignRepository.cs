@@ -12,20 +12,11 @@ public class CampaignRepository(AppDbContext context) : ICampaignRepository
         await context.SaveChangesAsync(cancellationToken);
     }
 
-    public async Task<IReadOnlyList<Campaign>> GetByNetworkAsync(
-        Guid networkId,
-        CampaignStatus? status,
-        CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<Campaign>> GetByNetworkAsync(Guid networkId, CancellationToken cancellationToken)
     {
-        var query = WithItems(context.Campaigns.AsNoTracking()).Where(campaign => campaign.NetworkId == networkId);
-
-        if (status is not null)
-        {
-            query = query.Where(campaign => campaign.Status == status);
-        }
-
         // O Id (Guid v7) desempata campanhas criadas no mesmo instante.
-        return await query
+        return await WithItems(context.Campaigns.AsNoTracking())
+            .Where(campaign => campaign.NetworkId == networkId)
             .OrderByDescending(campaign => campaign.CreatedAt)
             .ThenByDescending(campaign => campaign.Id)
             .AsSplitQuery()
@@ -47,9 +38,12 @@ public class CampaignRepository(AppDbContext context) : ICampaignRepository
     public Task SaveChangesAsync(CancellationToken cancellationToken) => context.SaveChangesAsync(cancellationToken);
 
     // Itens e condições na ordem em que foram informados: os ids (Guid v7) são gerados em sequência.
+    // O escopo vem com região e loja para a resposta trazer os nomes (US-02.3).
     // Consulta dividida: duas coleções na mesma consulta multiplicariam as linhas.
     private static IQueryable<Campaign> WithItems(IQueryable<Campaign> query) =>
         query.Include(campaign => campaign.Items.OrderBy(item => item.Id))
             .Include(campaign => campaign.Conditions.OrderBy(condition => condition.Id))
+            .Include(campaign => campaign.Scopes).ThenInclude(scope => scope.Region)
+            .Include(campaign => campaign.Scopes).ThenInclude(scope => scope.Establishment)
             .AsSplitQuery();
 }

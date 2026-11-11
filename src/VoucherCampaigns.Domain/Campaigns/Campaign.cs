@@ -73,6 +73,12 @@ public class Campaign
     /// <summary>Uso do voucher na mesma compra que o gerou (US-01.4, cenário 4); falso = só em compra posterior.</summary>
     public bool AllowUseInSamePurchase { get; set; }
 
+    /// <summary>Vouchers confirmados (RN09). Mantido pelo motor em comandos condicionais; não altere na mão.</summary>
+    public int IssuedVouchers { get; set; }
+
+    /// <summary>Vouchers provisórios vivos, que contam para o esgotamento (US-04.9, cenário 6).</summary>
+    public int ReservedVouchers { get; set; }
+
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
 
     public DateTime UpdatedAt { get; set; } = DateTime.UtcNow;
@@ -158,9 +164,78 @@ public class Campaign
         UpdatedAt = utcNow;
     }
 
-    /// <summary>Só campanha ativa e dentro da vigência concede voucher (PR-10); rascunho nunca concede.</summary>
-    public bool CanIssueVouchers(DateTime utcNow) =>
-        Status == CampaignStatus.Active && StartsAt <= utcNow && utcNow < EndsAt;
+    /// <summary>
+    /// Status efetivo (PR-04): agendada e ativa seguem a vigência pelo relógio, sem job. O minuto do fim conta
+    /// inteiro (D9): às 23:59:59 ainda vale, a partir de 00:00 está encerrada. A pausada vira encerrada no fim (US-01.8).
+    /// A ativa sem saldo é esgotada (RN09, spec GH-045 D-5): as reservas contam e, se vencem, ela volta a ativa.
+    /// Os demais status valem como foram gravados (spec GH-026-status-efetivo).
+    /// </summary>
+    public CampaignStatus EffectiveStatus(DateTime utcNow)
+    {
+        if (Status is not (CampaignStatus.Scheduled or CampaignStatus.Active or CampaignStatus.Paused))
+        {
+            return Status;
+        }
+
+        if (BusinessTime.HasPassed(EndsAt, utcNow))
+        {
+            return CampaignStatus.Ended;
+        }
+
+        if (Status == CampaignStatus.Paused)
+        {
+            return CampaignStatus.Paused;
+        }
+
+        if (utcNow < StartsAt)
+        {
+            return CampaignStatus.Scheduled;
+        }
+
+        return HasAvailableVouchers ? CampaignStatus.Active : CampaignStatus.SoldOut;
+    }
+
+    /// <summary>Saldo para novas emissões: total menos confirmados e reservados; sem total, nunca esgota.</summary>
+    public bool HasAvailableVouchers =>
+        TotalVoucherLimit is null || IssuedVouchers + ReservedVouchers < TotalVoucherLimit;
+
+    /// <summary>
+    /// A campanha vale na loja e no canal (RN08, US-02.3) quando alguma linha do escopo casa: a rede inteira,
+    /// a região da loja ou a própria loja, sempre com o canal da compra.
+    /// </summary>
+    public bool IsInScope(Establishment establishment, ChannelType channel) =>
+        Scopes.Any(scope =>
+            scope.ChannelType == channel
+            && (scope.EstablishmentId is null && scope.RegionId is null
+                || scope.RegionId == establishment.RegionId
+                || scope.EstablishmentId == establishment.Id));
+
+    /// <summary>Condições de geração (US-04.1), cumulativas; sem alvo configurado não há o que conceder.</summary>
+    public bool IsSatisfiedBy(Vouchers.Purchase purchase) =>
+        Items.Count > 0 && Conditions.All(condition => condition.IsSatisfiedBy(purchase));
+
+    /// <summary>
+    /// Alvo que origina o voucher (US-04.3, spec GH-045 D-10): o mais específico presente na compra (produto antes
+    /// de categoria); sem nenhum, o alvo "todos"; sem "todos", o primeiro configurado.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">Campanha sem alvo (a submissão exige ao menos um).</exception>
+    public CampaignItem ChooseTarget(Vouchers.Purchase purchase)
+    {
+        var ordered = Items.OrderBy(item => item.Id).ToList();
+
+        if (ordered.Count == 0)
+        {
+            throw new InvalidOperationException("A campanha não tem alvo configurado.");
+        }
+
+        return ordered.FirstOrDefault(item => item.TargetType == TargetType.Product && purchase.Items.Any(item.Matches))
+            ?? ordered.FirstOrDefault(item => item.TargetType == TargetType.Category && purchase.Items.Any(item.Matches))
+            ?? ordered.FirstOrDefault(item => item.TargetType == TargetType.All)
+            ?? ordered[0];
+    }
+
+    /// <summary>Só campanha efetivamente ativa concede voucher (PR-10); rascunho nunca concede.</summary>
+    public bool CanIssueVouchers(DateTime utcNow) => EffectiveStatus(utcNow) == CampaignStatus.Active;
 
     /// <summary>Saldo sem cota por alvo (US-01.3, cenário 2); null enquanto o total não foi definido.</summary>
     public int? UndistributedVouchers =>
@@ -302,6 +377,11 @@ public class Campaign
             throw new BusinessRuleException(CampaignErrors.SubmitMaxUsesRequiredCode, CampaignErrors.SubmitMaxUsesRequiredMessage);
         }
 
+        if (Scopes.Count == 0)
+        {
+            throw new BusinessRuleException(CampaignErrors.SubmitScopeRequiredCode, CampaignErrors.SubmitScopeRequiredMessage);
+        }
+
         SubmittedByUserId = actorUserId;
         SubmittedAt = utcNow;
         return MoveTo(CampaignStatus.PendingApproval, actorUserId, null, utcNow);
@@ -316,7 +396,8 @@ public class Campaign
         EnsureUtc(utcNow, nameof(utcNow));
         EnsurePending();
 
-        if (utcNow >= EndsAt)
+        // D9: o minuto do fim conta inteiro.
+        if (BusinessTime.HasPassed(EndsAt, utcNow))
         {
             throw new BusinessRuleException(CampaignErrors.ApprovePeriodEndedCode, CampaignErrors.ApprovePeriodEndedMessage);
         }
@@ -340,6 +421,142 @@ public class Campaign
         DecidedAt = utcNow;
         RejectionReason = trimmed;
         return MoveTo(CampaignStatus.Rejected, actorUserId, trimmed, utcNow);
+    }
+
+    /// <summary>
+    /// Substitui onde a campanha vale (US-02.3): uma linha por local (rede, região ou loja) e canal.
+    /// A existência, a rede e os canais da loja são conferidos pelo serviço.
+    /// </summary>
+    /// <exception cref="BusinessRuleException">Campanha fora de rascunho ou local repetido com o mesmo canal.</exception>
+    public void ReplaceScopes(IReadOnlyList<CampaignScope> scopes, DateTime utcNow)
+    {
+        EnsureDraft();
+
+        if (scopes.DistinctBy(scope => (scope.RegionId, scope.EstablishmentId, scope.ChannelType)).Count() != scopes.Count)
+        {
+            throw new BusinessRuleException(CampaignErrors.ScopeDuplicatedCode, CampaignErrors.ScopeDuplicatedMessage);
+        }
+
+        Scopes.Clear();
+
+        foreach (var scope in scopes)
+        {
+            scope.CampaignId = Id;
+            Scopes.Add(scope);
+        }
+
+        UpdatedAt = utcNow;
+    }
+
+    /// <summary>Pausa a campanha efetivamente ativa (US-01.8). Não há retomada: a pausada só pode ser encerrada.</summary>
+    /// <exception cref="BusinessRuleException">Campanha que não está ativa.</exception>
+    public CampaignStatusEvent Pause(Guid actorUserId, DateTime utcNow)
+    {
+        EnsureUtc(utcNow, nameof(utcNow));
+
+        if (EffectiveStatus(utcNow) != CampaignStatus.Active)
+        {
+            throw new BusinessRuleException(CampaignErrors.PauseNotActiveCode, CampaignErrors.PauseNotActiveMessage);
+        }
+
+        // A agendada que já começou é ativa: o histórico registra o status efetivo.
+        Status = CampaignStatus.Active;
+        return MoveTo(CampaignStatus.Paused, actorUserId, null, utcNow);
+    }
+
+    /// <summary>Encerra a campanha ativa ou pausada antes do fim da vigência (US-01.8).</summary>
+    /// <exception cref="BusinessRuleException">Campanha que não está ativa nem pausada.</exception>
+    public CampaignStatusEvent End(Guid actorUserId, DateTime utcNow)
+    {
+        EnsureUtc(utcNow, nameof(utcNow));
+
+        var current = EffectiveStatus(utcNow);
+
+        if (current is not (CampaignStatus.Active or CampaignStatus.Paused))
+        {
+            throw new BusinessRuleException(CampaignErrors.EndNotAllowedCode, CampaignErrors.EndNotAllowedMessage);
+        }
+
+        Status = current;
+        return MoveTo(CampaignStatus.Ended, actorUserId, null, utcNow);
+    }
+
+    /// <summary>
+    /// Rascunho novo com a configuração desta campanha, de qualquer status (US-01.10), na mesma rede e com a RN02.
+    /// Teto e data fixa da validade só vêm se continuarem coerentes com a nova vigência (spec US-01.10, D-2).
+    /// </summary>
+    /// <exception cref="BusinessRuleException">Período inválido ou início no passado.</exception>
+    public Campaign Duplicate(string name, DateTime startsAtUtc, DateTime endsAtUtc, DateTime utcNow)
+    {
+        var copy = CreateDraft(NetworkId, name, Description, startsAtUtc, endsAtUtc, utcNow);
+
+        copy.TotalVoucherLimit = TotalVoucherLimit;
+        copy.PerCustomerVoucherLimit = PerCustomerVoucherLimit;
+        copy.AudienceType = AudienceType;
+        copy.MinPurchaseAmount = MinPurchaseAmount;
+        copy.MaxPurchaseAmount = MaxPurchaseAmount;
+        copy.MaxUsesPerVoucher = MaxUsesPerVoucher;
+        copy.AllowUseInSamePurchase = AllowUseInSamePurchase;
+
+        if (VoucherValidityType == Campaigns.VoucherValidityType.Relative)
+        {
+            copy.VoucherValidityType = VoucherValidityType;
+            copy.VoucherValidityAmount = VoucherValidityAmount;
+            copy.VoucherValidityUnit = VoucherValidityUnit;
+            copy.VoucherValidityCap = VoucherValidityCap > copy.StartsAt ? VoucherValidityCap : null;
+        }
+        else if (VoucherValidityType == Campaigns.VoucherValidityType.FixedDate && VoucherValidUntil >= copy.EndsAt)
+        {
+            copy.VoucherValidityType = VoucherValidityType;
+            copy.VoucherValidUntil = VoucherValidUntil;
+        }
+
+        // Ids em sequência para itens, condições e locais manterem a ordem da origem.
+        var sequence = 0;
+        Guid NextId() => Guid.CreateVersion7(new DateTimeOffset(utcNow).AddMilliseconds(sequence++));
+
+        foreach (var item in Items.OrderBy(item => item.Id))
+        {
+            copy.Items.Add(new CampaignItem
+            {
+                Id = NextId(),
+                CampaignId = copy.Id,
+                TargetType = item.TargetType,
+                CategoryId = item.CategoryId,
+                ProductId = item.ProductId,
+                BenefitType = item.BenefitType,
+                BenefitValue = item.BenefitValue,
+                VoucherLimit = item.VoucherLimit
+            });
+        }
+
+        foreach (var condition in Conditions.OrderBy(condition => condition.Id))
+        {
+            copy.Conditions.Add(new CampaignCondition
+            {
+                Id = NextId(),
+                CampaignId = copy.Id,
+                Type = condition.Type,
+                MinAmount = condition.MinAmount,
+                MinQuantity = condition.MinQuantity,
+                CategoryId = condition.CategoryId,
+                ProductId = condition.ProductId
+            });
+        }
+
+        foreach (var scope in Scopes.OrderBy(scope => scope.Id))
+        {
+            copy.Scopes.Add(new CampaignScope
+            {
+                Id = NextId(),
+                CampaignId = copy.Id,
+                RegionId = scope.RegionId,
+                EstablishmentId = scope.EstablishmentId,
+                ChannelType = scope.ChannelType
+            });
+        }
+
+        return copy;
     }
 
     private void EnsurePending()
@@ -420,10 +637,16 @@ public class Campaign
 
     private static void EnsureValidCondition(CampaignCondition condition)
     {
-        // D2 e semântica indefinida no backlog (spec US-01.4, D-2).
-        if (condition.Type is ConditionType.CustomerPurchaseCount or ConditionType.ProductCombination or ConditionType.PurchasePeriod)
+        // Semântica indefinida no backlog (spec US-01.4, D-2). A quantidade de compras foi liberada pela decisão D2 (GH-045, D-11).
+        if (condition.Type is ConditionType.ProductCombination or ConditionType.PurchasePeriod)
         {
             throw new BusinessRuleException(CampaignErrors.ConditionTypeUnavailableCode, CampaignErrors.ConditionTypeUnavailableMessage);
+        }
+
+        if (condition.Type == ConditionType.CustomerPurchaseCount && !(condition.MinQuantity > 0))
+        {
+            throw new BusinessRuleException(
+                CampaignErrors.ConditionMinPurchasesNotPositiveCode, CampaignErrors.ConditionMinPurchasesNotPositiveMessage);
         }
 
         if (condition.Type == ConditionType.PurchaseTotal && !(condition.MinAmount > 0))

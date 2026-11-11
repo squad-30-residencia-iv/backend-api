@@ -1,7 +1,9 @@
+using VoucherCampaigns.Application.Audit;
 using VoucherCampaigns.Application.Authentication;
 using VoucherCampaigns.Application.Campaigns;
 using VoucherCampaigns.Application.Common;
 using VoucherCampaigns.Application.Ports;
+using VoucherCampaigns.Domain.Audit;
 using VoucherCampaigns.Domain.Catalog;
 using VoucherCampaigns.Domain.Campaigns;
 using VoucherCampaigns.Domain.Common;
@@ -18,6 +20,8 @@ public class CampaignServiceTests
 
     private readonly FakeCampaignRepository _campaigns = new();
     private readonly FakeCatalogRepository _catalog = new();
+    private readonly FakeAuditTrail _audit = new();
+    private readonly FakeCurrentUser _user = new(Network.Id);
 
     [Fact]
     public async Task CreateAsync_ConvertsNetworkLocalTimesAndStoresDraft()
@@ -86,6 +90,62 @@ public class CampaignServiceTests
             CreateService(Network).GetAllAsync(Network.Id, status, CancellationToken.None));
 
         Assert.Equal("Status", exception.Field);
+    }
+
+    [Fact]
+    public async Task GetAllAsync_FiltersByEffectiveStatus()
+    {
+        var campaign = StoredDraft();
+        campaign.Status = CampaignStatus.Scheduled;
+        var duringPeriod = new DateTimeOffset(2026, 10, 10, 12, 0, 0, TimeSpan.FromHours(-3));
+
+        var actives = await CreateService(Network, duringPeriod).GetAllAsync(Network.Id, "active", CancellationToken.None);
+        var scheduled = await CreateService(Network, duringPeriod).GetAllAsync(Network.Id, "Scheduled", CancellationToken.None);
+
+        Assert.Equal("Active", Assert.Single(actives).Status);
+        Assert.Empty(scheduled);
+    }
+
+    [Fact]
+    public async Task SubmitAsync_AppendsAuditEntryWithActorScopeAndPayload()
+    {
+        var campaign = StoredReadyDraft();
+
+        await CreateService(Network).SubmitAsync(campaign.Id, CancellationToken.None);
+
+        var entry = Assert.Single(_audit.Entries);
+        Assert.Equal(AuditEventTypes.CampaignSubmitted, entry.EventType);
+        Assert.Equal(AuditActorType.User, entry.ActorType);
+        Assert.Equal(_user.UserId, entry.ActorId);
+        Assert.Equal(Network.Id, entry.NetworkId);
+        Assert.Equal(campaign.Id, entry.CampaignId);
+        Assert.Equal("Campaign", entry.EntityType);
+        Assert.Equal(campaign.Id, entry.EntityId);
+        Assert.Equal(Now.UtcDateTime, entry.OccurredAt);
+        Assert.Equal("""{"fromStatus":"Draft","toStatus":"PendingApproval"}""", entry.Payload);
+    }
+
+    [Fact]
+    public async Task RejectAsync_AuditPayloadKeepsTheReasonReadable()
+    {
+        var campaign = StoredReadyDraft();
+        campaign.Status = CampaignStatus.PendingApproval;
+
+        await CreateService(Network).RejectAsync(campaign.Id, new RejectCampaignRequest(" Fora do calendário "), CancellationToken.None);
+
+        var entry = Assert.Single(_audit.Entries);
+        Assert.Equal(AuditEventTypes.CampaignRejected, entry.EventType);
+        Assert.Equal("""{"fromStatus":"PendingApproval","toStatus":"Rejected","reason":"Fora do calendário"}""", entry.Payload);
+    }
+
+    [Fact]
+    public async Task SubmitAsync_WhenIncomplete_DoesNotAppendAudit()
+    {
+        var campaign = StoredDraft();
+
+        await Assert.ThrowsAsync<BusinessRuleException>(() => CreateService(Network).SubmitAsync(campaign.Id, CancellationToken.None));
+
+        Assert.Empty(_audit.Entries);
     }
 
     [Fact]
@@ -194,8 +254,24 @@ public class CampaignServiceTests
         return campaign;
     }
 
-    private CampaignService CreateService(Network? network) =>
-        new(new FakeNetworkRepository(network), _campaigns, _catalog, new FakeCurrentUser(Network.Id), new FixedTimeProvider(Now));
+    /// <summary>Rascunho com tudo o que a submissão exige (US-01.6).</summary>
+    private Campaign StoredReadyDraft()
+    {
+        var campaign = StoredDraft();
+        var utcNow = Now.UtcDateTime;
+
+        campaign.SetAudience(CampaignAudienceType.AllCustomers, utcNow);
+        campaign.ReplaceItems([new CampaignItem { TargetType = TargetType.All, BenefitType = BenefitType.Percentage, BenefitValue = 10 }], utcNow);
+        campaign.SetQuantities(100, null, utcNow);
+        campaign.SetRelativeValidity(30, VoucherValidityUnit.Days, null, utcNow);
+        campaign.SetUsageRestrictions(null, null, 1, utcNow);
+        campaign.ReplaceScopes([new CampaignScope { ChannelType = ChannelType.Physical }], utcNow);
+
+        return campaign;
+    }
+
+    private CampaignService CreateService(Network? network, DateTimeOffset? now = null) =>
+        new(new FakeNetworkRepository(network), _campaigns, _catalog, new FakeOrganizationRepository(), _user, _audit, new FixedTimeProvider(now ?? Now));
 
     private static CreateCampaignRequest Request(DateTime startsAt, DateTime endsAt) =>
         new(Network.Id, "Volta às Aulas", null, startsAt, endsAt);
@@ -215,9 +291,8 @@ public class CampaignServiceTests
             return Task.CompletedTask;
         }
 
-        public Task<IReadOnlyList<Campaign>> GetByNetworkAsync(Guid networkId, CampaignStatus? status, CancellationToken cancellationToken) =>
-            Task.FromResult<IReadOnlyList<Campaign>>(
-                Added.Where(campaign => campaign.NetworkId == networkId && (status is null || campaign.Status == status)).ToList());
+        public Task<IReadOnlyList<Campaign>> GetByNetworkAsync(Guid networkId, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<Campaign>>(Added.Where(campaign => campaign.NetworkId == networkId).ToList());
 
         public Task<Campaign?> FindByIdAsync(Guid id, CancellationToken cancellationToken) =>
             Task.FromResult(Added.FirstOrDefault(campaign => campaign.Id == id));
@@ -244,6 +319,10 @@ public class CampaignServiceTests
         public Task<Product?> GetProductByIdAsync(Guid id, CancellationToken cancellationToken) =>
             Task.FromResult(Products.FirstOrDefault(product => product.Id == id));
 
+        public Task<IReadOnlyList<Product>> GetProductsByCodesAsync(IReadOnlyCollection<string> codes, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<Product>>(
+                Products.Where(product => codes.Contains(product.Code, StringComparer.OrdinalIgnoreCase)).ToList());
+
         public Task<IReadOnlyList<Category>> GetAllCategoriesAsync(bool? activeOnly, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
 
@@ -267,6 +346,33 @@ public class CampaignServiceTests
 
         public Task<bool> ExistsProductByCodeAsync(string code, Guid? excludeId, CancellationToken cancellationToken) =>
             throw new NotSupportedException();
+    }
+
+    /// <summary>A validação do escopo é coberta nos testes de integração; aqui nenhuma consulta é usada.</summary>
+    private sealed class FakeOrganizationRepository : IOrganizationRepository
+    {
+        public Task<IReadOnlyList<Network>> GetNetworksAsync(bool? activeOnly, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<Network?> GetNetworkByIdAsync(Guid id, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<Network> CreateNetworkAsync(Network network, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<Network> UpdateNetworkAsync(Network network, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<bool> ExistsNetworkByNameAsync(string name, Guid? excludeId, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<IReadOnlyList<Region>> GetRegionsAsync(Guid networkId, bool? activeOnly, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<Region?> GetRegionByIdAsync(Guid id, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<Region> CreateRegionAsync(Region region, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<Region> UpdateRegionAsync(Region region, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<bool> ExistsRegionByNameInNetworkAsync(Guid networkId, string name, Guid? excludeId, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<IReadOnlyList<Establishment>> GetEstablishmentsAsync(Guid regionId, bool? activeOnly, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<Establishment?> GetEstablishmentByIdAsync(Guid id, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<Establishment> CreateEstablishmentAsync(Establishment establishment, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<Establishment> UpdateEstablishmentAsync(Establishment establishment, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<bool> ExistsEstablishmentByCodeInRegionAsync(Guid regionId, string code, Guid? excludeId, CancellationToken cancellationToken) => throw new NotSupportedException();
+    }
+
+    private sealed class FakeAuditTrail : IAuditTrail
+    {
+        public List<AuditEntry> Entries { get; } = [];
+
+        public void Append(AuditEntry entry) => Entries.Add(entry);
     }
 
     private sealed class FakeCurrentUser(Guid networkId) : ICurrentUser
