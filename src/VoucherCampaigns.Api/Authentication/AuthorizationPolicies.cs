@@ -23,6 +23,9 @@ public static class AuthorizationPolicies
     /// <summary>Cadastrar, alterar e inativar categoria e produto: somente administrador da plataforma (frontend-web#42).</summary>
     public const string ManageCatalog = "ManageCatalog";
 
+    /// <summary>Gerenciar aplicações satélite: somente administrador da plataforma (GH-028).</summary>
+    public const string ManageSatelliteApps = "ManageSatelliteApps";
+
     /// <summary>Qualquer aplicação satélite autenticada (US-07.5); token de usuário não passa.</summary>
     public const string SatelliteApp = "SatelliteApp";
 

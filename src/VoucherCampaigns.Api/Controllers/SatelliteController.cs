@@ -17,16 +17,33 @@ public class SatelliteController(ISatelliteTokenService tokenService) : Controll
     [ProducesResponseType<SatelliteTokenResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
-    public async Task<ActionResult<SatelliteTokenResponse>> Token(SatelliteTokenRequest request, CancellationToken cancellationToken)
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status429TooManyRequests)]
+    public async Task<ActionResult<SatelliteTokenResponse>> Token(
+        SatelliteTokenRequest request,
+        [FromServices] ISatelliteTokenRateLimiter rateLimiter,
+        CancellationToken cancellationToken)
     {
+        var clientId = request.ClientId?.Trim().ToLowerInvariant() ?? string.Empty;
+
+        if (rateLimiter.IsLockedOut(clientId))
+        {
+            return ApiProblems.Result(
+                HttpContext,
+                StatusCodes.Status429TooManyRequests,
+                "SATELLITE_TOKEN_RATE_LIMIT_EXCEEDED",
+                "Limite de tentativas excedido para este clientId. Aguarde alguns instantes antes de tentar novamente.");
+        }
+
         var response = await tokenService.IssueAsync(request, cancellationToken);
 
         if (response is null)
         {
+            rateLimiter.RecordFailure(clientId);
             return ApiProblems.Result(
                 HttpContext, StatusCodes.Status401Unauthorized, ErrorCodes.InvalidClient, ApiProblems.InvalidClientDetail);
         }
 
+        rateLimiter.Reset(clientId);
         return Ok(response);
     }
 
