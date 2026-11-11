@@ -7,7 +7,8 @@ using VoucherCampaigns.Application.DTOs.Catalog;
 namespace VoucherCampaigns.Api.Controllers;
 
 [ApiController]
-[Authorize(Policy = AuthorizationPolicies.ManageCampaigns)]
+// Leitura para todos os papéis; escrita só para o administrador da plataforma (o catálogo é global).
+[Authorize(Policy = AuthorizationPolicies.ReadCatalog)]
 [Route("api/v1/products")]
 public class ProductsController(IProductService productService) : ControllerBase
 {
@@ -27,6 +28,8 @@ public class ProductsController(IProductService productService) : ControllerBase
         Ok(await productService.GetByIdAsync(id, cancellationToken));
 
     [HttpPost]
+    [Authorize(Policy = AuthorizationPolicies.ManageCatalog)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
     [ProducesResponseType<ProductResponse>(StatusCodes.Status201Created)]
     [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status422UnprocessableEntity)]
@@ -37,6 +40,8 @@ public class ProductsController(IProductService productService) : ControllerBase
     }
 
     [HttpPut("{id:guid}")]
+    [Authorize(Policy = AuthorizationPolicies.ManageCatalog)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
     [ProducesResponseType<ProductResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
@@ -45,6 +50,8 @@ public class ProductsController(IProductService productService) : ControllerBase
         Ok(await productService.UpdateAsync(id, request, cancellationToken));
 
     [HttpDelete("{id:guid}")]
+    [Authorize(Policy = AuthorizationPolicies.ManageCatalog)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
     [ProducesResponseType(StatusCodes.Status204NoContent)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
     public async Task<IActionResult> Delete(Guid id, CancellationToken cancellationToken)

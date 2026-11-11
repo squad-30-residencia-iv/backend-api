@@ -67,13 +67,41 @@ public class CatalogAndOrganizationEndpointTests : IClassFixture<ApiFactory>
     }
 
     [Fact]
-    public async Task Administrador_CannotUseCampaignsOrCatalog()
+    public async Task Administrador_CannotUseCampaigns()
     {
         var campaign = await Admin().PostAsJsonAsync("/api/v1/campaigns", new { });
-        var categories = await Admin().GetAsync("/api/v1/categories");
 
         await AssertForbiddenRoleAsync(campaign);
-        await AssertForbiddenRoleAsync(categories);
+    }
+
+    [Fact]
+    public async Task Administrador_ManagesTheCatalog()
+    {
+        var category = await Admin().PostAsJsonAsync("/api/v1/categories", new { name = Unique("Admin") });
+        var categories = await Admin().GetAsync("/api/v1/categories");
+
+        Assert.Equal(HttpStatusCode.Created, category.StatusCode);
+        Assert.Equal(HttpStatusCode.OK, categories.StatusCode);
+    }
+
+    [Theory]
+    [InlineData("POST", "/api/v1/categories")]
+    [InlineData("PUT", "/api/v1/categories/0199e3a0-0000-7000-8000-000000000301")]
+    [InlineData("DELETE", "/api/v1/categories/0199e3a0-0000-7000-8000-000000000301")]
+    [InlineData("POST", "/api/v1/products")]
+    [InlineData("PUT", "/api/v1/products/0199e3a0-0000-7000-8000-000000000301")]
+    [InlineData("DELETE", "/api/v1/products/0199e3a0-0000-7000-8000-000000000301")]
+    public async Task CatalogWrites_ByAnalistaOrGestor_ReturnForbiddenRole(string method, string url)
+    {
+        foreach (var role in new[] { Roles.Analista, Roles.Gestor })
+        {
+            using var request = new HttpRequestMessage(new HttpMethod(method), url)
+            {
+                Content = new StringContent("{}", Encoding.UTF8, "application/json")
+            };
+
+            await AssertForbiddenRoleAsync(await Client(role).SendAsync(request));
+        }
     }
 
     [Fact]
@@ -372,7 +400,7 @@ public class CatalogAndOrganizationEndpointTests : IClassFixture<ApiFactory>
     {
         var category = await CreateCategoryAsync(Unique("Papelaria"));
 
-        var created = await Client().PostAsJsonAsync(
+        var created = await Admin().PostAsJsonAsync(
             "/api/v1/products", new { categoryId = category.Id, code = "SKU-4471", name = "Mochila Escolar G" });
 
         Assert.Equal(HttpStatusCode.Created, created.StatusCode);
@@ -380,7 +408,7 @@ public class CatalogAndOrganizationEndpointTests : IClassFixture<ApiFactory>
         Assert.Equal(category.Id, product!.CategoryId);
         Assert.Equal("SKU-4471", product.Code);
 
-        var duplicate = await Client().PostAsJsonAsync(
+        var duplicate = await Admin().PostAsJsonAsync(
             "/api/v1/products", new { categoryId = category.Id, code = "SKU-4471", name = "Outra mochila" });
 
         await AssertBusinessRuleAsync(duplicate, CatalogErrors.ProductCodeTakenCode, "Já existe produto com este identificador");
@@ -389,7 +417,7 @@ public class CatalogAndOrganizationEndpointTests : IClassFixture<ApiFactory>
     [Fact]
     public async Task US0204_Scenario2_ProductWithUnknownCategory_IsRefused()
     {
-        var response = await Client().PostAsJsonAsync(
+        var response = await Admin().PostAsJsonAsync(
             "/api/v1/products", new { categoryId = Guid.CreateVersion7(), code = UniqueCode(), name = "Produto do Bazar" });
 
         await AssertBusinessRuleAsync(response, CatalogErrors.ProductCategoryNotFoundCode, "Categoria informada não encontrada");
@@ -401,7 +429,7 @@ public class CatalogAndOrganizationEndpointTests : IClassFixture<ApiFactory>
         var category = await CreateCategoryAsync(Unique("Cascata"));
         var product = await CreateProductAsync(category.Id, UniqueCode(), Unique("Produto"));
 
-        var response = await Client().DeleteAsync($"/api/v1/categories/{category.Id}");
+        var response = await Admin().DeleteAsync($"/api/v1/categories/{category.Id}");
 
         Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
 
@@ -410,12 +438,12 @@ public class CatalogAndOrganizationEndpointTests : IClassFixture<ApiFactory>
         Assert.False(storedCategory!.IsActive);
         Assert.False(storedProduct!.IsActive);
 
-        var reactivate = await Client().PutAsJsonAsync(
+        var reactivate = await Admin().PutAsJsonAsync(
             $"/api/v1/products/{product.Id}",
             new { code = product.Code, name = product.Name, isActive = true });
         await AssertBusinessRuleAsync(reactivate, CatalogErrors.ProductCategoryInactiveCode, "Categoria informada está inativa");
 
-        var inInactive = await Client().PostAsJsonAsync(
+        var inInactive = await Admin().PostAsJsonAsync(
             "/api/v1/products", new { categoryId = category.Id, code = UniqueCode(), name = Unique("Produto") });
         await AssertBusinessRuleAsync(inInactive, CatalogErrors.ProductCategoryInactiveCode, "Categoria informada está inativa");
     }
@@ -423,7 +451,7 @@ public class CatalogAndOrganizationEndpointTests : IClassFixture<ApiFactory>
     [Fact]
     public async Task CreateCategory_WithBlankName_ReturnsValidationProblem()
     {
-        var response = await Client().PostAsJsonAsync("/api/v1/categories", new { name = "   " });
+        var response = await Admin().PostAsJsonAsync("/api/v1/categories", new { name = "   " });
 
         await AssertValidationAsync(response, "Name", "Informe o nome da categoria.");
     }
@@ -431,7 +459,7 @@ public class CatalogAndOrganizationEndpointTests : IClassFixture<ApiFactory>
     [Fact]
     public async Task CreateCategory_WithNameTooLong_ReturnsValidationProblem()
     {
-        var response = await Client().PostAsJsonAsync("/api/v1/categories", new { name = new string('a', 151) });
+        var response = await Admin().PostAsJsonAsync("/api/v1/categories", new { name = new string('a', 151) });
 
         await AssertValidationAsync(response, "Name", "O nome deve ter no máximo 150 caracteres.");
     }
@@ -439,7 +467,7 @@ public class CatalogAndOrganizationEndpointTests : IClassFixture<ApiFactory>
     [Fact]
     public async Task CreateCategory_WithDuplicateName_ReturnsBusinessRule()
     {
-        var response = await Client().PostAsJsonAsync("/api/v1/categories", new { name = "Moda" });
+        var response = await Admin().PostAsJsonAsync("/api/v1/categories", new { name = "Moda" });
 
         await AssertBusinessRuleAsync(response, CatalogErrors.CategoryNameTakenCode, CatalogErrors.CategoryNameTakenMessage);
     }
@@ -449,7 +477,7 @@ public class CatalogAndOrganizationEndpointTests : IClassFixture<ApiFactory>
     {
         var name = Unique("Categoria");
 
-        var response = await Client().PostAsJsonAsync("/api/v1/categories", new { name });
+        var response = await Admin().PostAsJsonAsync("/api/v1/categories", new { name });
 
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
         var category = await response.Content.ReadFromJsonAsync<CategoryResponse>();
@@ -465,7 +493,7 @@ public class CatalogAndOrganizationEndpointTests : IClassFixture<ApiFactory>
     {
         var created = await CreateCategoryAsync(Unique("Sem flag"));
 
-        var response = await Client().PutAsync(
+        var response = await Admin().PutAsync(
             $"/api/v1/categories/{created.Id}",
             new StringContent($$"""{"name":"{{created.Name}}"}""", Encoding.UTF8, "application/json"));
 
@@ -477,7 +505,7 @@ public class CatalogAndOrganizationEndpointTests : IClassFixture<ApiFactory>
     {
         var json = $$"""{"categoryId":"{{Guid.Empty}}","code":"{{UniqueCode()}}","name":"Sem categoria"}""";
 
-        var response = await Client().PostAsync("/api/v1/products", new StringContent(json, Encoding.UTF8, "application/json"));
+        var response = await Admin().PostAsync("/api/v1/products", new StringContent(json, Encoding.UTF8, "application/json"));
 
         await AssertValidationAsync(response, "CategoryId", "Informe a categoria do produto.");
     }
@@ -488,8 +516,8 @@ public class CatalogAndOrganizationEndpointTests : IClassFixture<ApiFactory>
     [InlineData(Roles.Administrador, "networks")]
     [InlineData(Roles.Administrador, "regions")]
     [InlineData(Roles.Administrador, "establishments")]
-    [InlineData(Roles.Analista, "categories")]
-    [InlineData(Roles.Analista, "products")]
+    [InlineData(Roles.Administrador, "categories")]
+    [InlineData(Roles.Administrador, "products")]
     public async Task UnknownId_ReturnsNotFound(string role, string resource)
     {
         var url = $"/api/v1/{resource}/{Guid.CreateVersion7()}";
@@ -553,14 +581,14 @@ public class CatalogAndOrganizationEndpointTests : IClassFixture<ApiFactory>
 
     private async Task<CategoryResponse> CreateCategoryAsync(string name)
     {
-        var response = await Client().PostAsJsonAsync("/api/v1/categories", new { name });
+        var response = await Admin().PostAsJsonAsync("/api/v1/categories", new { name });
         response.EnsureSuccessStatusCode();
         return (await response.Content.ReadFromJsonAsync<CategoryResponse>())!;
     }
 
     private async Task<ProductResponse> CreateProductAsync(Guid categoryId, string code, string name)
     {
-        var response = await Client().PostAsJsonAsync("/api/v1/products", new { categoryId, code, name });
+        var response = await Admin().PostAsJsonAsync("/api/v1/products", new { categoryId, code, name });
         response.EnsureSuccessStatusCode();
         return (await response.Content.ReadFromJsonAsync<ProductResponse>())!;
     }

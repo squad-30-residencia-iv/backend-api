@@ -28,6 +28,8 @@ public static class AuthenticationSetup
             .AddPolicy(AuthorizationPolicies.ApproveCampaigns, policy => policy.RequireRole(Roles.Gestor))
             .AddPolicy(AuthorizationPolicies.ReadHierarchy, policy => policy.RequireRole(Roles.Administrador, Roles.Analista, Roles.Gestor))
             .AddPolicy(AuthorizationPolicies.ManageHierarchy, policy => policy.RequireRole(Roles.Administrador))
+            .AddPolicy(AuthorizationPolicies.ReadCatalog, policy => policy.RequireRole(Roles.Administrador, Roles.Analista, Roles.Gestor))
+            .AddPolicy(AuthorizationPolicies.ManageCatalog, policy => policy.RequireRole(Roles.Administrador))
             .AddPolicy(AuthorizationPolicies.SatelliteApp, policy => SatellitePolicy(policy))
             .AddPolicy(AuthorizationPolicies.SatelliteReadCampaigns, policy => SatellitePolicy(policy, SatelliteScopes.ReadCampaigns))
             .AddPolicy(AuthorizationPolicies.SatelliteIssueVouchers, policy => SatellitePolicy(policy, SatelliteScopes.IssueVouchers))
