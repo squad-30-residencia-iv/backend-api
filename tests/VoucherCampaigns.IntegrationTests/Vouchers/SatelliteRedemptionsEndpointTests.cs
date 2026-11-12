@@ -167,6 +167,7 @@ public class SatelliteRedemptionsEndpointTests : IClassFixture<ApiFactory>
         var problem = await TestAuth.ReadProblemAsync(below);
         Assert.Equal("REDEMPTION_AMOUNT_BELOW_MINIMUM", problem.GetProperty("code").GetString());
         Assert.Equal("A compra precisa ser de pelo menos R$ 150,00 para usar este voucher.", problem.GetProperty("detail").GetString());
+        Assert.Equal("AmountBelowMinimum", problem.GetProperty("reason").GetString());
         Assert.Equal("REDEMPTION_AMOUNT_ABOVE_MAXIMUM", (await TestAuth.ReadProblemAsync(above)).GetProperty("code").GetString());
 
         var stored = await QueryAsync(_factory, db => db.Vouchers.AsNoTracking().SingleAsync(v => v.Id == voucher.Id));
@@ -360,6 +361,33 @@ public class SatelliteRedemptionsEndpointTests : IClassFixture<ApiFactory>
 
         var audit = await QueryAsync(_factory, db => db.AuditEntries.CountAsync(a => a.EventType == AuditEventTypes.VoucherRedemptionReversed && a.EntityId == voucher.Id));
         Assert.Equal(1, audit);
+    }
+
+    [Fact]
+    public async Task Reverse_OnAMultiUseVoucher_ReversesOnlyTheRequestedRedemption()
+    {
+        var scenario = await ApprovedCampaignAsync(_factory, (analista, id) =>
+            analista.PutAsJsonAsync($"{ReadyCampaign.Route}/{id}/usage-restrictions", new { maxUsesPerVoucher = 2 }));
+        var satellite = Satellite(_factory);
+        var voucher = await AvailableVoucherAsync(satellite, scenario);
+        var first = await RedeemedAsync(satellite, Redeem(voucher.Id, scenario.StoreId, "TRX-MULTI-1"));
+        var second = await RedeemedAsync(satellite, Redeem(voucher.Id, scenario.StoreId, "TRX-MULTI-2"));
+        Assert.Equal("Redeemed", second.Voucher.Status);
+
+        var reversed = await (await satellite.PostAsync($"{RedemptionsRoute}/{second.RedemptionId}/reverse", null)).Content.ReadFromJsonAsync<RedemptionDto>();
+        var untouched = await satellite.GetFromJsonAsync<RedemptionDto>($"{RedemptionsRoute}/{first.RedemptionId}");
+
+        Assert.Equal("Reversed", reversed!.Status);
+        Assert.Equal("Effective", untouched!.Status);
+        Assert.Equal("Available", reversed.Voucher.Status);
+        Assert.Equal(1, reversed.Voucher.RemainingUses);
+        var stored = await QueryAsync(_factory, db => db.Vouchers.AsNoTracking().SingleAsync(v => v.Id == voucher.Id));
+        Assert.Equal(1, stored.UsesCount);
+        Assert.Equal(1, await QueryAsync(_factory, db => db.VoucherEvents.CountAsync(e => e.VoucherId == voucher.Id && e.EventType == VoucherEventTypes.RedemptionReversed)));
+
+        // O estorno do primeiro devolve a outra utilização: nenhum resgate ativo, voucher inteiro de novo.
+        var reversedFirst = await (await satellite.PostAsync($"{RedemptionsRoute}/{first.RedemptionId}/reverse", null)).Content.ReadFromJsonAsync<RedemptionDto>();
+        Assert.Equal(2, reversedFirst!.Voucher.RemainingUses);
     }
 
     [Fact]

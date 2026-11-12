@@ -25,7 +25,7 @@ public class ReservationReleaser(IConcessionRepository concessions, IRedemptionR
 
             await concessions.ReleaseReservationAsync(expired.CampaignId, expired.CampaignItemId, cancellationToken);
             await concessions.MarkConcessionAsync(expired.ConcessionId, ConcessionStatus.Expired, utcNow, cancellationToken);
-            await redemptionReverser.ReverseEffectiveAsync(expired.VoucherId, "ReservationExpired", null, utcNow, cancellationToken);
+            await redemptionReverser.ReverseAllOfVoucherAsync(expired.VoucherId, "ReservationExpired", null, utcNow, cancellationToken);
             concessions.Add(new VoucherEvent
             {
                 Id = Guid.CreateVersion7(new DateTimeOffset(utcNow)),

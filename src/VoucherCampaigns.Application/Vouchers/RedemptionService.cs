@@ -158,7 +158,7 @@ public class RedemptionService(
 
         await using (var transaction = await redemptions.BeginTransactionAsync(cancellationToken))
         {
-            if (await reverser.ReverseEffectiveAsync(redemption.VoucherId, "Application", app.ApplicationId, utcNow, cancellationToken))
+            if (await reverser.ReverseAsync(redemption.Id, "Application", app.ApplicationId, utcNow, cancellationToken))
             {
                 await redemptions.SaveChangesAsync(cancellationToken);
                 await transaction.CommitAsync(cancellationToken);
@@ -218,7 +218,7 @@ public class RedemptionService(
             ?? throw new ResourceNotFoundException(RedemptionErrors.RedemptionNotFoundMessage);
 
     private static BusinessRuleException Refused(RedemptionRefusal refusal, Voucher? voucher) =>
-        new(RedemptionErrors.CodeOf(refusal), Detail(refusal, voucher));
+        new(RedemptionErrors.CodeOf(refusal), Detail(refusal, voucher), new Dictionary<string, object?> { ["reason"] = refusal.ToString() });
 
     private static string Detail(RedemptionRefusal refusal, Voucher? voucher)
     {
@@ -287,23 +287,23 @@ public class RedemptionService(
 /// <summary>Estorno compartilhado entre o resgate, o desfazimento e a expiração da concessão (GH-049, D-10 e D-19).</summary>
 public class RedemptionReverser(IRedemptionRepository redemptions, IAuditTrail audit) : IRedemptionReverser
 {
-    public async Task<bool> ReverseEffectiveAsync(Guid voucherId, string cause, Guid? actorApplicationId, DateTime utcNow, CancellationToken cancellationToken)
+    public async Task<bool> ReverseAsync(Guid redemptionId, string cause, Guid? actorApplicationId, DateTime utcNow, CancellationToken cancellationToken)
     {
-        // Comando condicional primeiro: só quem marcar o resgate como estornado devolve a utilização.
-        if (!await redemptions.TryReverseByVoucherAsync(voucherId, utcNow, cancellationToken))
+        // Comando condicional por id: só quem marcar este resgate como estornado devolve a utilização dele.
+        if (!await redemptions.TryReverseAsync(redemptionId, utcNow, cancellationToken))
         {
             return false;
         }
 
-        var redemption = await redemptions.FindReversedNowAsync(voucherId, utcNow, cancellationToken)
+        var redemption = await redemptions.FindAsync(redemptionId, cancellationToken)
             ?? throw new InvalidOperationException("O resgate estornado não foi encontrado.");
-        await redemptions.TryReturnUseAsync(voucherId, cancellationToken);
+        await redemptions.TryReturnUseAsync(redemption.VoucherId, cancellationToken);
 
         var payload = new ReversedPayload(redemption.Id, redemption.TransactionId, redemption.DiscountAmount, cause);
         redemptions.Add(new VoucherEvent
         {
             Id = Guid.CreateVersion7(new DateTimeOffset(utcNow)),
-            VoucherId = voucherId,
+            VoucherId = redemption.VoucherId,
             EventType = VoucherEventTypes.RedemptionReversed,
             OccurredAt = utcNow,
             ActorType = actorApplicationId is null ? null : AuditActorType.Application,
@@ -322,13 +322,28 @@ public class RedemptionReverser(IRedemptionRepository redemptions, IAuditTrail a
                 NetworkId = redemption.NetworkId,
                 CampaignId = redemption.CampaignId,
                 EntityType = nameof(Voucher),
-                EntityId = voucherId,
+                EntityId = redemption.VoucherId,
                 OccurredAt = utcNow,
                 Payload = AuditJson.Serialize(payload)
             });
         }
 
         return true;
+    }
+
+    public async Task<int> ReverseAllOfVoucherAsync(Guid voucherId, string cause, Guid? actorApplicationId, DateTime utcNow, CancellationToken cancellationToken)
+    {
+        var reversed = 0;
+
+        foreach (var redemptionId in await redemptions.GetEffectiveIdsByVoucherAsync(voucherId, cancellationToken))
+        {
+            if (await ReverseAsync(redemptionId, cause, actorApplicationId, utcNow, cancellationToken))
+            {
+                reversed++;
+            }
+        }
+
+        return reversed;
     }
 
     private sealed record ReversedPayload(Guid RedemptionId, string TransactionId, decimal DiscountAmount, string Cause);

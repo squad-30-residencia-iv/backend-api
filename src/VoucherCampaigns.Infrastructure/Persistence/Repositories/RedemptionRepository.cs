@@ -36,12 +36,15 @@ public class RedemptionRepository(AppDbContext context) : IRedemptionRepository
         WithVoucher(context.Redemptions.AsNoTracking())
             .FirstOrDefaultAsync(redemption => redemption.Id == id && redemption.NetworkId == networkId, cancellationToken);
 
-    public Task<Redemption?> FindReversedNowAsync(Guid voucherId, DateTime reversedAt, CancellationToken cancellationToken) =>
-        context.Redemptions.AsNoTracking()
-            .Where(redemption => redemption.VoucherId == voucherId && redemption.Status == RedemptionStatus.Reversed)
-            .OrderByDescending(redemption => redemption.ReversedAt)
-            .ThenByDescending(redemption => redemption.Id)
-            .FirstOrDefaultAsync(cancellationToken);
+    public Task<Redemption?> FindAsync(Guid redemptionId, CancellationToken cancellationToken) =>
+        context.Redemptions.AsNoTracking().FirstOrDefaultAsync(redemption => redemption.Id == redemptionId, cancellationToken);
+
+    public async Task<IReadOnlyList<Guid>> GetEffectiveIdsByVoucherAsync(Guid voucherId, CancellationToken cancellationToken) =>
+        await context.Redemptions.AsNoTracking()
+            .Where(redemption => redemption.VoucherId == voucherId && redemption.Status == RedemptionStatus.Effective)
+            .OrderBy(redemption => redemption.Id)
+            .Select(redemption => redemption.Id)
+            .ToListAsync(cancellationToken);
 
     public async Task<IConcessionTransaction> BeginTransactionAsync(CancellationToken cancellationToken) =>
         new EfTransaction(await context.Database.BeginTransactionAsync(cancellationToken));
@@ -82,17 +85,17 @@ public class RedemptionRepository(AppDbContext context) : IRedemptionRepository
         return rows == 1;
     }
 
-    public async Task<bool> TryReverseByVoucherAsync(Guid voucherId, DateTime reversedAt, CancellationToken cancellationToken)
+    public async Task<bool> TryReverseAsync(Guid redemptionId, DateTime reversedAt, CancellationToken cancellationToken)
     {
         var rows = await context.Redemptions
-            .Where(redemption => redemption.VoucherId == voucherId && redemption.Status == RedemptionStatus.Effective)
+            .Where(redemption => redemption.Id == redemptionId && redemption.Status == RedemptionStatus.Effective)
             .ExecuteUpdateAsync(
                 setters => setters
                     .SetProperty(redemption => redemption.Status, RedemptionStatus.Reversed)
                     .SetProperty(redemption => redemption.ReversedAt, reversedAt),
                 cancellationToken);
 
-        return rows >= 1;
+        return rows == 1;
     }
 
     public async Task<bool> TryMarkExpiredAsync(Guid voucherId, DateTime utcNow, CancellationToken cancellationToken)

@@ -84,10 +84,13 @@ public interface IRedemptionService
 /// </summary>
 public interface IRedemptionReverser
 {
-    /// <summary>Marca o resgate como estornado, devolve a utilização e grava o evento; não chama <c>SaveChanges</c>.</summary>
+    /// <summary>Marca este resgate como estornado, devolve a utilização e grava o evento; não chama <c>SaveChanges</c>.</summary>
     /// <param name="actorApplicationId">Aplicação que provocou o estorno; nula na varredura (só o evento é gravado, sem auditoria).</param>
-    /// <returns>Falso quando o voucher não tinha resgate efetivo.</returns>
-    Task<bool> ReverseEffectiveAsync(Guid voucherId, string cause, Guid? actorApplicationId, DateTime utcNow, CancellationToken cancellationToken);
+    /// <returns>Falso quando o resgate já não estava efetivo.</returns>
+    Task<bool> ReverseAsync(Guid redemptionId, string cause, Guid? actorApplicationId, DateTime utcNow, CancellationToken cancellationToken);
+
+    /// <summary>Estorna todos os resgates efetivos do voucher (ao descartá-lo, D-10). Devolve quantos foram estornados.</summary>
+    Task<int> ReverseAllOfVoucherAsync(Guid voucherId, string cause, Guid? actorApplicationId, DateTime utcNow, CancellationToken cancellationToken);
 }
 
 /// <summary>Persistência do resgate. O consumo e a devolução da utilização são comandos condicionais únicos (D-9, D-19).</summary>
@@ -104,8 +107,11 @@ public interface IRedemptionRepository
 
     Task<Redemption?> FindByIdAsync(Guid id, Guid networkId, CancellationToken cancellationToken);
 
-    /// <summary>Resgate efetivo do voucher, sem navegações; usado depois de <see cref="TryReverseByVoucherAsync"/>.</summary>
-    Task<Redemption?> FindReversedNowAsync(Guid voucherId, DateTime reversedAt, CancellationToken cancellationToken);
+    /// <summary>Resgate pelo id, de qualquer rede e sem navegações (uso interno do estorno).</summary>
+    Task<Redemption?> FindAsync(Guid redemptionId, CancellationToken cancellationToken);
+
+    /// <summary>Ids dos resgates efetivos do voucher.</summary>
+    Task<IReadOnlyList<Guid>> GetEffectiveIdsByVoucherAsync(Guid voucherId, CancellationToken cancellationToken);
 
     Task<IConcessionTransaction> BeginTransactionAsync(CancellationToken cancellationToken);
 
@@ -118,8 +124,8 @@ public interface IRedemptionRepository
     /// <summary><c>uses_count - 1</c>; resgatado volta a disponível. Falso quando não havia uso a devolver.</summary>
     Task<bool> TryReturnUseAsync(Guid voucherId, CancellationToken cancellationToken);
 
-    /// <summary>O resgate efetivo do voucher passa a estornado. Falso quando não havia resgate efetivo.</summary>
-    Task<bool> TryReverseByVoucherAsync(Guid voucherId, DateTime reversedAt, CancellationToken cancellationToken);
+    /// <summary>Este resgate, se efetivo, passa a estornado. Falso quando já não estava efetivo.</summary>
+    Task<bool> TryReverseAsync(Guid redemptionId, DateTime reversedAt, CancellationToken cancellationToken);
 
     /// <summary>Disponível com a validade vencida passa a expirado (US-05.3, cenário 2). Falso quando já não estava disponível.</summary>
     Task<bool> TryMarkExpiredAsync(Guid voucherId, DateTime utcNow, CancellationToken cancellationToken);

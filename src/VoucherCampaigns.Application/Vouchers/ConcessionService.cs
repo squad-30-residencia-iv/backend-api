@@ -226,7 +226,7 @@ public class ConcessionService(
                     await concessions.ReleaseReservationAsync(voucher.CampaignId, voucher.CampaignItemId, cancellationToken);
                     await concessions.MarkConcessionAsync(concession.Id, ConcessionStatus.Cancelled, utcNow, cancellationToken);
                     // Resgatado na própria compra (GH-049, D-10): a venda desfeita estorna o resgate junto.
-                    await redemptionReverser.ReverseEffectiveAsync(voucher.Id, "ConcessionCancelled", app.ApplicationId, utcNow, cancellationToken);
+                    await redemptionReverser.ReverseAllOfVoucherAsync(voucher.Id, "ConcessionCancelled", app.ApplicationId, utcNow, cancellationToken);
                     concessions.Add(NewEvent(voucher, VoucherEventTypes.Cancelled, utcNow, null));
                     AppendAudit(AuditEventTypes.VoucherCancelled, voucher.CampaignId, nameof(Voucher), voucher.Id, utcNow,
                         new VoucherAuditPayload(concession.Id, concession.TransactionId, voucher.Code, voucher.CampaignItemId, voucher.ValidUntil, null));

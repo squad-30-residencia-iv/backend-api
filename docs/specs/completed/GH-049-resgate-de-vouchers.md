@@ -322,5 +322,7 @@ Autenticação: token de aplicação satélite (US-07.5). Token de usuário → 
 - Ordem dos motivos: o voucher já resgatado nesta compra é verificado **antes** do status, porque o próprio resgate pode tê-lo levado a `Redeemed`; a repetição do resgate devolve o original (`200`).
 - `TryConsumeUseAsync` aceita `Available` ou `Provisional` com a reserva em dia e só muda o status (`Redeemed`) no `Available`; `TryConfirmVoucherAsync` passou a decidir `Available`/`Redeemed` por `uses_count >= max_uses`.
 - O estorno pela varredura grava só o evento `RedemptionReversed` (sem ator); pelo desfazimento ou pela rota, grava também a auditoria `VoucherRedemptionReversed` com a aplicação.
+- O estorno é sempre **por id do resgate** (`TryReverseAsync` com `WHERE id = @id AND status = 'Effective'`); ao descartar um voucher, `ReverseAllOfVoucherAsync` percorre os resgates efetivos dele. A primeira versão estornava por `voucher_id` e, num voucher multiuso, revertia todos os resgates de uma vez; o agente de testes pegou o defeito e um teste com `maxUses = 2` cobre o caso.
+- O `422` de motivo traz a extensão `reason` via `BusinessRuleException.Extensions`, copiada pelo `ApiExceptionHandler`.
 - Nos testes de integração, cada teste usa um CPF próprio: os vouchers dos outros testes da mesma fábrica não entram na verificação.
 - O `pdv-demo` já tinha o escopo `vouchers:redeem` no `appsettings.Development.json`.
