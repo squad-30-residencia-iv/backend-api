@@ -312,7 +312,7 @@ Autenticação: token de aplicação satélite (US-07.5). Token de usuário → 
 | PA-7 | **Desconto fixo maior que a base** (`FixedAmount` 50 numa compra de 30 do alvo): adotado `min(valor, base)`. | Regra não escrita no backlog. | Validação com o PO. |
 | PA-8 | **Público elegível na US-07.1**: devolve `audience: "All"`. | Critérios são a #47. | Issue #47. |
 | PA-9 | **Idempotência por chave própria** (US-07.3 cenário 5 fala em "chave de idempotência"): usada a `transactionId`, como na concessão (PR-07). | Uma chave extra duplicaria o papel da transação. | O PDV precisar reenviar com outra transação. |
-| PA-10 | **PostgreSQL**: migração `VoucherRedemptions` e o `UPDATE` condicional validados só em SQLite nesta máquina. | Sem Docker local. | Suíte com `TEST_POSTGRES_CONNECTION`. |
+| PA-10 | ~~**PostgreSQL**~~ Resolvido em 2026-11-12: a suíte de integração (443 testes) passou num PostgreSQL local (WSL, porta 5432) com `TEST_POSTGRES_CONNECTION`. | — | — |
 
 ---
 
