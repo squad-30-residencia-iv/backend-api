@@ -169,6 +169,6 @@ public class SatelliteAppManagementService(
             app.NetworkId,
             scopes,
             app.IsActive,
-            app.CreatedAt);
+            DateTime.SpecifyKind(app.CreatedAt, DateTimeKind.Utc));
     }
 }

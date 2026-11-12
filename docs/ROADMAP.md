@@ -21,7 +21,7 @@ Objetivo: chegar o quanto antes a uma **base útil** (campanha configurada, apro
 | GH-023 Modelo único de condições | ✅ Mesclado | Fica `Domain.Campaigns.CampaignCondition` (`campaign_conditions`). Sai o modelo do #36. Migração `RemoveMotorCampaignConditions` |
 | US-01.6 / US-01.11 Submeter, aprovar e reprovar | ✅ Mesclado (#42, #43) | Analista submete, gestor aprova (`Scheduled`/`Active`) ou reprova; histórico em `campaign_status_events` |
 | Issue #26 Auditoria, status efetivo e US-07.5 | ✅ Concluído | `audit_entries` append-only; status efetivo na leitura (PR-04); client credentials das aplicações satélites (`satellite_apps`, esquema `Satellite`) |
-| Issue #45 Motor de concessão (EP-04, 07.2, 07.4) | ✅ Em PR para a `staging` | Concessão em duas fases (`concessions`, `vouchers`, `voucher_events`), saldo atômico, esgotada derivada, idempotência, rotas `/api/v1/satellite/concessions` e `/customers/{cpf}/vouchers` (spec `GH-045-motor-de-concessao.md`) |
+| Issue #45 Motor de concessão (EP-04, 07.2, 07.4) | ✅ Na `staging` e na `main` (PR #53, 2026-11-11) | Concessão em duas fases (`concessions`, `vouchers`, `voucher_events`), saldo atômico, esgotada derivada, idempotência, rotas `/api/v1/satellite/concessions` e `/customers/{cpf}/vouchers` (spec `GH-045-motor-de-concessao.md`) |
 | Issue #49 Resgate (EP-05, 07.1, 07.3) | ✅ Em PR para a `staging` | Verificação de aplicáveis com desconto previsto e recomendado, resgate com utilização atômica e um voucher por compra, estorno, provisório resgatável na própria compra, campanhas vigentes por API (spec `GH-049-resgate-de-vouchers.md`) |
 
 ---
