@@ -32,6 +32,8 @@ builder.Services.AddScoped<INetworkService, NetworkService>();
 builder.Services.AddScoped<IRegionService, RegionService>();
 builder.Services.AddScoped<IEstablishmentService, EstablishmentService>();
 builder.Services.AddScoped<IConcessionService, ConcessionService>();
+builder.Services.AddScoped<IRedemptionService, RedemptionService>();
+builder.Services.AddScoped<ISatelliteCampaignService, SatelliteCampaignService>();
 builder.Services.AddHostedService<ReservationSweepService>();
 builder.Services.AddInfrastructure();
 builder.Services.AddApiAuthentication();

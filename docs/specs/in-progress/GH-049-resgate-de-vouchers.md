@@ -1,6 +1,6 @@
 # 📋 Especificação Técnica: GH-049 - Verificação de aplicáveis e resgate de vouchers (EP-05, US-07.1, US-07.3)
 
-> Status: In Progress
+> Status: In Progress (decisões aprovadas pelo usuário em 2026-11-11: D-7 como proposta; D-10 na variante "resgata o provisório direto, cancelar estorna"; D-4, D-12 e D-14 como propostas)
 > História de Usuário Relacionada: issue #49 (fatia da #27), US-05.1 a US-05.6, US-07.1, US-07.3, US-04.9 (cenários 4 e 5)
 > Responsável: @iagovrocha
 > Data: 2026-11-11
@@ -15,7 +15,7 @@ Fechar o ciclo do voucher que a issue #45 emite: com o cliente identificado e o 
 
 O resgate é automático do ponto de vista do cliente (RF17): ele não digita código. O código do voucher continua identificador interno; o satélite trabalha com o `id` que a verificação devolve.
 
-Fora desta spec: público restrito (#47), relatórios e CSV (#50), o cancelamento da campanha com invalidação em lote (RN10, US-05.5 cenários 2 e 3; não existe operação de cancelar, PA-1) e o estorno de um resgate (PA-6).
+Fora desta spec: público restrito (#47), relatórios e CSV (#50) e o cancelamento da campanha com invalidação em lote (RN10, US-05.5 cenários 2 e 3; não existe operação de cancelar, PA-1). O **estorno** de um resgate entra nesta fatia (D-10 e D-19), porque o provisório pode ser resgatado na própria compra e a venda ainda pode ser desfeita.
 
 ### 1.2 Fluxo da verificação e do resgate (ordem de avaliação)
 
@@ -25,17 +25,20 @@ A verificação (`POST /satellite/vouchers/check`) e o resgate (`POST /satellite
 2. Loja da rede da aplicação, ativa e que opera o canal (`422`, D-4). Nada é gravado.
 3. Vouchers do cliente na rede, exceto `Discarded`, com campanha, alvo e concessão (D-5). No resgate, só o `voucherId` informado; de outro CPF ou de outra rede → `404` (D-12).
 4. Para cada voucher, o **primeiro motivo** que se aplica (D-6):
-   1. `Provisional` da **mesma transação** e campanha com `allowUseInSamePurchase` → entra como aplicável, com `requiresConfirmation: true` (US-04.9 cenário 4); `Provisional` de outra transação, ou da mesma sem a permissão → `NotConfirmed` (US-04.9 cenário 5).
+   0. Já resgatado **nesta** transação → `AlreadyRedeemedInThisPurchase` (antes do status, que pode ter virado `Redeemed` por esse mesmo resgate).
+   1. `Provisional` da **mesma transação**, com a reserva em dia e campanha com `allowUseInSamePurchase` → aplicável e **resgatável desde já** (US-04.9 cenário 4, D-10); `Provisional` da mesma transação sem a permissão → `SamePurchaseNotAllowed` (US-04.9 cenário 5); `Provisional` de outra transação → `NotConfirmed`.
    2. Status efetivo `Expired` → `Expired` (US-05.3, D9 inclusivo); `Redeemed` → `NoUsesLeft`; `Cancelled` → `Cancelled`.
    3. Campanha com status gravado `Cancelled` → `CampaignCancelled` (RN10). `Paused`, `Ended` e `SoldOut` **não recusam** (RN07a, US-05.5 cenário 1).
    4. Escopo: a campanha não contempla a loja e o canal da compra → `OutOfScope` (RN08, US-05.2 cenário 4).
    5. Valor bruto da compra (PR-16) abaixo de `minPurchaseAmount` → `AmountBelowMinimum`; acima de `maxPurchaseAmount` → `AmountAboveMaximum` (US-05.2 cenário 2).
    6. Nenhum item da compra casa o alvo do voucher (alvo `All` sempre casa) → `TargetNotInPurchase` (US-05.2 cenário 3, US-05.1 cenário 5).
-   7. Já existe resgate nesta transação: o voucher resgatado → `AlreadyRedeemedInThisPurchase`; os demais → `TransactionAlreadyRedeemed` (US-07.3 cenário 4).
+   7. Já existe resgate de **outro** voucher nesta transação → `TransactionAlreadyRedeemed` (US-07.3 cenário 4).
 5. Aplicáveis recebem o **desconto previsto** (D-7) e o de maior desconto é o **recomendado** (RF17b, D-8). A verificação **não grava nada** (US-05.1 cenário 3, US-07.3 cenário 1).
-6. Resgate do aplicável: `UPDATE vouchers ... WHERE id = @id AND status = 'Available' AND uses_count < max_uses` atômico (D-9); zero linhas → relê o voucher e devolve o motivo atual (US-05.4 cenário 4, US-07.3 cenário 6). Em seguida grava `redemptions`, o evento `Redeemed` e a auditoria `VoucherRedeemed` no mesmo `SaveChanges`. Quando `uses_count` chega a `max_uses`, o status passa a `Redeemed` no mesmo `UPDATE` (US-05.4 cenários 1 e 2).
+6. Resgate do aplicável: `UPDATE vouchers ... WHERE id = @id AND uses_count < max_uses AND (status = 'Available' OR (status = 'Provisional' AND reserved_until > @now))` atômico (D-9); zero linhas → relê o voucher e devolve o motivo atual (US-05.4 cenário 4, US-07.3 cenário 6). Em seguida grava `redemptions` (`Effective`), o evento `Redeemed` e a auditoria `VoucherRedeemed` no mesmo `SaveChanges`. Quando um `Available` chega a `max_uses`, o status passa a `Redeemed` no mesmo `UPDATE` (US-05.4 cenários 1 e 2); um `Provisional` continua `Provisional` e é a confirmação da concessão que o leva a `Available` ou `Redeemed` (D-10).
 7. Idempotência (US-07.3 cenário 5): `redemptions` tem índice único por rede + `transactionId`. Antes do passo 6, resgate já existente nesta transação com o mesmo voucher → `200` com o resgate original; com outro voucher → `422 REDEMPTION_TRANSACTION_ALREADY_REDEEMED`. Se duas chamadas simultâneas passarem pela leitura, a violação do índice desfaz a transação do banco e a chamada relê e responde pela mesma regra.
 8. Tentativa de resgate de voucher vencido grava o status `Expired` e o evento `Expired`, antes do `422` (US-05.3 cenário 2). A verificação não faz isso (só lê o status efetivo).
+9. **Estorno** (`POST /satellite/redemptions/{id}/reverse`, D-19): resgate `Effective` → `Reversed`, `uses_count - 1` e, se o voucher estava `Redeemed`, volta a `Available`; evento `RedemptionReversed` e auditoria `VoucherRedemptionReversed`. Idempotente: já `Reversed` → `200` igual.
+10. **Cancelar ou expirar a concessão** de um voucher resgatado na própria compra (D-10) estorna o resgate do mesmo jeito que o passo 9, dentro da mesma operação que descarta o voucher; **confirmar** a concessão leva o voucher a `Available` ou, se os usos acabaram, a `Redeemed`.
 
 ### 1.3 Base reutilizada
 
@@ -46,7 +49,7 @@ A verificação (`POST /satellite/vouchers/check`) e o resgate (`POST /satellite
 | # | Ponto | Proposta |
 |---|---|---|
 | D-1 | Recorte. | Issue #49: US-05.1 a 05.6 no recorte abaixo, US-07.3, US-07.1 e US-04.9 cenários 4 e 5. A US-05.5 fica só com o cenário 1 e com a recusa de voucher de campanha `Cancelled`; a invalidação em lote vai junto com a operação de cancelar (PA-1). |
-| D-2 | Modelo. | Entidade nova `Redemption` em `Domain/Vouchers`, tabela `redemptions`: um resgate por transação (índice único `network_id + transaction_id`) e vários por voucher (multiuso). Guarda loja, canal, valor bruto, desconto aplicado, CPF, aplicação e instante. Não é `IAppendOnly` porque o estorno (PA-6) pode precisar de uma coluna de status; sem rota de alteração nesta entrega. Migração `VoucherRedemptions` nos dois bancos. |
+| D-2 | Modelo. | Entidade nova `Redemption` em `Domain/Vouchers`, tabela `redemptions`: um resgate por transação (índice único `network_id + transaction_id`, mesmo depois de estornado: a transação está encerrada) e vários por voucher (multiuso). Guarda loja, canal, valor bruto, desconto aplicado, CPF, aplicação, instante, `status` (`Effective`, `Reversed`) e `reversed_at`. Não é `IAppendOnly` por causa do estorno; a única alteração é `Effective → Reversed`. Migração `VoucherRedemptions` nos dois bancos. |
 | D-3 | Mesma compra na verificação, no resgate e na concessão. | Os três recebem `transactionId`, `customer.document`, `establishmentId`, `channel`, `totalAmount` e `items`, no mesmo formato do `POST /concessions` (D-12 e D-16 da GH-045). Assim o PDV monta um payload só. `customerPurchaseCount` não entra (só condição de geração). |
 | D-4 | Loja e canal. | Mesmas regras da concessão (GH-045 D-13), com códigos próprios: `422 REDEMPTION_ESTABLISHMENT_NOT_FOUND`, `REDEMPTION_ESTABLISHMENT_INACTIVE`, `REDEMPTION_CHANNEL_NOT_ENABLED`. Mensagens iguais às da emissão. Não se reaproveitam os códigos `ISSUANCE_*` para o cliente da API distinguir a etapa. |
 | D-5 | Quais vouchers entram na verificação. | Todos os do CPF na rede da aplicação, exceto `Discarded`, inclusive os que não servem: a US-07.3 pede o motivo de cada um. Resposta separa `applicable` e `notApplicable`. |
@@ -54,7 +57,7 @@ A verificação (`POST /satellite/vouchers/check`) e o resgate (`POST /satellite
 | D-7 | Desconto previsto e aplicado (US-05.6). | O voucher está preso a **um alvo** desde a emissão (GH-045 D-10, que já aplicou a precedência Produto > Categoria > Todos). O desconto é calculado sobre os itens da compra que casam esse alvo (alvo `All` = valor total): `Percentage` = `round(base × valor / 100, 2)`; `FixedAmount` = `min(valor, base)`, para o desconto nunca passar do que o alvo vale na compra. Sem acumular com outros alvos da campanha. A alternativa (recalcular item a item sobre todos os alvos da campanha, RN10a literal) fica em PA-2. |
 | D-8 | Recomendado. | Maior desconto previsto; empate → menor `validUntil` (gasta primeiro o que vence primeiro) → menor `id`. `applicable` vem nessa ordem, o recomendado primeiro, e a resposta traz `onlyOnePerPurchase: true` (US-05.1 cenário 2). |
 | D-9 | Consumo atômico (US-05.4 cenário 4). | `ExecuteUpdateAsync` condicional, como a reserva da concessão: `SET uses_count = uses_count + 1, status = CASE WHEN uses_count + 1 >= max_uses THEN 'Redeemed' ELSE status END WHERE id = @id AND status = 'Available' AND uses_count < max_uses`. É o primeiro comando da transação (SQLite exige a escrita antes das leituras na mesma transação). Linhas afetadas = 0 → recusa com o motivo relido. |
-| D-10 | Provisório na mesma compra (US-04.9 cenário 4). | A verificação lista o provisório da própria transação como aplicável com `requiresConfirmation: true`, com o desconto previsto. O resgate dele antes da confirmação da concessão → `422 REDEMPTION_NOT_CONFIRMED` (D3 da issue #45: "o provisório só resgata depois da confirmação"). A ordem para o PDV é: conceder → confirmar → resgatar. A tensão com "confirmar depois do pagamento" está em PA-3. |
+| D-10 | Provisório na mesma compra (US-04.9 cenário 4). **Aprovada na variante alternativa.** | O provisório da própria transação, com a reserva em dia e campanha que permite uso na mesma compra, é aplicável e **resgatável antes da confirmação**: o PDV concede, verifica, resgata, cobra e só então confirma. O resgate não muda o status `Provisional`; a **confirmação** leva o voucher a `Available` (ou `Redeemed`, se os usos acabaram). **Cancelar a concessão** ou **expirar a reserva** descarta o voucher e **estorna** o resgate (D-19), devolvendo a utilização e o saldo da campanha. Provisório de outra transação → `NotConfirmed`; da mesma transação sem a permissão → `SamePurchaseNotAllowed`. Substitui a leitura da D3 da GH-045 ("só resgata depois da confirmação") para o caso da mesma compra. |
 | D-11 | Validade (US-05.3). | `Voucher.IsValidAt` (inclusivo até o último segundo, D9). A vigência da campanha não entra no resgate (cenário 4). O resgate de voucher vencido persiste `Expired` + evento, numa gravação separada antes do `422`, para o status do voucher ficar consistente mesmo sem varredura. |
 | D-12 | Voucher de outro CPF, de outra rede ou inexistente. | `404 NOT_FOUND` "Voucher não encontrado." nas três situações, para não revelar vouchers alheios. O `customer.document` do resgate precisa bater com o do voucher. |
 | D-13 | Rotas. | `POST /api/v1/satellite/vouchers/check`, `POST /api/v1/satellite/redemptions`, `GET /api/v1/satellite/redemptions/{id}` (policy `SatelliteRedeemVouchers`) e `GET /api/v1/satellite/campaigns` (policy `SatelliteReadCampaigns`). Controllers `SatelliteRedemptionsController` e `SatelliteCampaignsController`. O `pdv-demo` ganha o escopo `vouchers:redeem` no seed de Development. |
@@ -63,6 +66,7 @@ A verificação (`POST /satellite/vouchers/check`) e o resgate (`POST /satellite
 | D-16 | Resposta do resgate. | `200` com o `VoucherResponse` já atualizado (status `Available` com `remainingUses` menor, ou `Redeemed`), o desconto aplicado e o instante. Repetição idempotente devolve o mesmo corpo com o `redemptionId` original. |
 | D-17 | `GET /customers/{cpf}/vouchers` (US-07.4). | Sem mudança de contrato. O status efetivo já reflete `Redeemed` e `Expired`. |
 | D-18 | Contadores da campanha. | Nenhum contador novo em `campaigns`: resgatados e expirados saem de `vouchers` quando a #50 precisar (PA-4). |
+| D-19 | Estorno (antes PA-6). | `POST /api/v1/satellite/redemptions/{id}/reverse`, policy `SatelliteRedeemVouchers`, sem corpo. Resgate `Effective` da rede → `Reversed` com `reversedAt`; `UPDATE vouchers SET uses_count = uses_count - 1, status = CASE WHEN status = 'Redeemed' THEN 'Available' ELSE status END WHERE id = @id AND uses_count > 0`. Não reabre o índice da transação. Voucher já vencido continua `Expired` no status efetivo (a utilização volta, mas não há prazo para usá-la). Sem janela de tempo e sem motivo obrigatório nesta entrega (PA-6 fica para o PO definir limites). Idempotente. |
 
 ---
 
@@ -73,7 +77,7 @@ A verificação (`POST /satellite/vouchers/check`) e o resgate (`POST /satellite
 ```csharp
 public enum RedemptionRefusal
 {
-    NotConfirmed, Expired, NoUsesLeft, Cancelled, CampaignCancelled, OutOfScope,
+    NotConfirmed, SamePurchaseNotAllowed, Expired, NoUsesLeft, Cancelled, CampaignCancelled, OutOfScope,
     AmountBelowMinimum, AmountAboveMaximum, TargetNotInPurchase,
     TransactionAlreadyRedeemed, AlreadyRedeemedInThisPurchase
 }
@@ -94,7 +98,11 @@ public class Redemption
     public decimal DiscountAmount { get; set; }  // D-7
     public int ItemCount { get; set; }
     public DateTime RedeemedAt { get; set; }
+    public RedemptionStatus Status { get; set; }   // Effective | Reversed
+    public DateTime? ReversedAt { get; set; }
 }
+
+public enum RedemptionStatus { Effective, Reversed }
 
 /// <summary>Passos 4 e 5 do fluxo (1.2), sem I/O.</summary>
 public static class RedemptionEvaluator
@@ -102,14 +110,13 @@ public static class RedemptionEvaluator
     public static RedemptionRefusal? Refusal(Voucher voucher, Campaign campaign, CampaignItem target, Concession concession,
         Purchase purchase, Establishment store, ChannelType channel, string transactionId, Redemption? existing, DateTime utcNow);
     public static decimal Discount(CampaignItem target, Purchase purchase);   // D-7
-    public static bool RequiresConfirmation(Voucher voucher, Campaign campaign, Concession concession, string transactionId); // D-10
 }
 
-public static class VoucherEventTypes { /* + */ public const string Redeemed = "Redeemed"; public const string Expired = "Expired"; }
-public static class AuditEventTypes  { /* + */ public const string VoucherRedeemed = "VoucherRedeemed"; public const string VoucherRedemptionRefused = "VoucherRedemptionRefused"; }
+public static class VoucherEventTypes { /* + */ public const string Redeemed = "Redeemed"; public const string RedemptionReversed = "RedemptionReversed"; public const string Expired = "Expired"; }
+public static class AuditEventTypes  { /* + */ public const string VoucherRedeemed = "VoucherRedeemed"; public const string VoucherRedemptionRefused = "VoucherRedemptionRefused"; public const string VoucherRedemptionReversed = "VoucherRedemptionReversed"; }
 ```
 
-`Voucher` ganha o método `bool CanBeRedeemedAt(DateTime utcNow) => EffectiveStatus(utcNow) == VoucherStatus.Available && RemainingUses > 0`.
+`Voucher` ganha `bool CanBeRedeemedAt(DateTime utcNow, bool sameTransactionAllowed)`: `Available` dentro da validade com usos restantes, ou `Provisional` com a reserva em dia quando `sameTransactionAllowed` (D-10).
 
 ### 2.2 Aplicação (`Application/Vouchers`)
 
@@ -132,7 +139,7 @@ public record RedemptionCheckResponse(
     IReadOnlyList<ApplicableVoucherResponse> Applicable,      // ordem D-8, recomendado primeiro
     IReadOnlyList<InapplicableVoucherResponse> NotApplicable);
 
-public record ApplicableVoucherResponse(VoucherResponse Voucher, decimal DiscountAmount, bool Recommended, bool RequiresConfirmation);
+public record ApplicableVoucherResponse(VoucherResponse Voucher, decimal DiscountAmount, bool Recommended);
 public record InapplicableVoucherResponse(VoucherResponse Voucher, string Reason, string Detail);
 
 public record RedemptionRequest(
@@ -142,15 +149,24 @@ public record RedemptionRequest(
 public record RedemptionResponse(
     Guid RedemptionId,
     string TransactionId,
+    string Status,                                    // Effective | Reversed
     VoucherResponse Voucher,                          // já com o status e remainingUses atualizados
     decimal DiscountAmount,
-    DateTimeOffset RedeemedAt);                       // fuso da rede
+    DateTimeOffset RedeemedAt,                        // fuso da rede
+    DateTimeOffset? ReversedAt);
 
 public interface IRedemptionService
 {
     Task<RedemptionCheckResponse> CheckAsync(RedemptionCheckRequest request, CancellationToken ct);
     Task<RedemptionResponse> RedeemAsync(RedemptionRequest request, CancellationToken ct);
+    Task<RedemptionResponse> ReverseAsync(Guid redemptionId, CancellationToken ct);      // D-19
     Task<RedemptionResponse> GetAsync(Guid redemptionId, CancellationToken ct);
+}
+
+/// <summary>Usado por ConcessionService e ReservationReleaser ao descartar um provisório resgatado (D-10).</summary>
+public interface IRedemptionReverser
+{
+    Task ReverseEffectiveAsync(Voucher voucher, string cause, DateTime utcNow, CancellationToken ct);
 }
 
 public interface IRedemptionRepository
@@ -160,7 +176,9 @@ public interface IRedemptionRepository
     Task<Redemption?> FindByTransactionAsync(Guid networkId, string transactionId, CancellationToken ct);
     Task<Redemption?> FindByIdAsync(Guid id, Guid networkId, CancellationToken ct);
     Task<IConcessionTransaction> BeginTransactionAsync(CancellationToken ct);
-    Task<bool> TryConsumeUseAsync(Guid voucherId, CancellationToken ct);                 // D-9
+    Task<bool> TryConsumeUseAsync(Guid voucherId, DateTime utcNow, CancellationToken ct); // D-9
+    Task<bool> TryReturnUseAsync(Guid voucherId, CancellationToken ct);                   // D-19
+    Task<Redemption?> FindEffectiveByVoucherAsync(Guid voucherId, CancellationToken ct);
     Task<bool> TryMarkExpiredAsync(Guid voucherId, DateTime utcNow, CancellationToken ct); // D-11
     void Add(Redemption redemption); void Add(VoucherEvent voucherEvent);
     Task<bool> TrySaveChangesAsync(CancellationToken ct);                                // false na violação do índice único
@@ -192,7 +210,8 @@ public interface ISatelliteCampaignService
 | `REDEMPTION_ESTABLISHMENT_NOT_FOUND` | 422 | "A loja informada não existe nesta rede." |
 | `REDEMPTION_ESTABLISHMENT_INACTIVE` | 422 | "A loja informada está inativa; o resgate não é avaliado até a loja voltar." |
 | `REDEMPTION_CHANNEL_NOT_ENABLED` | 422 | "A loja {nome} não opera o canal {canal}." |
-| `REDEMPTION_NOT_CONFIRMED` | 422 | "O voucher ainda é provisório; confirme a concessão antes de resgatar." |
+| `REDEMPTION_NOT_CONFIRMED` | 422 | "O voucher é provisório de outra compra; só vale depois da confirmação dela." |
+| `REDEMPTION_SAME_PURCHASE_NOT_ALLOWED` | 422 | "A campanha não permite usar o voucher na compra que o gerou." |
 | `REDEMPTION_EXPIRED` | 422 | "O voucher venceu em {validUntil}." |
 | `REDEMPTION_NO_USES_LEFT` | 422 | "O voucher já consumiu todas as utilizações." |
 | `REDEMPTION_CANCELLED` | 422 | "O voucher foi cancelado." |
@@ -229,6 +248,15 @@ Autenticação: token de aplicação satélite (US-07.5). Token de usuário → 
 
 - `200 RedemptionResponse` do resgate da rede da aplicação; `404` fora dela.
 
+### 3.3a `POST /api/v1/satellite/redemptions/{id}/reverse` (policy `SatelliteRedeemVouchers`)
+
+- Sem corpo. `200 RedemptionResponse` com `status: "Reversed"` e o voucher com a utilização devolvida. Repetição → `200` igual. `404` fora da rede.
+
+### 3.3b Efeito nas rotas da concessão (GH-045)
+
+- `POST /concessions/{id}/confirm`: o voucher vai a `Available` ou, se `uses_count >= max_uses`, a `Redeemed`.
+- `POST /concessions/{id}/cancel` e a expiração da reserva (lazy e varredura): se houver resgate `Effective` do voucher, ele é estornado junto (evento e auditoria), e o voucher é descartado.
+
 ### 3.4 `GET /api/v1/satellite/campaigns?establishmentId=&channel=` (policy `SatelliteReadCampaigns`)
 
 - `200` lista de `SatelliteCampaignResponse`, por `endsAt` crescente e nome.
@@ -238,12 +266,12 @@ Autenticação: token de aplicação satélite (US-07.5). Token de usuário → 
 
 ## 4. Checklist de Implementação
 
-- [ ] 1. Domínio: `Redemption`, `RedemptionRefusal`, `RedemptionEvaluator` (motivos, desconto, recomendado), `Voucher.CanBeRedeemedAt`, eventos e tipos de auditoria novos.
+- [ ] 1. Domínio: `Redemption`, `RedemptionStatus`, `RedemptionRefusal`, `RedemptionEvaluator` (motivos, desconto, recomendado), `Voucher.CanBeRedeemedAt`, eventos e tipos de auditoria novos.
 - [ ] 2. Persistência: `RedemptionConfiguration` (tabela `redemptions`, índice único `network_id + transaction_id`, índice `voucher_id`, FKs `vouchers` e `establishments` em `Restrict`, CHECKs de valores `>= 0`), `DbSet<Redemption>`, migração `VoucherRedemptions` (SQLite e PostgreSQL) via `scripts/add-migration.sh`.
-- [ ] 3. Aplicação: contratos de 2.2, `RedemptionService` (fluxo 1.2), `RedemptionRepository` (consumo e expiração por `ExecuteUpdateAsync`), `SatelliteCampaignService`; registro em `DependencyInjection` e `Program.cs`.
+- [ ] 3. Aplicação: contratos de 2.2, `RedemptionService` (fluxo 1.2, inclusive estorno), `RedemptionRepository` (consumo, devolução e expiração por `ExecuteUpdateAsync`), `IRedemptionReverser` chamado por `ConcessionService.CancelAsync` e `ReservationReleaser`; `TryConfirmVoucherAsync` passa a decidir `Available`/`Redeemed`; `SatelliteCampaignService`; registro em `DependencyInjection` e `Program.cs`.
 - [ ] 4. API: `SatelliteRedemptionsController` e `SatelliteCampaignsController`; `pdv-demo` com `vouchers:redeem` no seed e no `appsettings.Development.json`.
 - [ ] 5. Testes unitários: `RedemptionEvaluatorTests` (cada motivo, ordem dos motivos, desconto percentual e fixo com teto da base, recomendado e desempate, provisório na mesma compra).
-- [ ] 6. Testes de integração: `SatelliteRedemptionsEndpointTests` (verificar, resgatar, multiuso, idempotência, um por compra, 404, 422 de loja e canal, 401 e 403), `RedemptionConcurrencyTests` (20 resgates simultâneos do último uso → um `200`), `SatelliteCampaignsEndpointTests` (US-07.1 com filtros e status), e o cenário completo conceder → confirmar → verificar → resgatar.
+- [ ] 6. Testes de integração: `SatelliteRedemptionsEndpointTests` (verificar, resgatar, multiuso, idempotência, um por compra, estorno, 404, 422 de loja e canal, 401 e 403), `RedemptionConcurrencyTests` (20 resgates simultâneos do último uso → um `200`), `SatelliteCampaignsEndpointTests` (US-07.1 com filtros e status), o cenário conceder → confirmar → verificar → resgatar e o da mesma compra: conceder → verificar → resgatar → confirmar (vira `Redeemed`) e conceder → resgatar → cancelar (estorno + `Discarded`).
 - [ ] 7. `scripts/smoke/motor.py`: verificar e resgatar depois da confirmação; `GET /satellite/campaigns`.
 - [ ] 8. Documentos: README (seção do satélite), `agents.md` (skill do motor), `ROADMAP.md`, `PROJECT_STATE.md`; spec para `completed/`.
 
@@ -261,7 +289,9 @@ Autenticação: token de aplicação satélite (US-07.5). Token de usuário → 
 - [ ] Relógio depois de `validUntil` → `check` mostra `Expired`; `redeem` → `422 REDEMPTION_EXPIRED` e o banco passa a `Expired` com evento (US-05.3 cenário 2). Até 23:59:59 do último dia ainda resgata (D9).
 - [ ] Campanha encerrada ou pausada depois da emissão → resgate segue (US-05.3 cenário 4, US-05.5 cenário 1). Campanha com status gravado `Cancelled` → `CampaignCancelled`.
 - [ ] Mesma transação: segundo voucher → `422 REDEMPTION_TRANSACTION_ALREADY_REDEEMED`; mesmo voucher repetido → `200` idêntico, `usesCount` não muda (US-07.3 cenários 4 e 5).
-- [ ] Provisório da própria transação: aplicável com `requiresConfirmation` se a campanha permite uso na mesma compra, `NotConfirmed` se não permite (US-04.9 cenários 4 e 5); resgate antes da confirmação → `422 REDEMPTION_NOT_CONFIRMED`; depois da confirmação → `200`.
+- [ ] Provisório da própria transação: aplicável se a campanha permite uso na mesma compra, `SamePurchaseNotAllowed` se não permite (US-04.9 cenários 4 e 5); provisório de outra transação → `NotConfirmed`.
+- [ ] Mesma compra, campanha com `maxUses` = 1: resgate antes da confirmação → `200`, voucher segue `Provisional`; confirmar → `Redeemed`, saldo da campanha consumido. Outra concessão: resgatar e cancelar → resgate `Reversed`, voucher `Discarded`, saldo devolvido. Reserva expirada depois do resgate → o mesmo efeito do cancelamento.
+- [ ] Estorno de um resgate normal: `maxUses` = 1 resgatado → `reverse` → `200 Reversed`, voucher volta a `Available` com 1 uso; repetir o `reverse` → `200` igual; a mesma transação não resgata outro voucher.
 - [ ] 20 resgates simultâneos do último uso → exatamente um `200`, um único evento `Redeemed` (US-05.4 cenário 4).
 - [ ] Voucher de outro CPF ou de outra rede → `404`.
 - [ ] `GET /satellite/campaigns`: ativa aparece; agendada, pausada, encerrada, esgotada e rascunho não; filtro por loja e canal respeita `campaign_scopes`; loja de outra rede → `404`.
@@ -275,10 +305,10 @@ Autenticação: token de aplicação satélite (US-07.5). Token de usuário → 
 |---|---|---|---|
 | PA-1 | **Cancelamento da campanha em lote** (RN10, US-05.5 cenários 2 e 3): marcar `Cancelled` os vouchers não utilizados, com evento e auditoria, preservando os `Redeemed`. | Não existe operação de cancelar campanha (US-01.8 entregou pausar e encerrar). Aqui só se recusa o voucher cuja campanha estiver `Cancelled`. | A operação de cancelar (Onda 3 ou pedido do PO). |
 | PA-2 | **Desconto item a item sobre todos os alvos da campanha** (RN10a literal, US-05.6 cenários 1 a 3). | O voucher nasce preso a um alvo (GH-045 D-10) e a cota é por alvo; recalcular sobre todos os alvos descolaria o desconto da cota consumida. | O PO confirmar que um voucher de campanha com vários alvos deve descontar itens de alvos diferentes. |
-| PA-3 | **Ordem conceder → confirmar → resgatar na mesma compra.** A US-04.9 diz que a confirmação vem depois do pagamento e que o provisório pode ser aplicável na mesma compra; as duas coisas juntas exigem confirmar antes de pagar. | Decisão D3 da issue #45 já fixou "só resgata depois da confirmação". | Integração real de um PDV com uso na mesma compra. |
+| PA-3 | **Resgate do provisório sem confirmação posterior.** Se o PDV resgata na mesma compra e nunca confirma, a reserva expira, o voucher é descartado e o resgate estornado, mas o desconto já foi dado na venda. | É o preço da D-10 na variante aprovada; a plataforma não tem como saber se a venda se concluiu sem a confirmação. | Monitorar `RedemptionReversed` por expiração; se for frequente, prazo de reserva maior ou confirmação automática no resgate. |
 | PA-4 | **Contadores de resgatados e expirados na campanha** e no portal. | Saem de `vouchers` por consulta; o dashboard é a #50. | Issue #50. |
 | PA-5 | **Varredura para persistir `Expired`** dos vouchers vencidos que nunca foram consultados. | O status efetivo já responde certo; a gravação acontece na tentativa de resgate (D-11). | Relatórios da #50 que leiam o status gravado. |
-| PA-6 | **Estorno do resgate** quando a venda é desfeita depois do desconto aplicado (devolver a utilização). | O backlog não define a operação. A `redemptions` não é append-only por causa disso. | Pedido do PO ou do time do PDV. |
+| PA-6 | **Limites do estorno** (D-19): janela de tempo, motivo obrigatório, quem pode estornar, e o que fazer se a validade do voucher já venceu entre o resgate e o estorno. | A operação entrou sem regra do backlog; nesta entrega é livre e idempotente. | Pedido do PO ou do time do PDV. |
 | PA-7 | **Desconto fixo maior que a base** (`FixedAmount` 50 numa compra de 30 do alvo): adotado `min(valor, base)`. | Regra não escrita no backlog. | Validação com o PO. |
 | PA-8 | **Público elegível na US-07.1**: devolve `audience: "All"`. | Critérios são a #47. | Issue #47. |
 | PA-9 | **Idempotência por chave própria** (US-07.3 cenário 5 fala em "chave de idempotência"): usada a `transactionId`, como na concessão (PR-07). | Uma chave extra duplicaria o papel da transação. | O PDV precisar reenviar com outra transação. |
