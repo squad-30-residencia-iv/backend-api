@@ -3,7 +3,8 @@
 Uso: python -I scripts/smoke/motor.py http://localhost:5091
 
 Cria e aprova uma campanha de rede inteira (o relógio da API é o real, então o início é o minuto atual),
-pede a concessão como o pdv-demo, confirma, desfaz outra, repete a transação e lista os vouchers do cliente.
+pede a concessão como o pdv-demo, confirma, desfaz outra, repete a transação, verifica e resgata o voucher confirmado,
+estorna e resgata de novo (spec GH-049), consulta as campanhas vigentes e lista os vouchers do cliente.
 """
 
 import sys
@@ -13,6 +14,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from smoke import FAILURES, Client, Demo, check  # noqa: E402
 
 ROUTE = "/api/v1/satellite/concessions"
+CHECK = "/api/v1/satellite/vouchers/check"
+REDEMPTIONS = "/api/v1/satellite/redemptions"
 
 
 def purchase(transaction_id, document="123.456.789-01", store=Demo.STORE_CENTER, channel="Physical", total=200.0, items=None, purchases=None):
@@ -26,6 +29,12 @@ def purchase(transaction_id, document="123.456.789-01", store=Demo.STORE_CENTER,
     }
     if purchases is not None:
         body["customerPurchaseCount"] = purchases
+    return body
+
+
+def redeem(voucher_id, transaction_id, **kwargs):
+    body = purchase(transaction_id, **kwargs)
+    body["voucherId"] = voucher_id
     return body
 
 
@@ -92,13 +101,57 @@ def run(base_url):
     status, body = api.call("POST", f"{ROUTE}/{second}/confirm", None, token=satellite)
     check("POST /satellite/concessions/{id}/confirm (desfeita)", status, 422, body, "CONCESSION_ALREADY_CANCELLED")
 
+    # Resgate (spec GH-049): verificar, resgatar o recomendado, repetir, estornar, resgatar de novo
+    status, body = api.call("GET", "/api/v1/satellite/campaigns", token=satellite)
+    check("GET /satellite/campaigns (vigentes)", status, 200, body)
+    if isinstance(body, list) and not any(c.get("id") == campaign_id for c in body):
+        print("FAIL  a campanha deste roteiro não apareceu nas vigentes")
+        FAILURES.append("campanhas vigentes")
+    status, body = api.call("GET", f"/api/v1/satellite/campaigns?establishmentId={Demo.STORE_CENTER}&channel=Physical", token=satellite)
+    check("GET /satellite/campaigns?establishmentId&channel", status, 200, body)
+    status, body = api.call("POST", CHECK, purchase(f"TRX-{tag}-R1"), token=satellite)
+    check("POST /satellite/vouchers/check", status, 200, body)
+    applicable = body.get("applicable", []) if isinstance(body, dict) else []
+    chosen = next((a for a in applicable if a["voucher"]["code"] == code), None)
+    if chosen is None:
+        print(f"FAIL  o voucher confirmado {code} não apareceu como aplicável: {body}")
+        FAILURES.append("verificação")
+        return 1
+    print(f"      aplicáveis {len(applicable)}, recomendado {next((a['voucher']['code'] for a in applicable if a['recommended']), None)}, desconto do {code}: {chosen['discountAmount']}")
+    status, body = api.call("POST", REDEMPTIONS, redeem(chosen["voucher"]["id"], f"TRX-{tag}-R1"), token=satellite)
+    check("POST /satellite/redemptions", status, 200, body)
+    redemption_id = body.get("redemptionId") if isinstance(body, dict) else None
+    if isinstance(body, dict) and (body.get("status") != "Effective" or body.get("voucher", {}).get("status") != "Redeemed"):
+        print(f"FAIL  esperado resgate Effective com voucher Redeemed, obtido {body}")
+        FAILURES.append("resgate")
+    status, body = api.call("POST", REDEMPTIONS, redeem(chosen["voucher"]["id"], f"TRX-{tag}-R1"), token=satellite)
+    check("POST /satellite/redemptions (mesma transação)", status, 200, body)
+    if isinstance(body, dict) and body.get("redemptionId") != redemption_id:
+        print(f"FAIL  a repetição devolveu outro resgate: {body}")
+        FAILURES.append("idempotência do resgate")
+    status, body = api.call("POST", REDEMPTIONS, redeem(chosen["voucher"]["id"], f"TRX-{tag}-R2"), token=satellite)
+    check("POST /satellite/redemptions (sem utilização)", status, 422, body, "REDEMPTION_NO_USES_LEFT")
+    status, body = api.call("GET", f"{REDEMPTIONS}/{redemption_id}", token=satellite)
+    check("GET /satellite/redemptions/{id}", status, 200, body)
+    status, body = api.call("POST", f"{REDEMPTIONS}/{redemption_id}/reverse", None, token=satellite)
+    check("POST /satellite/redemptions/{id}/reverse", status, 200, body)
+    if isinstance(body, dict) and (body.get("status") != "Reversed" or body.get("voucher", {}).get("remainingUses") != 1):
+        print(f"FAIL  esperado Reversed com 1 utilização de volta, obtido {body}")
+        FAILURES.append("estorno")
+    status, body = api.call("POST", REDEMPTIONS, redeem(chosen["voucher"]["id"], f"TRX-{tag}-R3"), token=satellite)
+    check("POST /satellite/redemptions (depois do estorno)", status, 200, body)
+    status, body = api.call("POST", REDEMPTIONS, redeem("0199e3a0-0000-7000-8000-0000000009ff", f"TRX-{tag}-R4"), token=satellite)
+    check("POST /satellite/redemptions (voucher inexistente)", status, 404, body, "NOT_FOUND")
+    status, body = api.call("POST", CHECK, purchase(f"TRX-{tag}-R5", channel="Virtual"), token=satellite)
+    check("POST /satellite/vouchers/check (canal que a loja não opera)", status, 422, body, "REDEMPTION_CHANNEL_NOT_ENABLED")
+
     # Consulta e vouchers do cliente
     status, body = api.call("GET", f"{ROUTE}/{concession_id}", token=satellite)
     check("GET /satellite/concessions/{id}", status, 200, body)
     status, body = api.call("GET", "/api/v1/satellite/customers/123.456.789-01/vouchers", token=satellite)
     check("GET /satellite/customers/{cpf}/vouchers", status, 200, body)
-    if isinstance(body, list) and not any(v.get("code") == code and v.get("status") == "Available" for v in body):
-        print(f"FAIL  o voucher confirmado não apareceu como Available: {body}")
+    if isinstance(body, list) and not any(v.get("code") == code and v.get("status") == "Redeemed" for v in body):
+        print(f"FAIL  o voucher resgatado não apareceu como Redeemed: {body}")
         FAILURES.append("vouchers do cliente")
     status, body = api.call("GET", "/api/v1/satellite/customers/123/vouchers", token=satellite)
     check("GET /satellite/customers/{cpf}/vouchers (CPF inválido)", status, 400, body, "VALIDATION_ERROR")
