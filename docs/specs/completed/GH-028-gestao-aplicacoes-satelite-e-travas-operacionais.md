@@ -26,7 +26,7 @@ Esta especificação cobre a governança completa de **Aplicações Satélite** 
     - Resgate de vouchers: `vouchers:redeem` (ou alias `voucher:redeem`)
   - Qualquer escopo desconhecido resulta em `400 VALIDATION_ERROR` ("Escopo informado inválido.").
 - **Geração e Armazenamento de Segredo:**
-  - O segredo (`clientSecret`) é gerado criptograficamente pela API (string aleatória segura de 40 caracteres com prefixo `sec_`).
+  - O segredo (`clientSecret`) é gerado criptograficamente pela API (24 bytes aleatórios em hexadecimal, 52 caracteres com o prefixo `sec_`).
   - O segredo **nunca** é gravado em texto claro, apenas seu hash PBKDF2 (`PasswordHasher.Hash(secret)`).
   - O segredo em texto claro é retornado **uma única vez** na resposta de criação (`201 Created`) ou de rotação de segredo (`200 OK`).
   - Respostas de consulta e listagem (`GET`) **nunca** incluem o segredo nem o hash.
@@ -52,6 +52,7 @@ Esta especificação cobre a governança completa de **Aplicações Satélite** 
 - **Solução no Banco de Dados:**
   - **PostgreSQL:** Trigger function `prevent_append_only_modification()` disparando exceção `RAISE EXCEPTION` em eventos `BEFORE UPDATE OR DELETE` nas tabelas `audit_entries` e `campaign_status_events`.
   - **SQLite:** Triggers dedicadas `BEFORE UPDATE` e `BEFORE DELETE` utilizando `SELECT RAISE(ABORT, 'Updates and deletes are not allowed on append-only tables.')`.
+  - A tabela `voucher_events` (issue #45, também `IAppendOnly`) ficou de fora desta migração; a trigger dela veio na `VoucherEventsAppendOnlyTrigger` (spec `GH-028-ajustes-pos-verificacao.md`).
   - Criada migração `AppendOnlyTableTriggers` em ambos os assemblies:
     - `VoucherCampaigns.Infrastructure.Migrations.Sqlite`
     - `VoucherCampaigns.Infrastructure.Migrations.Postgres`
@@ -156,7 +157,7 @@ Autorização: Exclusiva para `administrador` (`[Authorize(Policy = Authorizatio
 - **Respostas:**
   - `200 OK`: Retorna `SatelliteAppItemResponse`.
   - `403 Forbidden`: `AUTH_FORBIDDEN_ROLE`.
-  - `404 Not Found`: `SATELLITE_APP_NOT_FOUND` ("Aplicação satélite não encontrada.").
+  - `404 Not Found`: `NOT_FOUND` ("Aplicação satélite não encontrada."), como todo recurso inexistente da API (`ResourceNotFoundException`).
 
 ### 3.4 `PUT /api/v1/satellite/apps/{id}`
 - **Descrição:** Altera nome e escopos da aplicação satélite. `clientId` e `networkId` não são modificados.
@@ -164,21 +165,21 @@ Autorização: Exclusiva para `administrador` (`[Authorize(Policy = Authorizatio
   - `200 OK`: Retorna `SatelliteAppItemResponse` atualizado.
   - `400 Bad Request`: `VALIDATION_ERROR` (nome inválido ou escopos desconhecidos).
   - `403 Forbidden`: `AUTH_FORBIDDEN_ROLE`.
-  - `404 Not Found`: `SATELLITE_APP_NOT_FOUND`.
+  - `404 Not Found`: `NOT_FOUND`.
 
 ### 3.5 `DELETE /api/v1/satellite/apps/{id}` & `PATCH /api/v1/satellite/apps/{id}/deactivate`
 - **Descrição:** Inativa a aplicação (`IsActive = false`).
 - **Respostas:**
   - `200 OK`: Retorna `SatelliteAppItemResponse` com `isActive = false`.
   - `403 Forbidden`: `AUTH_FORBIDDEN_ROLE`.
-  - `404 Not Found`: `SATELLITE_APP_NOT_FOUND`.
+  - `404 Not Found`: `NOT_FOUND`.
 
 ### 3.6 `POST /api/v1/satellite/apps/{id}/rotate-secret`
 - **Descrição:** Gera um novo segredo, substitui o hash no banco e devolve o segredo novo uma única vez.
 - **Respostas:**
   - `200 OK`: Retorna `RotateSecretResponse(ClientSecret: "sec_...")`.
   - `403 Forbidden`: `AUTH_FORBIDDEN_ROLE`.
-  - `404 Not Found`: `SATELLITE_APP_NOT_FOUND`.
+  - `404 Not Found`: `NOT_FOUND`.
 
 ---
 
