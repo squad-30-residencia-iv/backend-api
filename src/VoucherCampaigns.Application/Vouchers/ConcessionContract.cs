@@ -35,4 +35,7 @@ public static class ConcessionContract
     public const string VoucherStatusInvalid = "Status inválido. Use Provisional, Available, Redeemed, Expired ou Cancelled.";
 
     public const string ConcessionNotFound = "Concessão não encontrada.";
+
+    /// <summary>Filtro <c>establishmentId</c> da consulta de campanhas vigentes (US-07.1): loja inexistente ou de outra rede.</summary>
+    public const string EstablishmentNotFoundForList = "A loja informada não existe nesta rede.";
 }

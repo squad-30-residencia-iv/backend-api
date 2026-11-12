@@ -24,6 +24,9 @@ internal sealed record Scenario(Guid CampaignId, Guid StoreId);
 internal static class MotorScenario
 {
     public const string ConcessionsRoute = "/api/v1/satellite/concessions";
+    public const string CheckRoute = "/api/v1/satellite/vouchers/check";
+    public const string RedemptionsRoute = "/api/v1/satellite/redemptions";
+    public const string SatelliteCampaignsRoute = "/api/v1/satellite/campaigns";
     public const string Document = "123.456.789-01";
     public const string DocumentDigits = "12345678901";
 
@@ -125,6 +128,66 @@ internal static class MotorScenario
         return body;
     }
 
+    /// <summary>Corpo do resgate: a compra mais o voucher escolhido (spec GH-049, D-3).</summary>
+    public static object Redeem(
+        Guid voucherId,
+        Guid establishmentId,
+        string? transactionId = null,
+        string document = Document,
+        string channel = "Physical",
+        decimal totalAmount = 200m,
+        object[]? items = null) => new
+    {
+        voucherId,
+        transactionId = transactionId ?? $"TRX-{Guid.NewGuid():N}",
+        customer = new { document },
+        establishmentId,
+        channel,
+        totalAmount,
+        items = items ?? [new { productCode = "MOD-001", quantity = 1, unitPrice = 200m }]
+    };
+
+    public static async Task<ConcessionResponseDto> ConfirmedAsync(HttpClient satellite, Guid concessionId)
+    {
+        var response = await satellite.PostAsync($"{ConcessionsRoute}/{concessionId}/confirm", null);
+        response.EnsureSuccessStatusCode();
+
+        return (await response.Content.ReadFromJsonAsync<ConcessionResponseDto>())!;
+    }
+
+    /// <summary>Concede e confirma: voucher disponível para o CPF padrão, na loja do cenário.</summary>
+    public static async Task<VoucherResponseDto> AvailableVoucherAsync(HttpClient satellite, Scenario scenario, string document = Document)
+    {
+        var granted = await GrantedAsync(satellite, Purchase(scenario.StoreId, document: document));
+        var confirmed = await ConfirmedAsync(satellite, granted.ConcessionId);
+
+        return confirmed.Voucher!;
+    }
+
+    public static async Task<RedemptionCheckDto> CheckAsync(HttpClient satellite, object purchase)
+    {
+        var response = await satellite.PostAsJsonAsync(CheckRoute, purchase);
+        response.EnsureSuccessStatusCode();
+
+        return (await response.Content.ReadFromJsonAsync<RedemptionCheckDto>())!;
+    }
+
+    public static async Task<(HttpResponseMessage Response, RedemptionDto? Body)> RedeemAsync(HttpClient satellite, object redemption)
+    {
+        var response = await satellite.PostAsJsonAsync(RedemptionsRoute, redemption);
+        var body = response.IsSuccessStatusCode ? await response.Content.ReadFromJsonAsync<RedemptionDto>() : null;
+
+        return (response, body);
+    }
+
+    public static async Task<RedemptionDto> RedeemedAsync(HttpClient satellite, object redemption)
+    {
+        var (response, body) = await RedeemAsync(satellite, redemption);
+        Assert.True(response.IsSuccessStatusCode, $"resgate: {(int)response.StatusCode} {await response.Content.ReadAsStringAsync()}");
+
+        return body!;
+    }
+
     public static async Task<Campaign> StoredCampaignAsync(ApiFactory factory, Guid campaignId)
     {
         await using var scope = factory.Services.CreateAsyncScope();
@@ -171,3 +234,23 @@ public record VoucherResponseDto(
     string TransactionId);
 
 public record VoucherTargetDto(string TargetType, Guid? CategoryId, Guid? ProductId, string BenefitType, decimal BenefitValue);
+
+public record RedemptionCheckDto(
+    string TransactionId,
+    bool OnlyOnePerPurchase,
+    Guid? RedemptionId,
+    IReadOnlyList<ApplicableVoucherDto> Applicable,
+    IReadOnlyList<InapplicableVoucherDto> NotApplicable);
+
+public record ApplicableVoucherDto(VoucherResponseDto Voucher, decimal DiscountAmount, bool Recommended);
+
+public record InapplicableVoucherDto(VoucherResponseDto Voucher, string Reason, string Detail);
+
+public record RedemptionDto(
+    Guid RedemptionId,
+    string TransactionId,
+    string Status,
+    VoucherResponseDto Voucher,
+    decimal DiscountAmount,
+    DateTimeOffset RedeemedAt,
+    DateTimeOffset? ReversedAt);

@@ -58,6 +58,18 @@ public class Voucher
 
     public int RemainingUses => Math.Max(MaxUses - UsesCount, 0);
 
+    /// <summary>
+    /// Pode consumir uma utilização agora (spec GH-049): disponível dentro da validade com usos restantes, ou provisório
+    /// com a reserva em dia quando a própria compra pode usá-lo (<paramref name="sameTransactionAllowed"/>, D-10).
+    /// </summary>
+    public bool CanBeRedeemedAt(DateTime utcNow, bool sameTransactionAllowed) =>
+        RemainingUses > 0 && EffectiveStatus(utcNow) switch
+        {
+            VoucherStatus.Available => true,
+            VoucherStatus.Provisional => sameTransactionAllowed,
+            _ => false
+        };
+
     /// <summary>Validade inclusiva até o último segundo (D9).</summary>
     public bool IsValidAt(DateTime utcNow) => BusinessTime.TruncateToSecond(utcNow) <= ValidUntil;
 
