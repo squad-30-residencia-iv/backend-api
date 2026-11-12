@@ -54,7 +54,8 @@ public class SatelliteAppsEndpointTests(ApiFactory factory) : IClassFixture<ApiF
         Assert.Equal(created.App.Id, fetched!.Id);
         Assert.Equal("pdv-loja-1", fetched.ClientId);
         Assert.Equal(DateTimeKind.Utc, fetched.CreatedAt.Kind);
-        Assert.Equal(created.App.CreatedAt, fetched.CreatedAt);
+        // O PostgreSQL guarda microssegundos; os ticks de 100 ns do .NET não voltam iguais.
+        Assert.Equal(created.App.CreatedAt, fetched.CreatedAt, TimeSpan.FromMilliseconds(1));
     }
 
     [Theory]
