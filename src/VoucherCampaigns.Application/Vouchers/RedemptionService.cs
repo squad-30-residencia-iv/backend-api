@@ -77,6 +77,17 @@ public class RedemptionService(
 
             if (candidate.Refusal is { } refusal)
             {
+                // O voucher pode ter sido relido depois de um pedido igual gravar o resgate desta transação
+                // (ex.: já aparece Redeemed): antes de recusar, vale a idempotência.
+                var settled = await redemptions.FindByTransactionAsync(app.NetworkId, context.Input.TransactionId, cancellationToken);
+
+                if (settled is not null)
+                {
+                    return settled.VoucherId == voucherId
+                        ? Map(settled, context.UtcNow)
+                        : throw Refused(RedemptionRefusal.TransactionAlreadyRedeemed, null);
+                }
+
                 await RegisterRefusalAsync(voucher, refusal, context, cancellationToken);
                 throw Refused(refusal, voucher);
             }

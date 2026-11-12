@@ -46,7 +46,13 @@ public class RedemptionConcurrencyTests : IClassFixture<ApiFactory>
         var results = await Task.WhenAll(Enumerable.Range(0, 10).Select(_ =>
             RedeemAsync(satellite, Redeem(voucher.Id, scenario.StoreId, "TRX-REPETIDA"))));
 
-        Assert.All(results, result => Assert.Equal(HttpStatusCode.OK, result.Response.StatusCode));
+        var failures = new List<string>();
+        foreach (var result in results.Where(result => result.Response.StatusCode != HttpStatusCode.OK))
+        {
+            failures.Add($"{(int)result.Response.StatusCode} {await result.Response.Content.ReadAsStringAsync()}");
+        }
+
+        Assert.True(failures.Count == 0, string.Join(Environment.NewLine, failures));
         Assert.Single(results.Select(result => result.Body!.RedemptionId).Distinct());
         var stored = await QueryAsync(_factory, db => db.Vouchers.AsNoTracking().SingleAsync(v => v.Id == voucher.Id));
         Assert.Equal(1, stored.UsesCount);

@@ -324,5 +324,6 @@ Autenticação: token de aplicação satélite (US-07.5). Token de usuário → 
 - O estorno pela varredura grava só o evento `RedemptionReversed` (sem ator); pelo desfazimento ou pela rota, grava também a auditoria `VoucherRedemptionReversed` com a aplicação.
 - O estorno é sempre **por id do resgate** (`TryReverseAsync` com `WHERE id = @id AND status = 'Effective'`); ao descartar um voucher, `ReverseAllOfVoucherAsync` percorre os resgates efetivos dele. A primeira versão estornava por `voucher_id` e, num voucher multiuso, revertia todos os resgates de uma vez; o agente de testes pegou o defeito e um teste com `maxUses = 2` cobre o caso.
 - O `422` de motivo traz a extensão `reason` via `BusinessRuleException.Extensions`, copiada pelo `ApiExceptionHandler`.
+- Idempotência sob concorrência: o resgate relê o resgate da transação em dois pontos além da entrada, quando perde a corrida pela utilização e quando a avaliação recusa o voucher (ele pode ter sido relido já `Redeemed` por um pedido igual que gravou antes). O CI pegou esse segundo caso num dos dez pedidos simultâneos da mesma transação.
 - Nos testes de integração, cada teste usa um CPF próprio: os vouchers dos outros testes da mesma fábrica não entram na verificação.
 - O `pdv-demo` já tinha o escopo `vouchers:redeem` no `appsettings.Development.json`.
