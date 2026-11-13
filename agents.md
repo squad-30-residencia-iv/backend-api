@@ -133,6 +133,12 @@ Qualquer assistente que iniciar uma sessão de desenvolvimento deve seguir estri
 
 - Resgate (spec `GH-049-resgate-de-vouchers.md`, seção 1.2): `Application/Vouchers/RedemptionService.cs` recebe a mesma compra da concessão (`IPurchaseRequest`, parsing em `PurchaseParsing`), lista os vouchers do CPF e passa cada um por `RedemptionEvaluator.Refusal` (domínio, sem I/O: já resgatado nesta compra → status efetivo → campanha cancelada → escopo → faixa de valor → alvo → compra já com outro resgate); o desconto é do alvo do voucher (`RedemptionEvaluator.Discount`, D-7). O resgate consome a utilização por `IRedemptionRepository.TryConsumeUseAsync` (primeiro comando da transação) e grava `redemptions` (único por rede + `transactionId`), evento `Redeemed` e auditoria. O provisório da própria compra resgata antes da confirmação (D-10); `ConcessionService.CancelAsync` e `ReservationReleaser` chamam `IRedemptionReverser` para estornar. Rotas em `SatelliteRedemptionsController` (policy `SatelliteRedeemVouchers`) e `SatelliteCampaignsController` (US-07.1, `SatelliteReadCampaigns`).
 
+### [Skill] Acompanhamento (EP-03)
+
+- `Application/Dashboard/DashboardService.cs` (spec `GH-050-acompanhamento-da-campanha.md`): indicadores agregados por consulta em `DashboardRepository.CountVouchersAsync` (um `GROUP BY` sobre `vouchers` com o status efetivo repetido no SQL, outro sobre `redemptions`), sem contadores novos em `campaigns`. Cada voucher emitido cai num único balde; ao mudar um balde, mantenha a soma `issued = redeemed + expiredUnused + cancelledUnused + available` e o teste que a confere.
+- A trilha lê `audit_entries` com `entity_type = Campaign`; a criação e cada `PUT` de rascunho gravam `CampaignCreated`/`CampaignUpdated` pelo `CampaignService` (`AuditSection`, só quando a seção mudou; snapshots sem ids e com decimais em 2 casas). Ids da auditoria vêm de `AuditIds.Next(occurredAt)` para a ordem valer dentro do mesmo instante.
+- CSV por `Csv.Build` (UTF-8 com BOM, `;`, `CRLF`); nada de PDF ou planilha (D8).
+
 ### [Skill] Trilha de Auditoria
 
 - Escopo da campanha (US-02.3): `campaign_scopes` tem uma linha por local e canal; região e loja nulas = rede inteira, e a campanha vale na união dos locais. Uma coleção da campanha substituída por inteiro (itens, condições, escopo) usa `ValueGeneratedNever` na chave e ids v7 em sequência para manter a ordem informada.

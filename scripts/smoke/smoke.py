@@ -247,6 +247,36 @@ def run_base(base_url: str) -> int:
     status, body = api.call("GET", f"/api/v1/campaigns?networkId={Demo.NETWORK}&status=Active", token=analista)
     check("GET /campaigns?status=Active", status, 200, body)
 
+    # Acompanhamento (spec GH-050): indicadores, lista, trilha e CSV
+    status, body = api.call("GET", f"/api/v1/campaigns/{campaign_id}/dashboard", token=analista)
+    check("GET /campaigns/{id}/dashboard", status, 200, body)
+    if isinstance(body, dict):
+        ind = body.get("indicators", {})
+        print(f"      emitidos {ind.get('issued')}, resgatados {ind.get('redeemed')}, taxa {ind.get('utilizationRate')}, status {body.get('status')}")
+    status, body = api.call("GET", f"/api/v1/campaigns/{campaign_id}/dashboard?from=2020-01-01&to=2019-12-31", token=analista)
+    check("GET /campaigns/{id}/dashboard (período invertido)", status, 400, body, "VALIDATION_ERROR")
+    status, body = api.call("GET", f"/api/v1/dashboard?networkId={Demo.NETWORK}&establishmentId={Demo.STORE_CENTER}", token=analista)
+    check("GET /dashboard?networkId&establishmentId", status, 200, body)
+    if isinstance(body, dict) and not any(c.get("campaignId") == campaign_id for c in body.get("campaigns", [])):
+        print("FAIL  a campanha do roteiro não apareceu na lista do dashboard")
+        FAILURES.append("dashboard lista")
+    status, body = api.call("GET", f"/api/v1/dashboard?networkId={Demo.OTHER_NETWORK}", token=analista)
+    check("GET /dashboard (outra rede)", status, 403, body, "SCOPE_FORBIDDEN")
+    status, body = api.call("GET", f"/api/v1/campaigns/{campaign_id}/audit", token=gestor)
+    check("GET /campaigns/{id}/audit", status, 200, body)
+    if isinstance(body, dict):
+        kinds = [e.get("eventType") for e in body.get("entries", [])]
+        print(f"      trilha: {', '.join(kinds)}")
+        if not kinds or kinds[0] != "CampaignCreated" or "CampaignApproved" not in kinds:
+            print("FAIL  a trilha deveria começar pela criação e conter a aprovação")
+            FAILURES.append("trilha")
+    status, body = api.call("GET", f"/api/v1/dashboard/export?networkId={Demo.NETWORK}", token=analista)
+    check("GET /dashboard/export (CSV)", status, 200, body)
+    status, body = api.call("GET", f"/api/v1/dashboard/export?networkId={Demo.NETWORK}&status=Cancelled", token=analista)
+    check("GET /dashboard/export (sem dados)", status, 422, body, "EXPORT_EMPTY")
+    status, body = api.call("GET", f"/api/v1/campaigns/{campaign_id}/audit/export", token=analista)
+    check("GET /campaigns/{id}/audit/export (CSV)", status, 200, body)
+
     print()
     if FAILURES:
         print(f"{len(FAILURES)} rota(s) com falha: " + ", ".join(FAILURES))

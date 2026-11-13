@@ -44,6 +44,8 @@ public class CampaignService(
             NetworkTime.ToUtc(request.EndsAt!.Value, timeZone, nameof(request.EndsAt)),
             utcNow);
 
+        AppendAudit(campaign, AuditEventTypes.CampaignCreated, currentUser.UserId, utcNow, new CreatedPayload(
+            campaign.Name, NetworkTime.ToLocal(campaign.StartsAt, timeZone), NetworkTime.ToLocal(campaign.EndsAt, timeZone), campaign.NetworkId));
         await campaigns.AddAsync(campaign, cancellationToken);
 
         return Map(campaign, network, utcNow);
@@ -100,7 +102,9 @@ public class CampaignService(
             items.Add(item);
         }
 
+        var before = SnapshotItems(campaign);
         campaign.ReplaceItems(items, utcNow.UtcDateTime);
+        AuditSection(campaign, "items", before, SnapshotItems(campaign), utcNow.UtcDateTime);
         await campaigns.SaveChangesAsync(cancellationToken);
 
         return Map(campaign, campaign.Network!, utcNow.UtcDateTime);
@@ -183,7 +187,9 @@ public class CampaignService(
 
         // As regras do domínio vêm antes da hierarquia, como nas condições. Se um local for recusado,
         // a substituição em memória é descartada com a requisição.
+        var before = SnapshotScopes(campaign);
         campaign.ReplaceScopes(scopes, utcNow.UtcDateTime);
+        AuditSection(campaign, "scopes", before, SnapshotScopes(campaign), utcNow.UtcDateTime);
 
         foreach (var entry in entries)
         {
@@ -240,7 +246,9 @@ public class CampaignService(
         var campaign = await RequireForUpdateAsync(id, cancellationToken);
         var utcNow = timeProvider.GetUtcNow().UtcDateTime;
 
+        var before = SnapshotQuantities(campaign);
         campaign.SetQuantities(request.TotalVoucherLimit!.Value, request.PerCustomerVoucherLimit, utcNow);
+        AuditSection(campaign, "quantities", before, SnapshotQuantities(campaign), utcNow);
         await campaigns.SaveChangesAsync(cancellationToken);
 
         return Map(campaign, campaign.Network!, utcNow);
@@ -256,7 +264,9 @@ public class CampaignService(
         var campaign = await RequireForUpdateAsync(id, cancellationToken);
         var utcNow = timeProvider.GetUtcNow().UtcDateTime;
 
+        var before = new AudienceSnapshot(campaign.AudienceType?.ToString());
         campaign.SetAudience(audienceType, utcNow);
+        AuditSection(campaign, "audience", before, new AudienceSnapshot(campaign.AudienceType?.ToString()), utcNow);
         await campaigns.SaveChangesAsync(cancellationToken);
 
         return Map(campaign, campaign.Network!, utcNow);
@@ -270,12 +280,14 @@ public class CampaignService(
         // RN02: as datas digitadas valem no fuso da rede (US-02.6).
         var timeZone = NetworkTime.Resolve(campaign.Network!.TimeZone);
 
+        var before = SnapshotDetails(campaign, timeZone);
         campaign.UpdateDetails(
             request.Name,
             request.Description,
             NetworkTime.ToUtc(request.StartsAt!.Value, timeZone, nameof(request.StartsAt)),
             NetworkTime.ToUtc(request.EndsAt!.Value, timeZone, nameof(request.EndsAt)),
             utcNow);
+        AuditSection(campaign, "details", before, SnapshotDetails(campaign, timeZone), utcNow);
         await campaigns.SaveChangesAsync(cancellationToken);
 
         return Map(campaign, campaign.Network, utcNow);
@@ -298,6 +310,8 @@ public class CampaignService(
         var timeZone = NetworkTime.Resolve(campaign.Network!.TimeZone);
         var utcNow = timeProvider.GetUtcNow().UtcDateTime;
 
+        var before = MapValidity(campaign, timeZone);
+
         if (type == VoucherValidityType.Relative)
         {
             var cap = request.Cap is { } localCap ? NetworkTime.ToUtc(localCap, timeZone, nameof(request.Cap)) : (DateTime?)null;
@@ -308,6 +322,7 @@ public class CampaignService(
             campaign.SetFixedValidity(NetworkTime.ToUtc(request.ValidUntil!.Value, timeZone, nameof(request.ValidUntil)), utcNow);
         }
 
+        AuditSection(campaign, "voucherValidity", before, MapValidity(campaign, timeZone), utcNow);
         await campaigns.SaveChangesAsync(cancellationToken);
 
         return Map(campaign, campaign.Network, utcNow);
@@ -324,11 +339,13 @@ public class CampaignService(
         var campaign = await RequireForUpdateAsync(id, cancellationToken);
         var utcNow = timeProvider.GetUtcNow().UtcDateTime;
 
+        var before = SnapshotRestrictions(campaign);
         campaign.SetUsageRestrictions(
             request.MinPurchaseAmount,
             request.MaxPurchaseAmount,
             request.MaxUsesPerVoucher!.Value,
             utcNow);
+        AuditSection(campaign, "usageRestrictions", before, SnapshotRestrictions(campaign), utcNow);
         await campaigns.SaveChangesAsync(cancellationToken);
 
         return Map(campaign, campaign.Network!, utcNow);
@@ -351,6 +368,7 @@ public class CampaignService(
 
         // As regras do domínio vêm antes do catálogo (spec US-01.4, seção 3). Se o catálogo recusar,
         // nada é gravado: a substituição em memória é descartada com a requisição.
+        var before = SnapshotConditions(campaign);
         campaign.ReplaceConditions(conditions, request.AllowUseInSamePurchase!.Value, utcNow.UtcDateTime);
 
         foreach (var condition in conditions)
@@ -358,6 +376,7 @@ public class CampaignService(
             await EnsureConditionInCatalogAsync(condition, cancellationToken);
         }
 
+        AuditSection(campaign, "conditions", before, SnapshotConditions(campaign), utcNow.UtcDateTime);
         await campaigns.SaveChangesAsync(cancellationToken);
 
         return Map(campaign, campaign.Network!, utcNow.UtcDateTime);
@@ -561,7 +580,8 @@ public class CampaignService(
     {
         audit.Append(new AuditEntry
         {
-            Id = Guid.CreateVersion7(new DateTimeOffset(occurredAt)),
+            // Sequência dentro do mesmo instante: a trilha (GH-050) ordena por instante e depois por id.
+            Id = AuditIds.Next(occurredAt),
             EventType = eventType,
             ActorType = AuditActorType.User,
             ActorId = actorUserId,
@@ -573,6 +593,74 @@ public class CampaignService(
             Payload = AuditJson.Serialize(payload)
         });
     }
+
+    /// <summary>Edição de uma seção do rascunho (spec GH-050, D-8): grava <c>CampaignUpdated</c> só quando algo mudou.</summary>
+    private void AuditSection(Campaign campaign, string section, object? before, object? after, DateTime utcNow)
+    {
+        if (AuditJson.Serialize(before) == AuditJson.Serialize(after))
+        {
+            return;
+        }
+
+        AppendAudit(campaign, AuditEventTypes.CampaignUpdated, currentUser.UserId, utcNow, new SectionChangePayload(section, before, after));
+    }
+
+    private static DetailsSnapshot SnapshotDetails(Campaign campaign, TimeZoneInfo timeZone) =>
+        new(campaign.Name, campaign.Description, NetworkTime.ToLocal(campaign.StartsAt, timeZone), NetworkTime.ToLocal(campaign.EndsAt, timeZone));
+
+    // Sem os ids: a substituição gera ids novos, e só a configuração interessa à trilha.
+    private static List<ItemSnapshot> SnapshotItems(Campaign campaign) =>
+        campaign.Items.OrderBy(item => item.Id)
+            .Select(item => new ItemSnapshot(item.TargetType.ToString(), item.CategoryId, item.ProductId, item.BenefitType.ToString(), Money(item.BenefitValue), item.VoucherLimit))
+            .ToList();
+
+    private static QuantitiesSnapshot SnapshotQuantities(Campaign campaign) =>
+        new(campaign.TotalVoucherLimit, campaign.PerCustomerVoucherLimit);
+
+    private static RestrictionsSnapshot SnapshotRestrictions(Campaign campaign) =>
+        new(Money(campaign.MinPurchaseAmount), Money(campaign.MaxPurchaseAmount), campaign.MaxUsesPerVoucher);
+
+    private static ConditionsSnapshot SnapshotConditions(Campaign campaign) =>
+        new(
+            campaign.Conditions.OrderBy(condition => condition.Id)
+                .Select(condition => new ConditionSnapshot(condition.Type.ToString(), Money(condition.MinAmount), condition.MinQuantity, condition.CategoryId, condition.ProductId))
+                .ToList(),
+            campaign.AllowUseInSamePurchase);
+
+    private static List<ScopeSnapshot> SnapshotScopes(Campaign campaign) =>
+        campaign.Scopes
+            .OrderBy(scope => scope.Id)
+            .GroupBy(scope => (scope.RegionId, scope.EstablishmentId))
+            .Select(location => new ScopeSnapshot(
+                location.Key.RegionId,
+                location.Key.EstablishmentId,
+                location.Select(scope => scope.ChannelType).Distinct().Order().Select(channel => channel.ToString()).ToList()))
+            .ToList();
+
+    private sealed record CreatedPayload(string Name, DateTimeOffset StartsAt, DateTimeOffset EndsAt, Guid NetworkId);
+
+    private sealed record SectionChangePayload(string Section, object? Before, object? After);
+
+    private sealed record DetailsSnapshot(string Name, string? Description, DateTimeOffset StartsAt, DateTimeOffset EndsAt);
+
+    private sealed record QuantitiesSnapshot(int? TotalVoucherLimit, int? PerCustomerVoucherLimit);
+
+    private sealed record AudienceSnapshot(string? AudienceType);
+
+    private sealed record RestrictionsSnapshot(decimal? MinPurchaseAmount, decimal? MaxPurchaseAmount, int? MaxUsesPerVoucher);
+
+    /// <summary>Escala fixa de 2 casas: o valor lido do banco e o recém-informado comparam iguais.</summary>
+    private static decimal Money(decimal value) => decimal.Round(value, 2) + 0.00m;
+
+    private static decimal? Money(decimal? value) => value is { } amount ? Money(amount) : null;
+
+    private sealed record ItemSnapshot(string TargetType, Guid? CategoryId, Guid? ProductId, string BenefitType, decimal BenefitValue, int? VoucherLimit);
+
+    private sealed record ConditionSnapshot(string Type, decimal? MinAmount, int? MinQuantity, Guid? CategoryId, Guid? ProductId);
+
+    private sealed record ConditionsSnapshot(IReadOnlyList<ConditionSnapshot> Conditions, bool AllowUseInSamePurchase);
+
+    private sealed record ScopeSnapshot(Guid? RegionId, Guid? EstablishmentId, IReadOnlyList<string> Channels);
 
     private sealed record StatusChangePayload(string FromStatus, string ToStatus, string? Reason);
 

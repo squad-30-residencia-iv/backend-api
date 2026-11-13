@@ -1,6 +1,6 @@
 # 📋 Especificação Técnica: GH-050 - Acompanhamento da campanha: dashboard, filtros, trilha de auditoria e exportação (EP-03)
 
-> Status: In Progress
+> Status: Completed (decisões D-1 a D-13 aprovadas pelo usuário em 2026-11-12)
 > História de Usuário Relacionada: issue #50 (fatia da #27), US-03.1 a US-03.5
 > Responsável: @iagovrocha
 > Data: 2026-11-12
@@ -171,25 +171,25 @@ Policy `ManageCampaigns` (analista e gestor; `401` sem token, `403 AUTH_FORBIDDE
 
 ## 4. Checklist de Implementação
 
-- [ ] 1. Auditoria de criação e edição (D-8): `AuditEventTypes.CampaignCreated`/`CampaignUpdated`, `AppendAudit` em `CreateAsync` e nos oito `PUT` do `CampaignService`, só quando a seção mudou; testes de integração conferindo o payload.
-- [ ] 2. `IDashboardRepository`/`DashboardRepository` com a agregação por campanha (D-3, D-4) e os filtros (1.3); teste que compara as contagens do SQL com `Voucher.EffectiveStatus` em memória.
-- [ ] 3. `DashboardService`: validação dos filtros, escopo de rede, indicadores, taxa, totais, trilha com responsável e evento sintético (D-9), CSV (D-10, D-11).
-- [ ] 4. `DashboardController` e `CampaignAuditController`; registro em `Program.cs`/`DependencyInjection`.
-- [ ] 5. Testes de integração: cenários da seção 5, com `MotorScenario` para emitir, confirmar, resgatar, estornar e vencer vouchers.
-- [ ] 6. `scripts/smoke/smoke.py`: dashboard, trilha e exportação da campanha do roteiro.
-- [ ] 7. README (seção "Acompanhamento"), `agents.md` (skill), `ROADMAP.md`, `PROJECT_STATE.md`; spec para `completed/`.
+- [x] 1. Auditoria de criação e edição (D-8): `AuditEventTypes.CampaignCreated`/`CampaignUpdated`, `AppendAudit` em `CreateAsync` e nos oito `PUT` do `CampaignService`, só quando a seção mudou; testes de integração conferindo o payload.
+- [x] 2. `IDashboardRepository`/`DashboardRepository` com a agregação por campanha (D-3, D-4) e os filtros (1.3); teste que compara as contagens do SQL com `Voucher.EffectiveStatus` em memória.
+- [x] 3. `DashboardService`: validação dos filtros, escopo de rede, indicadores, taxa, totais, trilha com responsável e evento sintético (D-9), CSV (D-10, D-11).
+- [x] 4. `DashboardController` e `CampaignAuditController`; registro em `Program.cs`/`DependencyInjection`.
+- [x] 5. Testes de integração: cenários da seção 5, com `MotorScenario` para emitir, confirmar, resgatar, estornar e vencer vouchers.
+- [x] 6. `scripts/smoke/smoke.py`: dashboard, trilha e exportação da campanha do roteiro.
+- [x] 7. README (seção "Acompanhamento"), `agents.md` (skill), `ROADMAP.md`, `PROJECT_STATE.md`; spec para `completed/`.
 
 ---
 
 ## 5. Casos de Teste Essenciais
 
-- [ ] Campanha com 5 emitidos: 2 resgatados (um multiuso parcial), 1 expirado sem uso (relógio depois da validade), 2 disponíveis → `issued 5`, `redeemed 2`, `expiredUnused 1`, `available 2`, `utilizationRate 0.4000`, soma fechando (US-03.1 cenário 1). Provisório pendente aparece em `reserved` e não em `issued`.
-- [ ] Campanha sem movimentação → zeros e `utilizationRate: null` (cenário 3). Depois de novas emissões e resgates, a mesma consulta reflete os totais (cenário 4).
-- [ ] Filtro por loja, por região, por período e por categoria, isolados e combinados (US-03.2 cenários 1 e 2); recorte vazio → zeros com `200` (cenário 3); sem filtros → consolidado (cenário 4). `from > to` → `400`; loja de outra rede → `400`; loja inexistente → `404`.
-- [ ] `GET /dashboard` lista rascunho, agendada, ativa, pausada, encerrada e esgotada com o status efetivo e os indicadores; `status=` filtra; rede sem campanha → lista vazia e totais zerados (US-03.3).
-- [ ] Trilha: criar, editar itens duas vezes (a segunda sem mudança não gera evento), submeter, aprovar, pausar → eventos em ordem com `actor.name` e o `before/after` da edição; campanha antiga sem `CampaignCreated` → evento sintético (US-03.4 cenários 1, 2 e 4). Eventos de voucher não aparecem (cenário 3).
-- [ ] Exportação: CSV com BOM, `;`, cabeçalho, linhas de filtros e uma linha por campanha, valores iguais ao JSON; sem dados → `422 EXPORT_EMPTY` (US-03.5).
-- [ ] Analista e gestor leem; administrador → `403`; gestor de outra rede → `403 SCOPE_FORBIDDEN`; sem token → `401`.
+- [x] Campanha com 5 emitidos: 2 resgatados (um multiuso parcial), 1 expirado sem uso (relógio depois da validade), 2 disponíveis → `issued 5`, `redeemed 2`, `expiredUnused 1`, `available 2`, `utilizationRate 0.4000`, soma fechando (US-03.1 cenário 1). Provisório pendente aparece em `reserved` e não em `issued`.
+- [x] Campanha sem movimentação → zeros e `utilizationRate: null` (cenário 3). Depois de novas emissões e resgates, a mesma consulta reflete os totais (cenário 4).
+- [x] Filtro por loja, por região, por período e por categoria, isolados e combinados (US-03.2 cenários 1 e 2); recorte vazio → zeros com `200` (cenário 3); sem filtros → consolidado (cenário 4). `from > to` → `400`; loja de outra rede → `400`; loja inexistente → `404`.
+- [x] `GET /dashboard` lista rascunho, agendada, ativa, pausada, encerrada e esgotada com o status efetivo e os indicadores; `status=` filtra; rede sem campanha → lista vazia e totais zerados (US-03.3).
+- [x] Trilha: criar, editar itens duas vezes (a segunda sem mudança não gera evento), submeter, aprovar, pausar → eventos em ordem com `actor.name` e o `before/after` da edição; campanha antiga sem `CampaignCreated` → evento sintético (US-03.4 cenários 1, 2 e 4). Eventos de voucher não aparecem (cenário 3).
+- [x] Exportação: CSV com BOM, `;`, cabeçalho, linhas de filtros e uma linha por campanha, valores iguais ao JSON; sem dados → `422 EXPORT_EMPTY` (US-03.5).
+- [x] Analista e gestor leem; administrador → `403`; gestor de outra rede → `403 SCOPE_FORBIDDEN`; sem token → `401`.
 
 ---
 
@@ -205,3 +205,13 @@ Policy `ManageCampaigns` (analista e gestor; `401` sem token, `403 AUTH_FORBIDDE
 | PA-6 | **Histórico do voucher pelo portal** (RF21, EP-05). | Fora do EP-03 por decisão do backlog. | Tela de voucher no portal. |
 | PA-7 | **Indicadores por loja ou por dia** (série temporal para gráficos). | O backlog pede totais com filtros; a série é derivada. | O frontend pedir gráfico de evolução. |
 | PA-8 | **Responsável da criação em campanhas antigas** (D-9). | Não há coluna de autor em `campaigns`. | Se o auditor precisar, migração com `created_by_user_id` preenchido a partir da submissão. |
+
+---
+
+## 7. Notas da implementação
+
+- Os indicadores saem de `DashboardRepository.CountVouchersAsync`: um `GROUP BY campaign_id` sobre `vouchers` com `COUNT(CASE ...)` por balde (o status efetivo repetido no SQL: `Available` com `valid_until < agora` conta como expirado) e um segundo agrupamento sobre `redemptions` efetivas. Filtros de loja, região (via `establishments`), categoria (alvo ou produto do alvo) e período (`issued_at` em UTC, dia inteiro no fuso da rede).
+- `CampaignService` ganhou `AuditSection`: snapshot da seção antes e depois da mutação, serializado por `AuditJson`; igual → nada gravado. Os snapshots não levam ids (a substituição gera ids novos) e fixam decimais em 2 casas (`decimal.Round(x, 2) + 0.00m`), porque o valor lido do banco volta com outra escala e compararia diferente.
+- Ids de `audit_entries` do `CampaignService` vêm de `AuditIds.Next(occurredAt)`, que acrescenta uma sequência em milissegundos ao instante: a trilha ordena por `occurred_at` e desempata por id, e várias gravações no mesmo instante (relógio fixo dos testes ou um `PUT` com várias seções) mantêm a ordem.
+- Os testes antigos de auditoria (`CampaignAuditEndpointTests`) passaram a olhar só os eventos de ciclo de vida; a criação e as edições têm testes próprios em `Dashboard/CampaignTrailEndpointTests`.
+- `Routes_AreForAnalystsAndManagersOfTheNetworkOnly` confirma que o administrador recebe `403` e o gestor de outra rede `403` tanto pela policy quanto pelo `ValidateTenantScope`.

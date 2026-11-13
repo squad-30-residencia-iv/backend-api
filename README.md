@@ -173,6 +173,15 @@ Com o cliente identificado e o carrinho fechado, o satélite pergunta quais vouc
 
 Pausa, encerramento e esgotamento da campanha não impedem o resgate; a validade própria do voucher (inclusiva até 23:59:59) e as restrições de valor da campanha valem sempre. Voucher vencido na tentativa de resgate passa a `Expired` no banco.
 
+### Acompanhamento da campanha (EP-03)
+
+Rotas de leitura para analista e gestor da rede (policy `ManageCampaigns`). Spec `docs/specs/completed/GH-050-acompanhamento-da-campanha.md`.
+
+- `GET /api/v1/campaigns/{id}/dashboard?from&to&establishmentId&regionId&categoryId`: indicadores da campanha calculados na leitura pelo status efetivo de cada voucher: `issued`, `reserved`, `redeemed` (usados ao menos uma vez), `expiredUnused`, `cancelledUnused`, `available`, `utilizationRate` (`redeemed / issued`, nulo sem emissão), `redemptions` e `discountTotal`. Vale `issued = redeemed + expiredUnused + cancelledUnused + available`. O período filtra pela data de emissão, no fuso da rede; a categoria, pelo alvo do voucher.
+- `GET /api/v1/dashboard?networkId&status&from&to&establishmentId&regionId&categoryId&audience`: todas as campanhas da rede, em qualquer status, com os indicadores e os totais.
+- `GET /api/v1/campaigns/{id}/audit`: trilha de criação, edições (`CampaignUpdated` com `section`, `before` e `after`), submissão, aprovação, reprovação, pausa, encerramento e duplicação, com o responsável. Campanha anterior à auditoria da criação mostra um `CampaignCreated` sintético.
+- `GET /api/v1/dashboard/export` e `GET /api/v1/campaigns/{id}/audit/export`: o mesmo conteúdo em CSV (UTF-8 com BOM, `;`, datas no fuso da rede); lista vazia responde `422 EXPORT_EMPTY`.
+
 ### Estrutura da Solution (`VoucherCampaigns.slnx`)
 
 | Projeto | Responsabilidade |
