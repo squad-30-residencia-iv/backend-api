@@ -1,6 +1,6 @@
 # 📋 Especificação Técnica: GH-061 - Cancelar campanha e invalidar os vouchers não utilizados (RN10, US-05.5)
 
-> Status: In Progress (decisões D-1 a D-16 aprovadas pelo usuário em 2026-11-13, como propostas; pontos em aberto em debate)
+> Status: In Progress (decisões D-1 a D-16 aprovadas pelo usuário em 2026-11-13, como propostas; PA-1 a PA-6 debatidos e mantidos fora, agrupados na issue #62 para validação)
 > História de Usuário Relacionada: US-01.8 (EP-01), cenários 3 e 5; US-05.5 (EP-05), cenários 2 e 3. Fecha o PA-1 da spec `GH-049` e o PA-13 da `GH-045`. Issue #61.
 > Responsável: @iagovrocha
 > Data: 2026-11-13
@@ -179,13 +179,16 @@ Auditoria nova: `AuditEventTypes.CampaignCancelled`. Evento de voucher: `Voucher
 
 ## 6. Pontos em aberto
 
+Debatidos com o usuário em 2026-11-13: os seis ficam fora desta fatia, a D-2 se mantém e todos estão na **issue #62** para validar depois com o PO, o frontend e o PDV.
+
 | # | Ponto | Motivo de ficar de fora | Gatilho para retomar |
 |---|---|---|---|
 | PA-1 | Retomar a campanha pausada (US-01.8, cenário 4). | A spec de pausar e encerrar combinou com o portal (frontend-web#43) que não há retomada; não é parte do cancelamento. | PO ou frontend pedirem a retomada. |
-| PA-2 | Cancelar a campanha já encerrada (antecipadamente ou pelo fim da vigência) cujos vouchers ainda valem. | A US-01.8 trata a interrupção "antes do fim da vigência", e o encerramento é irreversível. Uma irregularidade descoberta depois não tem como invalidar os vouchers. | PO pedir a invalidação de vouchers de campanha encerrada. |
+| PA-2 | Cancelar a campanha já encerrada (antecipadamente ou pelo fim da vigência) cujos vouchers ainda valem. | A US-01.8 trata a interrupção "antes do fim da vigência", e o encerramento é irreversível. Uma irregularidade descoberta depois não tem como invalidar os vouchers. No código seria só aceitar `Ended` como origem na D-2. | PO responder se o "antes do fim da vigência" é proibição ou só o caso comum. |
 | PA-3 | Cancelamento em segundo plano para campanhas muito grandes. | O `UPDATE` em lote é um comando só e os eventos vão em blocos; o volume do projeto cabe numa requisição. | Cancelamento passar de alguns segundos em produção ou campanhas com centenas de milhares de vouchers. |
 | PA-4 | Avisar o cliente ou o satélite do cancelamento (notificação ativa). | O backend não guarda contato do cliente (D4) e o satélite consulta os vouchers na hora da compra. | Pedido de notificação, ou o satélite querer ser avisado (webhook). |
-| PA-5 | Restringir o cancelamento ao gestor. | O backlog dá a ação ao analista, como pausar e encerrar. | Governança pedir aprovação para cancelar. |
+| PA-5 | Restringir o cancelamento ao gestor (ou analista pede e gestor aprova). | O backlog dá a ação ao analista, como pausar e encerrar. Um fluxo de aprovação deixaria a campanha irregular emitindo enquanto espera; o motivo obrigatório (D-4) e a auditoria registram quem cancelou e por quê. | Governança pedir aprovação para cancelar. |
+| PA-6 | Venda em andamento no PDV: o provisório resgatado na própria compra, com o desconto já aplicado no caixa, é descartado pelo cancelamento e a confirmação responde `422 CONCESSION_CAMPAIGN_CANCELLED`. | O PDV já trata a reserva expirada do mesmo jeito; o backend fica como está (D-6). | PDV dizer se refaz o total da venda ou aceita a perda; validar junto com o PA-7 e o PA-8 da GH-047. |
 
 ---
 
