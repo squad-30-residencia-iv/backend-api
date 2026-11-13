@@ -20,6 +20,16 @@ public class EligibilityEvaluatorTests
     public void AgeOn_CountsCompleteYears_WithTheBirthdayOnTheDay(string birthDate, int expected) =>
         Assert.Equal(expected, EligibilityEvaluator.AgeOn(DateOnly.Parse(birthDate), PurchaseDate));
 
+    // PA-9 (decidido em 2026-11-13): quem nasceu em 29/02 faz aniversário em 28/02 nos anos não bissextos.
+    [Theory]
+    [InlineData("2027-02-27", 26)]
+    [InlineData("2027-02-28", 27)]
+    [InlineData("2027-03-01", 27)]
+    [InlineData("2028-02-28", 27)]
+    [InlineData("2028-02-29", 28)]
+    public void AgeOn_BornOnFebruary29_HasTheBirthdayOnFebruary28InCommonYears(string date, int expected) =>
+        Assert.Equal(expected, EligibilityEvaluator.AgeOn(new DateOnly(2000, 2, 29), DateOnly.Parse(date)));
+
     [Theory]
     [InlineData(18, 30, "2000-01-01", CriterionOutcome.Met)]
     [InlineData(18, null, "2008-10-11", CriterionOutcome.NotMet)]

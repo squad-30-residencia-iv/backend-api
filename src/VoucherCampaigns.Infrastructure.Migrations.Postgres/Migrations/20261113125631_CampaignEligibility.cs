@@ -35,8 +35,7 @@ namespace VoucherCampaigns.Infrastructure.Migrations.Postgres.Migrations
                     min_purchases = table.Column<int>(type: "integer", nullable: true),
                     category_id = table.Column<Guid>(type: "uuid", nullable: true),
                     window_days = table.Column<int>(type: "integer", nullable: true),
-                    customer_count = table.Column<int>(type: "integer", nullable: true),
-                    customers_digest = table.Column<string>(type: "character varying(64)", maxLength: 64, nullable: true)
+                    customer_count = table.Column<int>(type: "integer", nullable: true)
                 },
                 constraints: table =>
                 {

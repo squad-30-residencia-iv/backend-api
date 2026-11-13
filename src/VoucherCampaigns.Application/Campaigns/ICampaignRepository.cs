@@ -33,9 +33,10 @@ public interface ICampaignRepository
 
     /// <summary>
     /// Grava a campanha rastreada só se ninguém a alterou desde a leitura: o primeiro comando da transação é um
-    /// <c>UPDATE ... WHERE updated_at = @lido</c>. Falso quando outra requisição gravou antes (nada é gravado).
+    /// <c>UPDATE ... WHERE updated_at = @lido</c>, com o valor lido do rastreamento. A marca nova é sempre maior que a
+    /// lida, mesmo com o relógio parado. Falso quando outra requisição gravou antes (nada é gravado).
     /// </summary>
-    Task<bool> SaveIfUnchangedAsync(Campaign campaign, DateTime loadedUpdatedAt, CancellationToken cancellationToken);
+    Task<bool> SaveIfUnchangedAsync(Campaign campaign, CancellationToken cancellationToken);
 
     void AddStatusEvent(CampaignStatusEvent statusEvent);
 

@@ -108,7 +108,7 @@ public class CampaignService(
         var before = SnapshotItems(campaign);
         campaign.ReplaceItems(items, utcNow.UtcDateTime);
         AuditSection(campaign, "items", before, SnapshotItems(campaign), utcNow.UtcDateTime);
-        await campaigns.SaveChangesAsync(cancellationToken);
+        await SaveGuardedAsync(campaign, cancellationToken);
 
         return Map(campaign, campaign.Network!, utcNow.UtcDateTime);
     }
@@ -119,7 +119,7 @@ public class CampaignService(
         var utcNow = timeProvider.GetUtcNow().UtcDateTime;
         var statusEvent = campaign.Submit(currentUser.UserId, utcNow);
         RecordStatusChange(campaign, statusEvent, AuditEventTypes.CampaignSubmitted);
-        await campaigns.SaveChangesAsync(cancellationToken);
+        await SaveGuardedAsync(campaign, cancellationToken);
         return Map(campaign, campaign.Network!, utcNow);
     }
 
@@ -129,7 +129,7 @@ public class CampaignService(
         var utcNow = timeProvider.GetUtcNow().UtcDateTime;
         var statusEvent = campaign.Approve(currentUser.UserId, utcNow);
         RecordStatusChange(campaign, statusEvent, AuditEventTypes.CampaignApproved);
-        await campaigns.SaveChangesAsync(cancellationToken);
+        await SaveGuardedAsync(campaign, cancellationToken);
         return Map(campaign, campaign.Network!, utcNow);
     }
 
@@ -139,7 +139,7 @@ public class CampaignService(
         var utcNow = timeProvider.GetUtcNow().UtcDateTime;
         var statusEvent = campaign.Reject(currentUser.UserId, request?.Reason, utcNow);
         RecordStatusChange(campaign, statusEvent, AuditEventTypes.CampaignRejected);
-        await campaigns.SaveChangesAsync(cancellationToken);
+        await SaveGuardedAsync(campaign, cancellationToken);
         return Map(campaign, campaign.Network!, utcNow);
     }
 
@@ -149,7 +149,7 @@ public class CampaignService(
         var utcNow = timeProvider.GetUtcNow().UtcDateTime;
         var statusEvent = campaign.Pause(currentUser.UserId, utcNow);
         RecordStatusChange(campaign, statusEvent, AuditEventTypes.CampaignPaused);
-        await campaigns.SaveChangesAsync(cancellationToken);
+        await SaveGuardedAsync(campaign, cancellationToken);
         return Map(campaign, campaign.Network!, utcNow);
     }
 
@@ -159,7 +159,7 @@ public class CampaignService(
         var utcNow = timeProvider.GetUtcNow().UtcDateTime;
         var statusEvent = campaign.End(currentUser.UserId, utcNow);
         RecordStatusChange(campaign, statusEvent, AuditEventTypes.CampaignEnded);
-        await campaigns.SaveChangesAsync(cancellationToken);
+        await SaveGuardedAsync(campaign, cancellationToken);
         return Map(campaign, campaign.Network!, utcNow);
     }
 
@@ -199,7 +199,7 @@ public class CampaignService(
             await EnsureScopeLocationAsync(campaign.NetworkId, entry, cancellationToken);
         }
 
-        await campaigns.SaveChangesAsync(cancellationToken);
+        await SaveGuardedAsync(campaign, cancellationToken);
 
         // Relida para trazer o nome da região e da loja de cada local.
         return await MapStoredAsync(campaign.Id, utcNow.UtcDateTime, cancellationToken);
@@ -258,7 +258,7 @@ public class CampaignService(
         var before = SnapshotQuantities(campaign);
         campaign.SetQuantities(request.TotalVoucherLimit!.Value, request.PerCustomerVoucherLimit, utcNow);
         AuditSection(campaign, "quantities", before, SnapshotQuantities(campaign), utcNow);
-        await campaigns.SaveChangesAsync(cancellationToken);
+        await SaveGuardedAsync(campaign, cancellationToken);
 
         return Map(campaign, campaign.Network!, utcNow);
     }
@@ -287,19 +287,13 @@ public class CampaignService(
 
         await campaigns.LoadEligibleCustomersAsync(campaign, cancellationToken);
 
-        // Substituir a lista por diferença exige que ninguém a tenha mudado no meio (clique duplo no portal):
-        // a marca nova é sempre diferente da lida, mesmo com o relógio parado, para a segunda requisição perder.
-        var loaded = DateTime.SpecifyKind(campaign.UpdatedAt, DateTimeKind.Utc);
-        var stamp = utcNow > loaded ? utcNow : loaded.AddMilliseconds(1);
-
         var before = SnapshotAudience(campaign);
-        campaign.SetAudience(audienceType, audience.Criteria, audience.Documents, stamp);
-        AuditSection(campaign, "audience", before, SnapshotAudience(campaign), utcNow);
+        var changes = CustomerListChange.Between(campaign.EligibleCustomers.Select(customer => customer.Document), audience.Documents);
+        campaign.SetAudience(audienceType, audience.Criteria, audience.Documents, utcNow);
+        AuditSection(campaign, "audience", before, SnapshotAudience(campaign, changes), utcNow);
 
-        if (!await campaigns.SaveIfUnchangedAsync(campaign, loaded, cancellationToken))
-        {
-            throw new BusinessRuleException(CampaignErrors.ConcurrentUpdateCode, CampaignErrors.ConcurrentUpdateMessage);
-        }
+        // Substituir a lista por diferença exige que ninguém a tenha mudado no meio (clique duplo no portal).
+        await SaveGuardedAsync(campaign, cancellationToken);
 
         return Map(campaign, campaign.Network!, utcNow);
     }
@@ -374,7 +368,7 @@ public class CampaignService(
             NetworkTime.ToUtc(request.EndsAt!.Value, timeZone, nameof(request.EndsAt)),
             utcNow);
         AuditSection(campaign, "details", before, SnapshotDetails(campaign, timeZone), utcNow);
-        await campaigns.SaveChangesAsync(cancellationToken);
+        await SaveGuardedAsync(campaign, cancellationToken);
 
         return Map(campaign, campaign.Network, utcNow);
     }
@@ -409,7 +403,7 @@ public class CampaignService(
         }
 
         AuditSection(campaign, "voucherValidity", before, MapValidity(campaign, timeZone), utcNow);
-        await campaigns.SaveChangesAsync(cancellationToken);
+        await SaveGuardedAsync(campaign, cancellationToken);
 
         return Map(campaign, campaign.Network, utcNow);
     }
@@ -432,7 +426,7 @@ public class CampaignService(
             request.MaxUsesPerVoucher!.Value,
             utcNow);
         AuditSection(campaign, "usageRestrictions", before, SnapshotRestrictions(campaign), utcNow);
-        await campaigns.SaveChangesAsync(cancellationToken);
+        await SaveGuardedAsync(campaign, cancellationToken);
 
         return Map(campaign, campaign.Network!, utcNow);
     }
@@ -463,7 +457,7 @@ public class CampaignService(
         }
 
         AuditSection(campaign, "conditions", before, SnapshotConditions(campaign), utcNow.UtcDateTime);
-        await campaigns.SaveChangesAsync(cancellationToken);
+        await SaveGuardedAsync(campaign, cancellationToken);
 
         return Map(campaign, campaign.Network!, utcNow.UtcDateTime);
     }
@@ -681,6 +675,18 @@ public class CampaignService(
     }
 
     /// <summary>Edição de uma seção do rascunho (spec GH-050, D-8): grava <c>CampaignUpdated</c> só quando algo mudou.</summary>
+    /// <summary>
+    /// Grava só se a campanha não mudou desde a leitura (PA-10): duas edições ou transições simultâneas não se somam,
+    /// e a segunda recebe 422 <see cref="CampaignErrors.ConcurrentUpdateCode"/>.
+    /// </summary>
+    private async Task SaveGuardedAsync(Campaign campaign, CancellationToken cancellationToken)
+    {
+        if (!await campaigns.SaveIfUnchangedAsync(campaign, cancellationToken))
+        {
+            throw new BusinessRuleException(CampaignErrors.ConcurrentUpdateCode, CampaignErrors.ConcurrentUpdateMessage);
+        }
+    }
+
     private void AuditSection(Campaign campaign, string section, object? before, object? after, DateTime utcNow)
     {
         if (AuditJson.Serialize(before) == AuditJson.Serialize(after))
@@ -701,8 +707,9 @@ public class CampaignService(
             .Select(item => new ItemSnapshot(item.TargetType.ToString(), item.CategoryId, item.ProductId, item.BenefitType.ToString(), Money(item.BenefitValue), item.VoucherLimit))
             .ToList();
 
-    // A lista entra só como quantidade e resumo (D-20): a trilha detecta a troca sem copiar CPFs.
-    private static AudienceSnapshot SnapshotAudience(Campaign campaign) =>
+    // A lista entra só como quantidade e, no depois, quantos CPFs entraram e saíram (D-20, PA-11): a trilha
+    // detecta a troca sem copiar CPFs nem guardar nada que permita confirmar quem está na lista.
+    private static AudienceSnapshot SnapshotAudience(Campaign campaign, CustomerListChange? changes = null) =>
         new(campaign.AudienceType?.ToString(), campaign.EligibilityCriteria.OrderBy(criterion => criterion.Id)
             .Select(criterion => new CriterionSnapshot(
                 criterion.Type.ToString(),
@@ -714,9 +721,9 @@ public class CampaignService(
                 criterion.MinPurchases,
                 criterion.CategoryId,
                 criterion.WindowDays,
-                criterion.CustomerCount,
-                criterion.CustomersDigest))
-            .ToList());
+                criterion.CustomerCount))
+            .ToList(),
+            changes);
 
     private static QuantitiesSnapshot SnapshotQuantities(Campaign campaign) =>
         new(campaign.TotalVoucherLimit, campaign.PerCustomerVoucherLimit);
@@ -751,7 +758,21 @@ public class CampaignService(
 
     private sealed record QuantitiesSnapshot(int? TotalVoucherLimit, int? PerCustomerVoucherLimit);
 
-    private sealed record AudienceSnapshot(string? AudienceType, IReadOnlyList<CriterionSnapshot> Criteria);
+    private sealed record AudienceSnapshot(string? AudienceType, IReadOnlyList<CriterionSnapshot> Criteria, CustomerListChange? CustomerChanges);
+
+    /// <summary>Quantos CPFs entraram e saíram da lista; nulo quando nada mudou, para a repetição idêntica não gerar evento.</summary>
+    private sealed record CustomerListChange(int Added, int Removed)
+    {
+        public static CustomerListChange? Between(IEnumerable<string> current, IEnumerable<string> wanted)
+        {
+            var before = current.ToHashSet(StringComparer.Ordinal);
+            var after = wanted.ToHashSet(StringComparer.Ordinal);
+            var added = after.Count(document => !before.Contains(document));
+            var removed = before.Count(document => !after.Contains(document));
+
+            return added == 0 && removed == 0 ? null : new CustomerListChange(added, removed);
+        }
+    }
 
     private sealed record CriterionSnapshot(
         string Type,
@@ -763,8 +784,7 @@ public class CampaignService(
         int? MinPurchases,
         Guid? CategoryId,
         int? WindowDays,
-        int? CustomerCount,
-        string? CustomersDigest);
+        int? CustomerCount);
 
     private sealed record RestrictionsSnapshot(decimal? MinPurchaseAmount, decimal? MaxPurchaseAmount, int? MaxUsesPerVoucher);
 

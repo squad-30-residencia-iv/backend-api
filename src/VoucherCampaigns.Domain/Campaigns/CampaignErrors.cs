@@ -15,7 +15,10 @@ public static class CampaignErrors
     public const string NetworkUnavailableCode = "NETWORK_UNAVAILABLE";
     public const string NetworkUnavailableMessage = "A rede informada não existe ou está inativa.";
 
-    /// <summary>Duas edições simultâneas do mesmo público (spec GH-047, 7.1): a segunda é recusada para não somar as listas.</summary>
+    /// <summary>
+    /// Duas gravações simultâneas da mesma campanha (spec GH-047, 7.1 e PA-10): edição do rascunho ou mudança de
+    /// status. A segunda é recusada para não somar listas nem aprovar duas vezes.
+    /// </summary>
     public const string ConcurrentUpdateCode = "CAMPAIGN_CONCURRENT_UPDATE";
     public const string ConcurrentUpdateMessage = "A campanha foi alterada por outra requisição ao mesmo tempo. Recarregue e tente de novo.";
 

@@ -62,8 +62,17 @@ public class CampaignRepository(AppDbContext context) : ICampaignRepository
         context.CampaignEligibleCustomers.AnyAsync(
             customer => customer.CampaignId == campaignId && customer.Document == document, cancellationToken);
 
-    public async Task<bool> SaveIfUnchangedAsync(Campaign campaign, DateTime loadedUpdatedAt, CancellationToken cancellationToken)
+    public async Task<bool> SaveIfUnchangedAsync(Campaign campaign, CancellationToken cancellationToken)
     {
+        var loadedUpdatedAt = DateTime.SpecifyKind(
+            context.Entry(campaign).Property(item => item.UpdatedAt).OriginalValue, DateTimeKind.Utc);
+
+        // Duas requisições no mesmo instante (ou o relógio parado dos testes) teriam a mesma marca: a segunda passaria.
+        if (campaign.UpdatedAt <= loadedUpdatedAt)
+        {
+            campaign.UpdatedAt = loadedUpdatedAt.AddMilliseconds(1);
+        }
+
         await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
 
         // A marca é o primeiro comando: no PostgreSQL a segunda requisição espera o bloqueio da linha e, depois do

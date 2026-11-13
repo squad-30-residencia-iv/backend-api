@@ -35,8 +35,7 @@ namespace VoucherCampaigns.Infrastructure.Migrations.Sqlite.Migrations
                     min_purchases = table.Column<int>(type: "INTEGER", nullable: true),
                     category_id = table.Column<Guid>(type: "TEXT", nullable: true),
                     window_days = table.Column<int>(type: "INTEGER", nullable: true),
-                    customer_count = table.Column<int>(type: "INTEGER", nullable: true),
-                    customers_digest = table.Column<string>(type: "TEXT", maxLength: 64, nullable: true)
+                    customer_count = table.Column<int>(type: "INTEGER", nullable: true)
                 },
                 constraints: table =>
                 {

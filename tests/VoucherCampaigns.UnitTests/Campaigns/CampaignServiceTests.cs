@@ -301,7 +301,7 @@ public class CampaignServiceTests
 
         public Task LoadEligibleCustomersAsync(Campaign campaign, CancellationToken cancellationToken) => Task.CompletedTask;
 
-        public Task<bool> SaveIfUnchangedAsync(Campaign campaign, DateTime loadedUpdatedAt, CancellationToken cancellationToken) =>
+        public Task<bool> SaveIfUnchangedAsync(Campaign campaign, CancellationToken cancellationToken) =>
             Task.FromResult(true);
 
         public Task<IReadOnlyList<string>> GetEligibleDocumentsAsync(Guid campaignId, CancellationToken cancellationToken) =>

@@ -49,7 +49,6 @@ public class CampaignEligibilityCriterionConfiguration : IEntityTypeConfiguratio
         builder.Property(criterion => criterion.MinAmount).HasPrecision(10, 2);
         builder.Property(criterion => criterion.States).HasConversion(ListConverter, ListComparer).HasMaxLength(400).IsRequired();
         builder.Property(criterion => criterion.CityCodes).HasConversion(ListConverter, ListComparer).HasMaxLength(800).IsRequired();
-        builder.Property(criterion => criterion.CustomersDigest).HasMaxLength(64);
 
         builder.HasOne(criterion => criterion.Campaign)
             .WithMany(campaign => campaign.EligibilityCriteria)

@@ -35,9 +35,6 @@ public class CampaignEligibilityCriterion
 
     /// <summary>Quantidade de CPFs da lista (<see cref="EligibilityCriterionType.SpecificCustomers"/>), para a leitura e a auditoria.</summary>
     public int? CustomerCount { get; set; }
-
-    /// <summary>SHA-256 da lista ordenada (D-20): a trilha detecta a troca sem guardar CPFs.</summary>
-    public string? CustomersDigest { get; set; }
 }
 
 /// <summary>CPF da lista de clientes específicos da campanha (D-8, D-19).</summary>

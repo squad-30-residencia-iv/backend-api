@@ -114,7 +114,7 @@ public class RestrictedAudienceEndpointTests : IClassFixture<ApiFactory>
     }
 
     [Fact]
-    public async Task PutAudience_IsAudited_WithTheListOnlyAsCountAndDigest_AndNotWhenRepeated()
+    public async Task PutAudience_IsAudited_WithTheListOnlyAsCounts_AndNotWhenRepeated()
     {
         _factory.Clock.UtcNow = Setup;
         var analista = User(_factory);
@@ -133,8 +133,41 @@ public class RestrictedAudienceEndpointTests : IClassFixture<ApiFactory>
         Assert.Equal("AllCustomers", payload.GetProperty("before").GetProperty("audienceType").GetString());
         var list = payload.GetProperty("after").GetProperty("criteria")[1];
         Assert.Equal(1, list.GetProperty("customerCount").GetInt32());
-        Assert.Equal(64, list.GetProperty("customersDigest").GetString()!.Length);
+        Assert.False(list.TryGetProperty("customersDigest", out _));
+        var changes = payload.GetProperty("after").GetProperty("customerChanges");
+        Assert.Equal(1, changes.GetProperty("added").GetInt32());
+        Assert.Equal(0, changes.GetProperty("removed").GetInt32());
         Assert.DoesNotContain(document, payload.GetRawText());
+    }
+
+    [Fact]
+    public async Task PutAudience_ListSwappedForAnotherOfTheSameSize_IsAuditedWithWhoEnteredAndLeft()
+    {
+        _factory.Clock.UtcNow = Setup;
+        var analista = User(_factory);
+        var id = await ReadyCampaign.CreateAsync(analista);
+        var kept = TestCpf.New();
+        var leaving = TestCpf.New();
+        var entering = TestCpf.New();
+
+        (await PutAudienceAsync(analista, id, new { type = "SpecificCustomers", documents = new[] { kept, leaving } })).EnsureSuccessStatusCode();
+        (await PutAudienceAsync(analista, id, new { type = "SpecificCustomers", documents = new[] { kept, entering } })).EnsureSuccessStatusCode();
+
+        var edits = await QueryAsync(_factory, db => db.AuditEntries.AsNoTracking()
+            .Where(entry => entry.CampaignId == id && entry.EventType == AuditEventTypes.CampaignUpdated && entry.Payload!.Contains("\"audience\""))
+            .OrderBy(entry => entry.Id)
+            .ToListAsync());
+        var payload = JsonDocument.Parse(edits.Last().Payload!).RootElement;
+
+        // Mesma quantidade antes e depois: sem o resumo, só as entradas e saídas mostram a troca.
+        Assert.Equal(2, payload.GetProperty("before").GetProperty("criteria")[0].GetProperty("customerCount").GetInt32());
+        Assert.Equal(2, payload.GetProperty("after").GetProperty("criteria")[0].GetProperty("customerCount").GetInt32());
+        var changes = payload.GetProperty("after").GetProperty("customerChanges");
+        Assert.Equal(1, changes.GetProperty("added").GetInt32());
+        Assert.Equal(1, changes.GetProperty("removed").GetInt32());
+        Assert.False(payload.GetProperty("before").TryGetProperty("customerChanges", out _));
+        Assert.DoesNotContain(kept, payload.GetRawText());
+        Assert.DoesNotContain(entering, payload.GetRawText());
     }
 
     [Fact]

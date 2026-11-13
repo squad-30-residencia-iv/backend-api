@@ -1,5 +1,3 @@
-using System.Security.Cryptography;
-using System.Text;
 using VoucherCampaigns.Application.Audit;
 using VoucherCampaigns.Application.Common;
 using VoucherCampaigns.Application.Ports;
@@ -209,13 +207,6 @@ public static class EligibilityParsing
             .Select(criterion => new CriterionResultResponse(criterion.Type.ToString(), criterion.Outcome.ToString(), criterion.Parameters, criterion.Observed))
             .ToList();
 
-    /// <summary>SHA-256 em hexadecimal da lista ordenada (D-20).</summary>
-    public static string Digest(IEnumerable<string> documents)
-    {
-        var joined = string.Join(',', documents.Order(StringComparer.Ordinal));
-        return Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(joined)));
-    }
-
     private static bool IsCityCode(string value) => value.Length == EligibilityContract.CityCodeLength && value.All(char.IsAsciiDigit);
 
     private static CampaignEligibilityCriterion ParseCriterion(EligibilityCriterionRequest request, string field, out IReadOnlyList<string>? documents)
@@ -313,7 +304,6 @@ public static class EligibilityParsing
                 EnsureOnly(request, field, nameof(request.Documents));
                 documents = ParseDocuments(request.Documents, $"{field}.Documents");
                 criterion.CustomerCount = documents.Count;
-                criterion.CustomersDigest = Digest(documents);
                 break;
         }
 

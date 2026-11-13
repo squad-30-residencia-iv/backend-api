@@ -607,8 +607,7 @@ public class Campaign
                 MinPurchases = criterion.MinPurchases,
                 CategoryId = criterion.CategoryId,
                 WindowDays = criterion.WindowDays,
-                CustomerCount = criterion.CustomerCount,
-                CustomersDigest = criterion.CustomersDigest
+                CustomerCount = criterion.CustomerCount
             });
         }
 

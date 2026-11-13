@@ -317,11 +317,6 @@ namespace VoucherCampaigns.Infrastructure.Migrations.Postgres.Migrations
                         .HasColumnType("integer")
                         .HasColumnName("customer_count");
 
-                    b.Property<string>("CustomersDigest")
-                        .HasMaxLength(64)
-                        .HasColumnType("character varying(64)")
-                        .HasColumnName("customers_digest");
-
                     b.Property<int?>("MaxAge")
                         .HasColumnType("integer")
                         .HasColumnName("max_age");

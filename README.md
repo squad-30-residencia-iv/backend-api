@@ -128,7 +128,7 @@ Fora de Development, defina `Auth__Jwt__SigningKey` (mínimo de 32 caracteres); 
   "startsAt": "2026-12-01T08:00:00", "endsAt": "2026-12-25T23:59:00" }
 ```
 
-Resposta `201` com as datas no offset da rede (`"2026-12-01T08:00:00-03:00"`). Regras de negócio violadas respondem `422` com `code` (`CAMPAIGN_INVALID_PERIOD`, `CAMPAIGN_START_IN_PAST`, `NETWORK_UNAVAILABLE`).
+Resposta `201` com as datas no offset da rede (`"2026-12-01T08:00:00-03:00"`). Regras de negócio violadas respondem `422` com `code` (`CAMPAIGN_INVALID_PERIOD`, `CAMPAIGN_START_IN_PAST`, `NETWORK_UNAVAILABLE`). Duas gravações simultâneas da mesma campanha (edição do rascunho ou mudança de status) não se somam: a segunda responde `422 CAMPAIGN_CONCURRENT_UPDATE` e o portal deve recarregar a campanha.
 
 Onde a campanha vale vai em `PUT /api/v1/campaigns/{id}/scopes`, ainda em rascunho. Cada local tem região **ou** loja (sem nenhuma, a rede inteira) e os canais; na loja, só canal que ela opera:
 
@@ -168,7 +168,7 @@ A campanha pode ser para todos os clientes ou para um público restrito, com cri
 
 - `PUT /api/v1/campaigns/{id}/audience` com `{ "audienceType": "Restricted", "criteria": [...] }`, só em rascunho. Tipos: `AgeRange` (`minAge`, `maxAge`), `Location` (`states`, `cityCodes` IBGE), `LoyaltyMember`, `TotalSpent` (`minAmount`, `windowDays`), `PurchaseFrequency` (`minPurchases`, `windowDays`), `PurchasedCategory` (`categoryId`, `windowDays`) e `SpecificCustomers` (`documents`, até 10.000 CPFs com dígito verificador). `AllCustomers` não aceita critérios e apaga os anteriores. O `CampaignResponse` traz `eligibility.criteria`; a lista de CPFs aparece só como `customerCount` e sai paginada em `GET /api/v1/campaigns/{id}/audience/customers?page=&pageSize=`.
 - `POST /api/v1/campaigns/{id}/eligibility/simulate` com `{ "customer": {...} }`: resultado critério a critério (`Met`, `NotMet`, `Missing`), sem emitir voucher nem gravar nada.
-- Na concessão, o satélite manda em `customer` os atributos que a campanha pede (`birthDate`, `state`, `cityCode`, `loyaltyMember` e `history[]` com `windowDays`, `totalSpent`, `purchaseCount`, `productCodes`). `GET /api/v1/satellite/campaigns` informa `requiredAttributes` e `historyWindows` de cada campanha. Atributo ausente conta como não atendido. O inelegível não reserva saldo; se outra campanha servir, ela concede, senão a resposta é `NotGranted` com `CustomerNotEligible`. A concessão guarda os atributos usados e o resultado de cada critério; o resgate não reavalia o público. Smoke: `python -I scripts/smoke/publico.py http://localhost:5091`.
+- Na concessão, o satélite manda em `customer` os atributos que a campanha pede (`birthDate`, `state`, `cityCode`, `loyaltyMember` e `history[]` com `windowDays`, `totalSpent`, `purchaseCount`, `productCodes`). `GET /api/v1/satellite/campaigns` informa `requiredAttributes` e `historyWindows` de cada campanha. Atributo ausente conta como não atendido. O inelegível não reserva saldo; se outra campanha servir, ela concede, senão a resposta é `NotGranted` com `CustomerNotEligible`. A concessão guarda os atributos usados e o resultado de cada critério; o resgate não reavalia o público. Na auditoria da edição, a lista aparece só como quantidade e quantos CPFs entraram e saíram (`customerChanges`). Quem nasceu em 29/02 completa a idade em 28/02 nos anos não bissextos. Smoke: `python -I scripts/smoke/publico.py http://localhost:5091`.
 
 ### Verificação de aplicáveis e resgate (EP-05, US-07.1 e US-07.3)
 

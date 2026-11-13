@@ -312,11 +312,6 @@ namespace VoucherCampaigns.Infrastructure.Migrations.Sqlite.Migrations
                         .HasColumnType("INTEGER")
                         .HasColumnName("customer_count");
 
-                    b.Property<string>("CustomersDigest")
-                        .HasMaxLength(64)
-                        .HasColumnType("TEXT")
-                        .HasColumnName("customers_digest");
-
                     b.Property<int?>("MaxAge")
                         .HasColumnType("INTEGER")
                         .HasColumnName("max_age");
