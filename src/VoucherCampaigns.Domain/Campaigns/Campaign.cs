@@ -91,6 +91,15 @@ public class Campaign
 
     public ICollection<CampaignStatusEvent> StatusEvents { get; set; } = [];
 
+    /// <summary>Critérios do público restrito (spec GH-047); vazio no público "todos".</summary>
+    public ICollection<CampaignEligibilityCriterion> EligibilityCriteria { get; set; } = [];
+
+    /// <summary>
+    /// CPFs da lista de clientes específicos (D-8). Não vem nas leituras comuns da campanha (até 10.000 linhas):
+    /// carregue antes de <see cref="SetAudience"/> e de <see cref="Duplicate"/>.
+    /// </summary>
+    public ICollection<CampaignEligibleCustomer> EligibleCustomers { get; set; } = [];
+
     /// <summary>
     /// Cria a campanha em rascunho (PR-01) aplicando a RN02. Datas em UTC; o "agora" é comparado
     /// na precisão de minuto, para um início igual ao minuto atual ser aceito.
@@ -148,19 +157,57 @@ public class Campaign
         UpdatedAt = utcNow;
     }
 
-    /// <summary>Define o público elegível (US-01.5); o restrito depende dos critérios do EP-06.</summary>
-    /// <exception cref="BusinessRuleException">Campanha fora de rascunho ou público restrito.</exception>
-    public void SetAudience(CampaignAudienceType audienceType, DateTime utcNow)
+    /// <summary>Público "todos os clientes" (US-01.5): sem critérios e sem lista.</summary>
+    public void SetAudience(CampaignAudienceType audienceType, DateTime utcNow) => SetAudience(audienceType, [], [], utcNow);
+
+    /// <summary>
+    /// Define o público (US-01.5) e, no restrito, substitui os critérios e a lista de clientes (spec GH-047, D-9).
+    /// Os critérios chegam validados pelo contrato; aqui ficam só as regras que valem para qualquer origem.
+    /// A lista é aplicada por diferença, para não apagar e regravar os CPFs que continuam.
+    /// </summary>
+    /// <param name="documents">CPFs válidos e sem repetição, quando há o critério <see cref="EligibilityCriterionType.SpecificCustomers"/>.</param>
+    /// <exception cref="BusinessRuleException">Campanha fora de rascunho.</exception>
+    public void SetAudience(
+        CampaignAudienceType audienceType,
+        IReadOnlyList<CampaignEligibilityCriterion> criteria,
+        IReadOnlyCollection<string> documents,
+        DateTime utcNow)
     {
         EnsureDraft();
 
-        if (audienceType == CampaignAudienceType.Restricted)
+        if ((audienceType == CampaignAudienceType.Restricted) != (criteria.Count > 0))
         {
-            throw new BusinessRuleException(
-                CampaignErrors.AudienceRestrictedUnavailableCode, CampaignErrors.AudienceRestrictedUnavailableMessage);
+            throw new ArgumentException("O público restrito exige critérios e o público 'todos' não aceita nenhum.", nameof(criteria));
+        }
+
+        if (criteria.Any(criterion => criterion.Type == EligibilityCriterionType.SpecificCustomers) != (documents.Count > 0))
+        {
+            throw new ArgumentException("A lista de CPFs acompanha o critério de clientes específicos.", nameof(documents));
         }
 
         AudienceType = audienceType;
+        EligibilityCriteria.Clear();
+
+        foreach (var criterion in criteria)
+        {
+            criterion.CampaignId = Id;
+            EligibilityCriteria.Add(criterion);
+        }
+
+        var wanted = documents.ToHashSet(StringComparer.Ordinal);
+
+        foreach (var removed in EligibleCustomers.Where(customer => !wanted.Contains(customer.Document)).ToList())
+        {
+            EligibleCustomers.Remove(removed);
+        }
+
+        var kept = EligibleCustomers.Select(customer => customer.Document).ToHashSet(StringComparer.Ordinal);
+
+        foreach (var document in wanted.Where(document => !kept.Contains(document)))
+        {
+            EligibleCustomers.Add(new CampaignEligibleCustomer { CampaignId = Id, Document = document });
+        }
+
         UpdatedAt = utcNow;
     }
 
@@ -542,6 +589,31 @@ public class Campaign
                 CategoryId = condition.CategoryId,
                 ProductId = condition.ProductId
             });
+        }
+
+        // Público restrito com critérios e lista (spec GH-047, D-18); a lista precisa ter sido carregada.
+        foreach (var criterion in EligibilityCriteria.OrderBy(criterion => criterion.Id))
+        {
+            copy.EligibilityCriteria.Add(new CampaignEligibilityCriterion
+            {
+                Id = NextId(),
+                CampaignId = copy.Id,
+                Type = criterion.Type,
+                MinAge = criterion.MinAge,
+                MaxAge = criterion.MaxAge,
+                States = [.. criterion.States],
+                CityCodes = [.. criterion.CityCodes],
+                MinAmount = criterion.MinAmount,
+                MinPurchases = criterion.MinPurchases,
+                CategoryId = criterion.CategoryId,
+                WindowDays = criterion.WindowDays,
+                CustomerCount = criterion.CustomerCount
+            });
+        }
+
+        foreach (var customer in EligibleCustomers)
+        {
+            copy.EligibleCustomers.Add(new CampaignEligibleCustomer { CampaignId = copy.Id, Document = customer.Document });
         }
 
         foreach (var scope in Scopes.OrderBy(scope => scope.Id))

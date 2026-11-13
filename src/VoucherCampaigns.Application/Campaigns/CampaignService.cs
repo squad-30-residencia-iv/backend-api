@@ -2,11 +2,14 @@ using VoucherCampaigns.Application.Audit;
 using VoucherCampaigns.Application.Authentication;
 using VoucherCampaigns.Application.Common;
 using VoucherCampaigns.Application.DTOs.Organization;
+using VoucherCampaigns.Application.Eligibility;
+using VoucherCampaigns.Application.Vouchers;
 using VoucherCampaigns.Application.Ports;
 using VoucherCampaigns.Domain.Audit;
 using VoucherCampaigns.Domain.Campaigns;
 using VoucherCampaigns.Domain.Catalog;
 using VoucherCampaigns.Domain.Common;
+using VoucherCampaigns.Domain.Eligibility;
 using VoucherCampaigns.Domain.Organization;
 
 namespace VoucherCampaigns.Application.Campaigns;
@@ -105,7 +108,7 @@ public class CampaignService(
         var before = SnapshotItems(campaign);
         campaign.ReplaceItems(items, utcNow.UtcDateTime);
         AuditSection(campaign, "items", before, SnapshotItems(campaign), utcNow.UtcDateTime);
-        await campaigns.SaveChangesAsync(cancellationToken);
+        await SaveGuardedAsync(campaign, cancellationToken);
 
         return Map(campaign, campaign.Network!, utcNow.UtcDateTime);
     }
@@ -116,7 +119,7 @@ public class CampaignService(
         var utcNow = timeProvider.GetUtcNow().UtcDateTime;
         var statusEvent = campaign.Submit(currentUser.UserId, utcNow);
         RecordStatusChange(campaign, statusEvent, AuditEventTypes.CampaignSubmitted);
-        await campaigns.SaveChangesAsync(cancellationToken);
+        await SaveGuardedAsync(campaign, cancellationToken);
         return Map(campaign, campaign.Network!, utcNow);
     }
 
@@ -126,7 +129,7 @@ public class CampaignService(
         var utcNow = timeProvider.GetUtcNow().UtcDateTime;
         var statusEvent = campaign.Approve(currentUser.UserId, utcNow);
         RecordStatusChange(campaign, statusEvent, AuditEventTypes.CampaignApproved);
-        await campaigns.SaveChangesAsync(cancellationToken);
+        await SaveGuardedAsync(campaign, cancellationToken);
         return Map(campaign, campaign.Network!, utcNow);
     }
 
@@ -136,7 +139,7 @@ public class CampaignService(
         var utcNow = timeProvider.GetUtcNow().UtcDateTime;
         var statusEvent = campaign.Reject(currentUser.UserId, request?.Reason, utcNow);
         RecordStatusChange(campaign, statusEvent, AuditEventTypes.CampaignRejected);
-        await campaigns.SaveChangesAsync(cancellationToken);
+        await SaveGuardedAsync(campaign, cancellationToken);
         return Map(campaign, campaign.Network!, utcNow);
     }
 
@@ -146,7 +149,7 @@ public class CampaignService(
         var utcNow = timeProvider.GetUtcNow().UtcDateTime;
         var statusEvent = campaign.Pause(currentUser.UserId, utcNow);
         RecordStatusChange(campaign, statusEvent, AuditEventTypes.CampaignPaused);
-        await campaigns.SaveChangesAsync(cancellationToken);
+        await SaveGuardedAsync(campaign, cancellationToken);
         return Map(campaign, campaign.Network!, utcNow);
     }
 
@@ -156,7 +159,7 @@ public class CampaignService(
         var utcNow = timeProvider.GetUtcNow().UtcDateTime;
         var statusEvent = campaign.End(currentUser.UserId, utcNow);
         RecordStatusChange(campaign, statusEvent, AuditEventTypes.CampaignEnded);
-        await campaigns.SaveChangesAsync(cancellationToken);
+        await SaveGuardedAsync(campaign, cancellationToken);
         return Map(campaign, campaign.Network!, utcNow);
     }
 
@@ -196,7 +199,7 @@ public class CampaignService(
             await EnsureScopeLocationAsync(campaign.NetworkId, entry, cancellationToken);
         }
 
-        await campaigns.SaveChangesAsync(cancellationToken);
+        await SaveGuardedAsync(campaign, cancellationToken);
 
         // Relida para trazer o nome da região e da loja de cada local.
         return await MapStoredAsync(campaign.Id, utcNow.UtcDateTime, cancellationToken);
@@ -208,6 +211,12 @@ public class CampaignService(
             ?? throw new ResourceNotFoundException(CampaignContract.CampaignNotFound);
 
         NetworkScope.Ensure(currentUser, source.NetworkId);
+
+        // A lista de clientes específicos não vem na leitura comum (D-18).
+        foreach (var document in await campaigns.GetEligibleDocumentsAsync(source.Id, cancellationToken))
+        {
+            source.EligibleCustomers.Add(new CampaignEligibleCustomer { CampaignId = source.Id, Document = document });
+        }
 
         var timeZone = NetworkTime.Resolve(source.Network!.TimeZone);
         var utcNow = timeProvider.GetUtcNow().UtcDateTime;
@@ -249,7 +258,7 @@ public class CampaignService(
         var before = SnapshotQuantities(campaign);
         campaign.SetQuantities(request.TotalVoucherLimit!.Value, request.PerCustomerVoucherLimit, utcNow);
         AuditSection(campaign, "quantities", before, SnapshotQuantities(campaign), utcNow);
-        await campaigns.SaveChangesAsync(cancellationToken);
+        await SaveGuardedAsync(campaign, cancellationToken);
 
         return Map(campaign, campaign.Network!, utcNow);
     }
@@ -261,15 +270,86 @@ public class CampaignService(
     {
         var audienceType = ParseEnum<CampaignAudienceType>(
             request.AudienceType, nameof(request.AudienceType), CampaignContract.AudienceTypeInvalid);
+        var now = timeProvider.GetUtcNow();
+        var audience = EligibilityParsing.ParseCriteria(audienceType, request.Criteria, now);
         var campaign = await RequireForUpdateAsync(id, cancellationToken);
-        var utcNow = timeProvider.GetUtcNow().UtcDateTime;
+        var utcNow = now.UtcDateTime;
 
-        var before = new AudienceSnapshot(campaign.AudienceType?.ToString());
-        campaign.SetAudience(audienceType, utcNow);
-        AuditSection(campaign, "audience", before, new AudienceSnapshot(campaign.AudienceType?.ToString()), utcNow);
-        await campaigns.SaveChangesAsync(cancellationToken);
+        // Categoria do histórico: existir basta, ativa ou não (o critério olha compras passadas, US-06.2 cenário 3).
+        for (var index = 0; index < audience.Criteria.Count; index++)
+        {
+            if (audience.Criteria[index].CategoryId is { } categoryId
+                && await catalog.GetCategoryByIdAsync(categoryId, cancellationToken) is null)
+            {
+                throw new RequestValidationException($"Criteria[{index}].CategoryId", EligibilityContract.CategoryNotFound);
+            }
+        }
+
+        await campaigns.LoadEligibleCustomersAsync(campaign, cancellationToken);
+
+        var before = SnapshotAudience(campaign);
+        var changes = CustomerListChange.Between(campaign.EligibleCustomers.Select(customer => customer.Document), audience.Documents);
+        campaign.SetAudience(audienceType, audience.Criteria, audience.Documents, utcNow);
+        AuditSection(campaign, "audience", before, SnapshotAudience(campaign, changes), utcNow);
+
+        // Substituir a lista por diferença exige que ninguém a tenha mudado no meio (clique duplo no portal).
+        await SaveGuardedAsync(campaign, cancellationToken);
 
         return Map(campaign, campaign.Network!, utcNow);
+    }
+
+    public async Task<EligibleCustomersResponse> GetEligibleCustomersAsync(
+        Guid id, int? page, int? pageSize, CancellationToken cancellationToken)
+    {
+        var number = page ?? 1;
+        var size = pageSize ?? EligibilityContract.DefaultCustomersPageSize;
+
+        if (number < 1)
+        {
+            throw new RequestValidationException("page", EligibilityContract.PageInvalid);
+        }
+
+        if (size is < 1 or > EligibilityContract.MaxCustomersPageSize)
+        {
+            throw new RequestValidationException("pageSize", EligibilityContract.PageSizeInvalid);
+        }
+
+        var campaign = await campaigns.FindByIdAsync(id, cancellationToken)
+            ?? throw new ResourceNotFoundException(CampaignContract.CampaignNotFound);
+
+        NetworkScope.Ensure(currentUser, campaign.NetworkId);
+
+        var (total, documents) = await campaigns.GetEligibleDocumentsPageAsync(id, (number - 1) * size, size, cancellationToken);
+        return new EligibleCustomersResponse(number, size, total, documents);
+    }
+
+    public async Task<EligibilitySimulationResponse> SimulateEligibilityAsync(
+        Guid id, EligibilitySimulationRequest request, CancellationToken cancellationToken)
+    {
+        var utcNow = timeProvider.GetUtcNow().UtcDateTime;
+        var field = nameof(request.Customer);
+        var document = PurchaseParsing.ParseDocument(request.Customer!.Document, $"{field}.{nameof(ConcessionCustomerRequest.Document)}");
+        var parsed = EligibilityParsing.ParseProfile(request.Customer, document, utcNow, field);
+
+        var campaign = await campaigns.FindByIdAsync(id, cancellationToken)
+            ?? throw new ResourceNotFoundException(CampaignContract.CampaignNotFound);
+
+        NetworkScope.Ensure(currentUser, campaign.NetworkId);
+
+        // "Todos os clientes" é elegível sem avaliar critérios (US-04.2 cenário 3).
+        if (campaign.AudienceType != CampaignAudienceType.Restricted)
+        {
+            return new EligibilitySimulationResponse(campaign.Id, campaign.AudienceType?.ToString(), true, []);
+        }
+
+        var profile = await EligibilityParsing.ResolveAsync(catalog, parsed, cancellationToken);
+        var listed = campaign.EligibilityCriteria.Any(criterion => criterion.Type == EligibilityCriterionType.SpecificCustomers)
+            && await campaigns.IsCustomerListedAsync(campaign.Id, document, cancellationToken);
+        var today = DateOnly.FromDateTime(NetworkTime.ToLocal(utcNow, NetworkTime.Resolve(campaign.Network!.TimeZone)).DateTime);
+        var result = EligibilityEvaluator.Evaluate(campaign.EligibilityCriteria, profile, today, listed);
+
+        return new EligibilitySimulationResponse(
+            campaign.Id, campaign.AudienceType.ToString(), result.Eligible, EligibilityParsing.MapResults(result));
     }
 
     public async Task<CampaignResponse> UpdateAsync(Guid id, UpdateCampaignRequest request, CancellationToken cancellationToken)
@@ -288,7 +368,7 @@ public class CampaignService(
             NetworkTime.ToUtc(request.EndsAt!.Value, timeZone, nameof(request.EndsAt)),
             utcNow);
         AuditSection(campaign, "details", before, SnapshotDetails(campaign, timeZone), utcNow);
-        await campaigns.SaveChangesAsync(cancellationToken);
+        await SaveGuardedAsync(campaign, cancellationToken);
 
         return Map(campaign, campaign.Network, utcNow);
     }
@@ -323,7 +403,7 @@ public class CampaignService(
         }
 
         AuditSection(campaign, "voucherValidity", before, MapValidity(campaign, timeZone), utcNow);
-        await campaigns.SaveChangesAsync(cancellationToken);
+        await SaveGuardedAsync(campaign, cancellationToken);
 
         return Map(campaign, campaign.Network, utcNow);
     }
@@ -346,7 +426,7 @@ public class CampaignService(
             request.MaxUsesPerVoucher!.Value,
             utcNow);
         AuditSection(campaign, "usageRestrictions", before, SnapshotRestrictions(campaign), utcNow);
-        await campaigns.SaveChangesAsync(cancellationToken);
+        await SaveGuardedAsync(campaign, cancellationToken);
 
         return Map(campaign, campaign.Network!, utcNow);
     }
@@ -377,7 +457,7 @@ public class CampaignService(
         }
 
         AuditSection(campaign, "conditions", before, SnapshotConditions(campaign), utcNow.UtcDateTime);
-        await campaigns.SaveChangesAsync(cancellationToken);
+        await SaveGuardedAsync(campaign, cancellationToken);
 
         return Map(campaign, campaign.Network!, utcNow.UtcDateTime);
     }
@@ -595,6 +675,18 @@ public class CampaignService(
     }
 
     /// <summary>Edição de uma seção do rascunho (spec GH-050, D-8): grava <c>CampaignUpdated</c> só quando algo mudou.</summary>
+    /// <summary>
+    /// Grava só se a campanha não mudou desde a leitura (PA-10): duas edições ou transições simultâneas não se somam,
+    /// e a segunda recebe 422 <see cref="CampaignErrors.ConcurrentUpdateCode"/>.
+    /// </summary>
+    private async Task SaveGuardedAsync(Campaign campaign, CancellationToken cancellationToken)
+    {
+        if (!await campaigns.SaveIfUnchangedAsync(campaign, cancellationToken))
+        {
+            throw new BusinessRuleException(CampaignErrors.ConcurrentUpdateCode, CampaignErrors.ConcurrentUpdateMessage);
+        }
+    }
+
     private void AuditSection(Campaign campaign, string section, object? before, object? after, DateTime utcNow)
     {
         if (AuditJson.Serialize(before) == AuditJson.Serialize(after))
@@ -614,6 +706,24 @@ public class CampaignService(
         campaign.Items.OrderBy(item => item.Id)
             .Select(item => new ItemSnapshot(item.TargetType.ToString(), item.CategoryId, item.ProductId, item.BenefitType.ToString(), Money(item.BenefitValue), item.VoucherLimit))
             .ToList();
+
+    // A lista entra só como quantidade e, no depois, quantos CPFs entraram e saíram (D-20, PA-11): a trilha
+    // detecta a troca sem copiar CPFs nem guardar nada que permita confirmar quem está na lista.
+    private static AudienceSnapshot SnapshotAudience(Campaign campaign, CustomerListChange? changes = null) =>
+        new(campaign.AudienceType?.ToString(), campaign.EligibilityCriteria.OrderBy(criterion => criterion.Id)
+            .Select(criterion => new CriterionSnapshot(
+                criterion.Type.ToString(),
+                criterion.MinAge,
+                criterion.MaxAge,
+                criterion.States.Count > 0 ? criterion.States : null,
+                criterion.CityCodes.Count > 0 ? criterion.CityCodes : null,
+                Money(criterion.MinAmount),
+                criterion.MinPurchases,
+                criterion.CategoryId,
+                criterion.WindowDays,
+                criterion.CustomerCount))
+            .ToList(),
+            changes);
 
     private static QuantitiesSnapshot SnapshotQuantities(Campaign campaign) =>
         new(campaign.TotalVoucherLimit, campaign.PerCustomerVoucherLimit);
@@ -648,7 +758,33 @@ public class CampaignService(
 
     private sealed record QuantitiesSnapshot(int? TotalVoucherLimit, int? PerCustomerVoucherLimit);
 
-    private sealed record AudienceSnapshot(string? AudienceType);
+    private sealed record AudienceSnapshot(string? AudienceType, IReadOnlyList<CriterionSnapshot> Criteria, CustomerListChange? CustomerChanges);
+
+    /// <summary>Quantos CPFs entraram e saíram da lista; nulo quando nada mudou, para a repetição idêntica não gerar evento.</summary>
+    private sealed record CustomerListChange(int Added, int Removed)
+    {
+        public static CustomerListChange? Between(IEnumerable<string> current, IEnumerable<string> wanted)
+        {
+            var before = current.ToHashSet(StringComparer.Ordinal);
+            var after = wanted.ToHashSet(StringComparer.Ordinal);
+            var added = after.Count(document => !before.Contains(document));
+            var removed = before.Count(document => !after.Contains(document));
+
+            return added == 0 && removed == 0 ? null : new CustomerListChange(added, removed);
+        }
+    }
+
+    private sealed record CriterionSnapshot(
+        string Type,
+        int? MinAge,
+        int? MaxAge,
+        IReadOnlyList<string>? States,
+        IReadOnlyList<string>? CityCodes,
+        decimal? MinAmount,
+        int? MinPurchases,
+        Guid? CategoryId,
+        int? WindowDays,
+        int? CustomerCount);
 
     private sealed record RestrictionsSnapshot(decimal? MinPurchaseAmount, decimal? MaxPurchaseAmount, int? MaxUsesPerVoucher);
 
@@ -916,8 +1052,27 @@ public class CampaignService(
             campaign.AllowUseInSamePurchase,
             campaign.RejectionReason,
             MapScopes(campaign.Scopes),
-            campaign.ReservedVouchers);
+            campaign.ReservedVouchers,
+            MapEligibility(campaign));
     }
+
+    private static CampaignEligibilityResponse? MapEligibility(Campaign campaign) =>
+        campaign.AudienceType == CampaignAudienceType.Restricted
+            ? new CampaignEligibilityResponse(campaign.EligibilityCriteria.OrderBy(criterion => criterion.Id)
+                .Select(criterion => new EligibilityCriterionResponse(
+                    criterion.Id,
+                    criterion.Type.ToString(),
+                    criterion.MinAge,
+                    criterion.MaxAge,
+                    criterion.Type == EligibilityCriterionType.Location ? criterion.States : null,
+                    criterion.Type == EligibilityCriterionType.Location ? criterion.CityCodes : null,
+                    criterion.MinAmount,
+                    criterion.MinPurchases,
+                    criterion.CategoryId,
+                    criterion.WindowDays,
+                    criterion.CustomerCount))
+                .ToList())
+            : null;
 
     /// <summary>Junta as linhas de cada local (uma por canal), na ordem em que o local foi informado.</summary>
     private static List<CampaignScopeResponse> MapScopes(IEnumerable<CampaignScope> scopes) =>

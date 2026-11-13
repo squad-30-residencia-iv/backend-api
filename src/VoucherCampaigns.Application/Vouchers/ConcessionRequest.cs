@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using VoucherCampaigns.Application.Eligibility;
 
 namespace VoucherCampaigns.Application.Vouchers;
 
@@ -24,8 +25,23 @@ public record ConcessionRequest(
     IReadOnlyList<PurchaseItemRequest?>? Items,
     [Range(0, int.MaxValue, ErrorMessage = ConcessionContract.CustomerPurchaseCountRange)] int? CustomerPurchaseCount) : IPurchaseRequest;
 
+/// <summary>
+/// Cliente da compra. Além do CPF, os atributos que o público restrito das campanhas da rede exigir
+/// (modelo push, PR-08 e RF28b; spec GH-047, D-2). Nada disso é gravado como cadastro.
+/// </summary>
+/// <param name="BirthDate">Data de nascimento, para a faixa etária (D-11).</param>
+/// <param name="State">UF do cliente, sigla de 2 letras.</param>
+/// <param name="CityCode">Município do cliente, código IBGE de 7 dígitos.</param>
+/// <param name="LoyaltyMember">Cliente do clube de vantagens.</param>
+/// <param name="History">Histórico somado por janela (D-4), uma entrada por <c>windowDays</c>.</param>
 public record ConcessionCustomerRequest(
-    [Required(ErrorMessage = ConcessionContract.CustomerDocumentRequired)] string? Document);
+    [Required(ErrorMessage = ConcessionContract.CustomerDocumentRequired)] string? Document,
+    DateOnly? BirthDate = null,
+    string? State = null,
+    string? CityCode = null,
+    bool? LoyaltyMember = null,
+    [MaxLength(EligibilityContract.MaxHistoryWindows, ErrorMessage = EligibilityContract.HistoryTooMany)]
+    IReadOnlyList<CustomerHistoryRequest?>? History = null);
 
 /// <param name="ProductCode">Código do produto no catálogo (<c>products.code</c>); desconhecido conta só no total e na quantidade.</param>
 public record PurchaseItemRequest(

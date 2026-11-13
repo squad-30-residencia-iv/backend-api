@@ -29,15 +29,35 @@ public class CampaignDraftEditingTests
     }
 
     [Fact]
-    public void SetAudience_Restricted_ThrowsAndKeepsPreviousAudience()
+    public void SetAudience_RestrictedWithoutCriteria_IsAProgrammingError()
     {
         var campaign = Draft();
         campaign.SetAudience(CampaignAudienceType.AllCustomers, Now);
 
-        var exception = Assert.Throws<BusinessRuleException>(() => campaign.SetAudience(CampaignAudienceType.Restricted, Now));
-
-        Assert.Equal(CampaignErrors.AudienceRestrictedUnavailableCode, exception.Code);
+        Assert.Throws<ArgumentException>(() => campaign.SetAudience(CampaignAudienceType.Restricted, Now));
         Assert.Equal(CampaignAudienceType.AllCustomers, campaign.AudienceType);
+    }
+
+    [Fact]
+    public void SetAudience_Restricted_ReplacesCriteriaAndAppliesTheCustomerListByDifference()
+    {
+        var campaign = Draft();
+        List<CampaignEligibilityCriterion> List() =>
+            [new() { Id = Guid.CreateVersion7(), Type = EligibilityCriterionType.SpecificCustomers, CustomerCount = 2 }];
+
+        campaign.SetAudience(CampaignAudienceType.Restricted, List(), ["11144477735", "52998224725"], Now);
+        var kept = campaign.EligibleCustomers.Single(customer => customer.Document == "52998224725");
+
+        campaign.SetAudience(CampaignAudienceType.Restricted, List(), ["52998224725", "39053344705"], Now);
+
+        Assert.Equal(["39053344705", "52998224725"], campaign.EligibleCustomers.Select(customer => customer.Document).Order());
+        Assert.Same(kept, campaign.EligibleCustomers.Single(customer => customer.Document == "52998224725"));
+        Assert.All(campaign.EligibilityCriteria, criterion => Assert.Equal(campaign.Id, criterion.CampaignId));
+
+        campaign.SetAudience(CampaignAudienceType.AllCustomers, Now);
+
+        Assert.Empty(campaign.EligibilityCriteria);
+        Assert.Empty(campaign.EligibleCustomers);
     }
 
     [Fact]

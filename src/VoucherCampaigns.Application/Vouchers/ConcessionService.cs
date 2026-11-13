@@ -1,10 +1,12 @@
 using VoucherCampaigns.Application.Audit;
 using VoucherCampaigns.Application.Authentication;
 using VoucherCampaigns.Application.Common;
+using VoucherCampaigns.Application.Eligibility;
 using VoucherCampaigns.Application.Ports;
 using VoucherCampaigns.Domain.Audit;
 using VoucherCampaigns.Domain.Campaigns;
 using VoucherCampaigns.Domain.Common;
+using VoucherCampaigns.Domain.Eligibility;
 using VoucherCampaigns.Domain.Organization;
 using VoucherCampaigns.Domain.Vouchers;
 
@@ -42,6 +44,9 @@ public class ConcessionService(
             return Map(existing, utcNow);
         }
 
+        // Atributos do público só depois da idempotência: a repetição devolve a decisão original, mesmo com outros atributos (GH-047).
+        var profile = EligibilityParsing.ParseProfile(request.Customer!, input.Document, utcNow, nameof(request.Customer));
+
         // Reservas vencidas liberam saldo antes da avaliação (D-6).
         await releaser.ReleaseExpiredAsync(networkId, utcNow, cancellationToken);
 
@@ -50,7 +55,8 @@ public class ConcessionService(
             .Where(campaign => campaign.IsInScope(establishment, input.Channel))
             .ToList();
         var customerVouchers = await concessions.CountCustomerVouchersAsync(networkId, input.Document, cancellationToken);
-        var evaluation = ConcessionEvaluator.Evaluate(candidates, purchase, customerVouchers, utcNow);
+        var eligibility = await EvaluateEligibilityAsync(candidates, profile, utcNow, cancellationToken);
+        var evaluation = ConcessionEvaluator.Evaluate(candidates, purchase, customerVouchers, utcNow, eligibility);
 
         var refusal = evaluation.Refusal;
         var refusedCampaignId = evaluation.RefusedCampaignId;
@@ -72,6 +78,10 @@ public class ConcessionService(
             var concession = NewConcession(input, purchase, networkId, utcNow);
             concession.Status = ConcessionStatus.Provisional;
             concession.ReservedUntil = utcNow.AddMinutes(options.ReservationMinutes);
+
+            // Snapshot dos atributos usados na decisão (RN11a, spec GH-047 D-12); null no público "todos".
+            var decided = eligibility.GetValueOrDefault(eligible.Campaign.Id);
+            concession.Eligibility = decided is null ? null : EligibilityParsing.Snapshot(decided);
 
             var voucher = new Voucher
             {
@@ -104,9 +114,11 @@ public class ConcessionService(
                 eligible.Campaign.AudienceType?.ToString(),
                 eligible.EstimatedBenefit,
                 voucher.ValidUntil,
-                concession.ReservedUntil)));
+                concession.ReservedUntil,
+                decided is null ? null : EligibilityParsing.Summary(decided))));
             AppendAudit(AuditEventTypes.VoucherIssued, eligible.Campaign.Id, nameof(Voucher), voucher.Id, utcNow, new VoucherAuditPayload(
-                concession.Id, concession.TransactionId, voucher.Code, eligible.Target.Id, voucher.ValidUntil, concession.ReservedUntil));
+                concession.Id, concession.TransactionId, voucher.Code, eligible.Target.Id, voucher.ValidUntil, concession.ReservedUntil,
+                decided is null ? null : EligibilityParsing.Summary(decided)));
 
             if (!await concessions.TrySaveChangesAsync(cancellationToken))
             {
@@ -130,13 +142,18 @@ public class ConcessionService(
         refused.Status = ConcessionStatus.NotGranted;
         refused.Refusal = refusal ?? ConcessionRefusal.NoCampaignMatched;
         refused.RefusedCampaignId = refusedCampaignId;
+        var refusedEligibility = refusedCampaignId is { } blockedId ? eligibility.GetValueOrDefault(blockedId) : null;
+        refused.Eligibility = refusedEligibility is null ? null : EligibilityParsing.Snapshot(refusedEligibility);
         concessions.Add(refused);
 
         // Só a campanha satisfeita e bloqueada é auditada (D-20); compra sem campanha não é ação relevante.
         if (refused.Refusal != ConcessionRefusal.NoCampaignMatched)
         {
+            // Na recusa por público, o critério que falhou fica na auditoria, não na resposta ao satélite (D-13).
+            var failed = refused.Refusal == ConcessionRefusal.CustomerNotEligible ? refusedEligibility?.FirstFailed : null;
             AppendAudit(AuditEventTypes.VoucherIssuanceRefused, refusedCampaignId, nameof(Concession), refused.Id, utcNow,
-                new RefusedPayload(refused.TransactionId, refusedCampaignId, refused.Refusal.ToString()!));
+                new RefusedPayload(refused.TransactionId, refusedCampaignId, refused.Refusal.ToString()!,
+                    failed?.Type.ToString(), failed?.Outcome.ToString()));
         }
 
         if (!await concessions.TrySaveChangesAsync(cancellationToken))
@@ -262,6 +279,36 @@ public class ConcessionService(
             .ToList();
     }
 
+    /// <summary>
+    /// Público restrito das candidatas (spec GH-047, 1.3): uma consulta para a lista de CPFs e uma para o catálogo do
+    /// histórico, só quando alguma candidata é restrita. A idade usa a data da compra no fuso da rede (D-11).
+    /// </summary>
+    private async Task<IReadOnlyDictionary<Guid, EligibilityResult>> EvaluateEligibilityAsync(
+        IReadOnlyList<Campaign> candidates, ParsedProfile parsed, DateTime utcNow, CancellationToken cancellationToken)
+    {
+        var restricted = candidates.Where(campaign => campaign.AudienceType == CampaignAudienceType.Restricted).ToList();
+
+        if (restricted.Count == 0)
+        {
+            return new Dictionary<Guid, EligibilityResult>();
+        }
+
+        var profile = await EligibilityParsing.ResolveAsync(catalog, parsed, cancellationToken);
+        var withList = restricted
+            .Where(campaign => campaign.EligibilityCriteria.Any(criterion => criterion.Type == EligibilityCriterionType.SpecificCustomers))
+            .Select(campaign => campaign.Id)
+            .ToList();
+        var listed = await concessions.GetCampaignsListingCustomerAsync(withList, parsed.Document, cancellationToken);
+
+        return restricted.ToDictionary(
+            campaign => campaign.Id,
+            campaign =>
+            {
+                var purchaseDate = DateOnly.FromDateTime(NetworkTime.ToLocal(utcNow, VoucherMapper.TimeZoneOf(campaign)).DateTime);
+                return EligibilityEvaluator.Evaluate(campaign.EligibilityCriteria, profile, purchaseDate, listed.Contains(campaign.Id));
+            });
+    }
+
     private async Task<Establishment> RequireEstablishmentAsync(ParsedPurchase input, Guid networkId, CancellationToken cancellationToken) =>
         PurchaseParsing.RequireEstablishment(
             await concessions.FindEstablishmentAsync(input.EstablishmentId, networkId, cancellationToken), input.Channel, Errors);
@@ -364,7 +411,8 @@ public class ConcessionService(
         string? AudienceType,
         decimal EstimatedBenefit,
         DateTime ValidUntil,
-        DateTime? ReservedUntil);
+        DateTime? ReservedUntil,
+        object? Eligibility);
 
     private sealed record VoucherAuditPayload(
         Guid ConcessionId,
@@ -372,7 +420,9 @@ public class ConcessionService(
         string Code,
         Guid CampaignItemId,
         DateTime ValidUntil,
-        DateTime? ReservedUntil);
+        DateTime? ReservedUntil,
+        object? Eligibility = null);
 
-    private sealed record RefusedPayload(string TransactionId, Guid? CampaignId, string Reason);
+    private sealed record RefusedPayload(
+        string TransactionId, Guid? CampaignId, string Reason, string? FailedCriterion = null, string? FailedOutcome = null);
 }

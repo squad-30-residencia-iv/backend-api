@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using VoucherCampaigns.Api.Authentication;
 using VoucherCampaigns.Api.Filters;
 using VoucherCampaigns.Application.Campaigns;
+using VoucherCampaigns.Application.Eligibility;
 
 namespace VoucherCampaigns.Api.Controllers;
 
@@ -76,6 +77,36 @@ public class CampaignsController(ICampaignService campaignService) : ControllerB
         UpdateCampaignAudienceRequest request,
         CancellationToken cancellationToken) =>
         Ok(await campaignService.UpdateAudienceAsync(id, request, cancellationToken));
+
+    /// <summary>Lista de clientes específicos do público restrito, paginada, em ordem de CPF (spec GH-047, D-10).</summary>
+    [HttpGet("{id:guid}/audience/customers")]
+    [ProducesResponseType<EligibleCustomersResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<EligibleCustomersResponse>> GetEligibleCustomers(
+        Guid id,
+        [FromQuery] int? page,
+        [FromQuery] int? pageSize,
+        CancellationToken cancellationToken) =>
+        Ok(await campaignService.GetEligibleCustomersAsync(id, page, pageSize, cancellationToken));
+
+    /// <summary>
+    /// Simula o público para um cliente informado, critério a critério, sem emitir voucher e sem gravar nada
+    /// (US-06.6, spec GH-047 D-17). Vale em qualquer status da campanha.
+    /// </summary>
+    [HttpPost("{id:guid}/eligibility/simulate")]
+    [ProducesResponseType<EligibilitySimulationResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<EligibilitySimulationResponse>> SimulateEligibility(
+        Guid id,
+        EligibilitySimulationRequest request,
+        CancellationToken cancellationToken) =>
+        Ok(await campaignService.SimulateEligibilityAsync(id, request, cancellationToken));
 
     /// <summary>Define a validade do voucher (prazo relativo ou data fixa) da campanha em rascunho (US-01.12).</summary>
     [HttpPut("{id:guid}/voucher-validity")]

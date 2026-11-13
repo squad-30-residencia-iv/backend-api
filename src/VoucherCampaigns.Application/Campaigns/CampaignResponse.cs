@@ -1,3 +1,5 @@
+using VoucherCampaigns.Application.Eligibility;
+
 namespace VoucherCampaigns.Application.Campaigns;
 
 /// <summary>Campanha; datas com o offset do fuso da rede.</summary>
@@ -15,6 +17,7 @@ namespace VoucherCampaigns.Application.Campaigns;
 /// <param name="AllowUseInSamePurchase">Uso na mesma compra que gerou o voucher (US-01.4); falso por padrão.</param>
 /// <param name="RejectionReason">Motivo da reprovação (US-01.11); nulo quando a campanha não foi reprovada.</param>
 /// <param name="Scopes">Onde a campanha vale (US-02.3), na ordem informada; vazio enquanto não definido.</param>
+/// <param name="Eligibility">Critérios do público restrito (spec GH-047, D-10); null no público "todos" ou não definido.</param>
 public record CampaignResponse(
     Guid Id,
     Guid NetworkId,
@@ -39,7 +42,8 @@ public record CampaignResponse(
     bool AllowUseInSamePurchase,
     string? RejectionReason,
     IReadOnlyList<CampaignScopeResponse> Scopes,
-    int ReservedVouchers);
+    int ReservedVouchers,
+    CampaignEligibilityResponse? Eligibility = null);
 
 /// <summary>Local do escopo: região ou loja (as duas nulas = rede inteira), com os canais em ordem fixa.</summary>
 /// <param name="Name">Nome da região ou da loja; nulo para a rede inteira.</param>

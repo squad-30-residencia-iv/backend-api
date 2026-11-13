@@ -293,6 +293,95 @@ namespace VoucherCampaigns.Infrastructure.Migrations.Postgres.Migrations
                         });
                 });
 
+            modelBuilder.Entity("VoucherCampaigns.Domain.Campaigns.CampaignEligibilityCriterion", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("CampaignId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("campaign_id");
+
+                    b.Property<Guid?>("CategoryId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("category_id");
+
+                    b.Property<string>("CityCodes")
+                        .IsRequired()
+                        .HasMaxLength(800)
+                        .HasColumnType("character varying(800)")
+                        .HasColumnName("city_codes");
+
+                    b.Property<int?>("CustomerCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("customer_count");
+
+                    b.Property<int?>("MaxAge")
+                        .HasColumnType("integer")
+                        .HasColumnName("max_age");
+
+                    b.Property<int?>("MinAge")
+                        .HasColumnType("integer")
+                        .HasColumnName("min_age");
+
+                    b.Property<decimal?>("MinAmount")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("numeric(10,2)")
+                        .HasColumnName("min_amount");
+
+                    b.Property<int?>("MinPurchases")
+                        .HasColumnType("integer")
+                        .HasColumnName("min_purchases");
+
+                    b.Property<string>("States")
+                        .IsRequired()
+                        .HasMaxLength(400)
+                        .HasColumnType("character varying(400)")
+                        .HasColumnName("states");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("type");
+
+                    b.Property<int?>("WindowDays")
+                        .HasColumnType("integer")
+                        .HasColumnName("window_days");
+
+                    b.HasKey("Id")
+                        .HasName("pk_campaign_eligibility_criteria");
+
+                    b.HasIndex("CampaignId")
+                        .HasDatabaseName("ix_campaign_eligibility_criteria_campaign_id");
+
+                    b.HasIndex("CategoryId")
+                        .HasDatabaseName("ix_campaign_eligibility_criteria_category_id");
+
+                    b.ToTable("campaign_eligibility_criteria", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_campaign_eligibility_criteria_parameters", "(type = 'AgeRange' AND (min_age IS NOT NULL OR max_age IS NOT NULL) AND min_amount IS NULL AND min_purchases IS NULL AND category_id IS NULL AND window_days IS NULL AND customer_count IS NULL) OR (type = 'Location' AND (states <> '' OR city_codes <> '') AND min_age IS NULL AND max_age IS NULL AND min_amount IS NULL AND min_purchases IS NULL AND category_id IS NULL AND window_days IS NULL AND customer_count IS NULL) OR (type = 'LoyaltyMember' AND min_age IS NULL AND max_age IS NULL AND min_amount IS NULL AND min_purchases IS NULL AND category_id IS NULL AND window_days IS NULL AND customer_count IS NULL) OR (type = 'TotalSpent' AND min_amount IS NOT NULL AND CAST(min_amount AS REAL) > 0 AND window_days BETWEEN 1 AND 365 AND min_age IS NULL AND max_age IS NULL AND min_purchases IS NULL AND category_id IS NULL AND customer_count IS NULL) OR (type = 'PurchaseFrequency' AND min_purchases IS NOT NULL AND min_purchases > 0 AND window_days BETWEEN 1 AND 365 AND min_age IS NULL AND max_age IS NULL AND min_amount IS NULL AND category_id IS NULL AND customer_count IS NULL) OR (type = 'PurchasedCategory' AND category_id IS NOT NULL AND window_days BETWEEN 1 AND 365 AND min_age IS NULL AND max_age IS NULL AND min_amount IS NULL AND min_purchases IS NULL AND customer_count IS NULL) OR (type = 'SpecificCustomers' AND customer_count IS NOT NULL AND customer_count > 0 AND min_age IS NULL AND max_age IS NULL AND min_amount IS NULL AND min_purchases IS NULL AND category_id IS NULL AND window_days IS NULL)");
+                        });
+                });
+
+            modelBuilder.Entity("VoucherCampaigns.Domain.Campaigns.CampaignEligibleCustomer", b =>
+                {
+                    b.Property<Guid>("CampaignId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("campaign_id");
+
+                    b.Property<string>("Document")
+                        .HasMaxLength(11)
+                        .HasColumnType("character varying(11)")
+                        .HasColumnName("document");
+
+                    b.HasKey("CampaignId", "Document")
+                        .HasName("pk_campaign_eligible_customers");
+
+                    b.ToTable("campaign_eligible_customers", (string)null);
+                });
+
             modelBuilder.Entity("VoucherCampaigns.Domain.Campaigns.CampaignItem", b =>
                 {
                     b.Property<Guid>("Id")
@@ -527,32 +616,6 @@ namespace VoucherCampaigns.Infrastructure.Migrations.Postgres.Migrations
                         .HasDatabaseName("ix_products_code");
 
                     b.ToTable("products", (string)null);
-                });
-
-            modelBuilder.Entity("VoucherCampaigns.Domain.Entities.EligibilityCriterion", b =>
-                {
-                    b.Property<Guid>("Id")
-                        .ValueGeneratedOnAdd()
-                        .HasColumnType("uuid")
-                        .HasColumnName("id");
-
-                    b.Property<Guid>("CampaignId")
-                        .HasColumnType("uuid")
-                        .HasColumnName("campaign_id");
-
-                    b.Property<int>("CriterionType")
-                        .HasColumnType("integer")
-                        .HasColumnName("criterion_type");
-
-                    b.Property<string>("Value")
-                        .IsRequired()
-                        .HasColumnType("text")
-                        .HasColumnName("value");
-
-                    b.HasKey("Id")
-                        .HasName("pk_eligibility_criteria");
-
-                    b.ToTable("EligibilityCriteria");
                 });
 
             modelBuilder.Entity("VoucherCampaigns.Domain.Identity.SatelliteApp", b =>
@@ -833,6 +896,10 @@ namespace VoucherCampaigns.Infrastructure.Migrations.Postgres.Migrations
                     b.Property<DateTime?>("DecidedAt")
                         .HasColumnType("timestamp with time zone")
                         .HasColumnName("decided_at");
+
+                    b.Property<string>("Eligibility")
+                        .HasColumnType("text")
+                        .HasColumnName("eligibility");
 
                     b.Property<Guid>("EstablishmentId")
                         .HasColumnType("uuid")
@@ -1189,6 +1256,34 @@ namespace VoucherCampaigns.Infrastructure.Migrations.Postgres.Migrations
                     b.Navigation("Product");
                 });
 
+            modelBuilder.Entity("VoucherCampaigns.Domain.Campaigns.CampaignEligibilityCriterion", b =>
+                {
+                    b.HasOne("VoucherCampaigns.Domain.Campaigns.Campaign", "Campaign")
+                        .WithMany("EligibilityCriteria")
+                        .HasForeignKey("CampaignId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_campaign_eligibility_criteria_campaigns_campaign_id");
+
+                    b.HasOne("VoucherCampaigns.Domain.Catalog.Category", null)
+                        .WithMany()
+                        .HasForeignKey("CategoryId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_campaign_eligibility_criteria_categories_category_id");
+
+                    b.Navigation("Campaign");
+                });
+
+            modelBuilder.Entity("VoucherCampaigns.Domain.Campaigns.CampaignEligibleCustomer", b =>
+                {
+                    b.HasOne("VoucherCampaigns.Domain.Campaigns.Campaign", null)
+                        .WithMany("EligibleCustomers")
+                        .HasForeignKey("CampaignId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_campaign_eligible_customers_campaigns_campaign_id");
+                });
+
             modelBuilder.Entity("VoucherCampaigns.Domain.Campaigns.CampaignItem", b =>
                 {
                     b.HasOne("VoucherCampaigns.Domain.Campaigns.Campaign", "Campaign")
@@ -1386,6 +1481,10 @@ namespace VoucherCampaigns.Infrastructure.Migrations.Postgres.Migrations
             modelBuilder.Entity("VoucherCampaigns.Domain.Campaigns.Campaign", b =>
                 {
                     b.Navigation("Conditions");
+
+                    b.Navigation("EligibilityCriteria");
+
+                    b.Navigation("EligibleCustomers");
 
                     b.Navigation("Items");
 

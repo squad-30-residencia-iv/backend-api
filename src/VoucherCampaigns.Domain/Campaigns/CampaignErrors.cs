@@ -15,6 +15,13 @@ public static class CampaignErrors
     public const string NetworkUnavailableCode = "NETWORK_UNAVAILABLE";
     public const string NetworkUnavailableMessage = "A rede informada não existe ou está inativa.";
 
+    /// <summary>
+    /// Duas gravações simultâneas da mesma campanha (spec GH-047, 7.1 e PA-10): edição do rascunho ou mudança de
+    /// status. A segunda é recusada para não somar listas nem aprovar duas vezes.
+    /// </summary>
+    public const string ConcurrentUpdateCode = "CAMPAIGN_CONCURRENT_UPDATE";
+    public const string ConcurrentUpdateMessage = "A campanha foi alterada por outra requisição ao mesmo tempo. Recarregue e tente de novo.";
+
     public const string NotDraftCode = "CAMPAIGN_NOT_DRAFT";
     public const string NotDraftMessage = "Somente campanhas em rascunho podem ter a configuração alterada.";
 
@@ -41,10 +48,6 @@ public static class CampaignErrors
     public const string QuotasExceedTotalCode = "CAMPAIGN_ITEM_QUOTAS_EXCEED_TOTAL";
     public const string QuotasExceedTotalMessage =
         "A soma das quantidades por alvo ({0}) ultrapassa a quantidade total da campanha ({1})";
-
-    public const string AudienceRestrictedUnavailableCode = "CAMPAIGN_AUDIENCE_RESTRICTED_UNAVAILABLE";
-    public const string AudienceRestrictedUnavailableMessage =
-        "O público restrito ainda não está disponível: os critérios de elegibilidade serão configurados no EP-06.";
 
     public const string VoucherValidUntilBeforeEndCode = "CAMPAIGN_VOUCHER_VALID_UNTIL_BEFORE_END";
     public const string VoucherValidUntilBeforeEndMessage = "A validade fixa do voucher não pode ser anterior ao fim da campanha";

@@ -18,6 +18,26 @@ public interface ICampaignRepository
     /// <summary>Como <see cref="FindByIdAsync"/>, mas rastreada para alteração e gravação com <see cref="SaveChangesAsync"/>.</summary>
     Task<Campaign?> FindForUpdateAsync(Guid id, CancellationToken cancellationToken);
 
+    /// <summary>Carrega na campanha rastreada a lista de clientes específicos (spec GH-047, D-8), antes de substituí-la.</summary>
+    Task LoadEligibleCustomersAsync(Campaign campaign, CancellationToken cancellationToken);
+
+    /// <summary>CPFs da lista da campanha, em ordem, sem rastreamento (duplicação, D-18).</summary>
+    Task<IReadOnlyList<string>> GetEligibleDocumentsAsync(Guid campaignId, CancellationToken cancellationToken);
+
+    /// <summary>Página da lista de clientes específicos, em ordem de CPF, e o total (D-10).</summary>
+    Task<(int Total, IReadOnlyList<string> Documents)> GetEligibleDocumentsPageAsync(
+        Guid campaignId, int skip, int take, CancellationToken cancellationToken);
+
+    /// <summary>Verdadeiro quando o CPF está na lista de clientes específicos da campanha.</summary>
+    Task<bool> IsCustomerListedAsync(Guid campaignId, string document, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Grava a campanha rastreada só se ninguém a alterou desde a leitura: o primeiro comando da transação é um
+    /// <c>UPDATE ... WHERE updated_at = @lido</c>, com o valor lido do rastreamento. A marca nova é sempre maior que a
+    /// lida, mesmo com o relógio parado. Falso quando outra requisição gravou antes (nada é gravado).
+    /// </summary>
+    Task<bool> SaveIfUnchangedAsync(Campaign campaign, CancellationToken cancellationToken);
+
     void AddStatusEvent(CampaignStatusEvent statusEvent);
 
     Task SaveChangesAsync(CancellationToken cancellationToken);

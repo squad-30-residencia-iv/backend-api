@@ -70,17 +70,15 @@ public class CampaignDraftEditingEndpointTests : IClassFixture<ApiFactory>
     }
 
     [Fact]
-    public async Task PutAudience_Scenario2_Restricted_IsRejectedAndKeepsPreviousAudience()
+    public async Task PutAudience_Scenario2_RestrictedWithoutCriteria_IsRejectedAndKeepsPreviousAudience()
     {
         var campaign = await CreateCampaignAsync();
         await Client().PutAsJsonAsync(AudienceRoute(campaign), new { audienceType = "AllCustomers" });
 
+        // O público restrito chegou com a spec GH-047: sem critérios, é erro de contrato (D-9).
         var response = await Client().PutAsJsonAsync(AudienceRoute(campaign), new { audienceType = "Restricted" });
 
-        await AssertBusinessRuleAsync(
-            response,
-            "CAMPAIGN_AUDIENCE_RESTRICTED_UNAVAILABLE",
-            "O público restrito ainda não está disponível: os critérios de elegibilidade serão configurados no EP-06.");
+        await AssertValidationAsync(response, "Criteria", VoucherCampaigns.Application.Eligibility.EligibilityContract.CriteriaRequired);
 
         var detail = await Client().GetFromJsonAsync<CampaignResponse>($"{Route}/{campaign}");
         Assert.Equal("AllCustomers", detail!.AudienceType);

@@ -39,6 +39,10 @@ public interface IConcessionRepository
     /// <summary>Campanhas aprovadas da rede (status gravado fora de rascunho, aprovação e reprovada), com itens, condições, escopo e rede. Sem rastreamento.</summary>
     Task<IReadOnlyList<Campaign>> GetApprovedCampaignsAsync(Guid networkId, CancellationToken cancellationToken);
 
+    /// <summary>Das campanhas informadas, as que têm o CPF na lista de clientes específicos (spec GH-047, D-8), numa consulta.</summary>
+    Task<IReadOnlySet<Guid>> GetCampaignsListingCustomerAsync(
+        IReadOnlyCollection<Guid> campaignIds, string customerDocument, CancellationToken cancellationToken);
+
     /// <summary>Vouchers não descartados do cliente na rede, contados por campanha (RF06c).</summary>
     Task<IReadOnlyDictionary<Guid, int>> CountCustomerVouchersAsync(Guid networkId, string customerDocument, CancellationToken cancellationToken);
 
