@@ -63,6 +63,9 @@ public class CampaignTrailEndpointTests : IClassFixture<ApiFactory>
         Assert.Equal("Percentage", changed.GetProperty("before")[0].GetProperty("benefitType").GetString());
         Assert.Equal("FixedAmount", changed.GetProperty("after")[0].GetProperty("benefitType").GetString());
         Assert.Contains(trail.Entries, entry => entry.EventType == AuditEventTypes.CampaignUpdated && entry.Payload!.Value.GetProperty("section").GetString() == "scopes");
+        var validity = trail.Entries.Single(entry => entry.EventType == AuditEventTypes.CampaignUpdated && entry.Payload!.Value.GetProperty("section").GetString() == "voucherValidity").Payload!.Value;
+        Assert.Equal(System.Text.Json.JsonValueKind.Object, validity.GetProperty("before").ValueKind);
+        Assert.Equal("Relative", validity.GetProperty("after").GetProperty("type").GetString());
 
         var approved = trail.Entries[^1];
         Assert.Equal(new AuditActorResponse("User", GestorId, "Bruno Costa", Roles.Gestor), approved.Actor);
@@ -106,6 +109,7 @@ public class CampaignTrailEndpointTests : IClassFixture<ApiFactory>
 
         response.EnsureSuccessStatusCode();
         Assert.Equal("text/csv", response.Content.Headers.ContentType!.MediaType);
+        Assert.StartsWith("﻿Gerado em;", text);
         Assert.Contains("Data/hora;Evento;Responsável;Papel;Origem;Detalhes", text);
         Assert.Contains("CampaignCreated;Ana Lima;analista;User;", text);
         Assert.Contains("CampaignApproved;Bruno Costa;gestor;User;", text);

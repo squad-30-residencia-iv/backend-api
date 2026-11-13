@@ -602,7 +602,8 @@ public class CampaignService(
             return;
         }
 
-        AppendAudit(campaign, AuditEventTypes.CampaignUpdated, currentUser.UserId, utcNow, new SectionChangePayload(section, before, after));
+        // Seção ainda não configurada vira objeto vazio: o payload sempre tem "before" e "after".
+        AppendAudit(campaign, AuditEventTypes.CampaignUpdated, currentUser.UserId, utcNow, new SectionChangePayload(section, before ?? EmptySection, after ?? EmptySection));
     }
 
     private static DetailsSnapshot SnapshotDetails(Campaign campaign, TimeZoneInfo timeZone) =>
@@ -639,7 +640,9 @@ public class CampaignService(
 
     private sealed record CreatedPayload(string Name, DateTimeOffset StartsAt, DateTimeOffset EndsAt, Guid NetworkId);
 
-    private sealed record SectionChangePayload(string Section, object? Before, object? After);
+    private static readonly object EmptySection = new { };
+
+    private sealed record SectionChangePayload(string Section, object Before, object After);
 
     private sealed record DetailsSnapshot(string Name, string? Description, DateTimeOffset StartsAt, DateTimeOffset EndsAt);
 

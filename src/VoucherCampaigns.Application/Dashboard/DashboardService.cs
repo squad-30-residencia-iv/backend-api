@@ -145,8 +145,12 @@ public class DashboardService(
     public async Task<CsvFile> ExportAuditAsync(Guid campaignId, CancellationToken cancellationToken)
     {
         var trail = await GetAuditAsync(campaignId, cancellationToken);
+        var campaign = await RequireCampaignAsync(campaignId, cancellationToken);
+        var generatedAt = NetworkTime.ToLocal(timeProvider.GetUtcNow().UtcDateTime, NetworkTime.Resolve(campaign.Network!.TimeZone));
         var rows = new List<IReadOnlyList<string>>
         {
+            new[] { "Gerado em", generatedAt.ToString("dd/MM/yyyy HH:mm", Brazil) },
+            new[] { "Filtros", "nenhum" },
             new[] { "Campanha", trail.Name },
             new[] { "Status", trail.Status },
             Array.Empty<string>(),
