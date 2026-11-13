@@ -66,8 +66,11 @@ public interface IConcessionRepository
     /// </summary>
     Task<ReserveOutcome> TryReserveAsync(Guid campaignId, Guid campaignItemId, CancellationToken cancellationToken);
 
-    /// <summary>Status gravado da campanha, ou null se ela não existe.</summary>
-    Task<CampaignStatus?> GetCampaignStatusAsync(Guid campaignId, CancellationToken cancellationToken);
+    /// <summary>
+    /// Trava a linha da campanha na transação e devolve o status gravado. Vem antes de mexer no voucher na confirmação,
+    /// no desfazimento e na liberação da reserva: a mesma ordem do cancelamento (GH-061, 7.1), sem deadlock.
+    /// </summary>
+    Task<CampaignStatus?> LockCampaignAsync(Guid campaignId, CancellationToken cancellationToken);
 
     /// <summary>Provisórios da campanha com a reserva em dia (GH-061, D-6).</summary>
     Task<IReadOnlyList<LiveProvisionalVoucher>> GetLiveProvisionalAsync(Guid campaignId, DateTime utcNow, CancellationToken cancellationToken);
@@ -85,7 +88,8 @@ public interface IConcessionRepository
     Task<bool> TryConfirmVoucherAsync(Guid voucherId, DateTime utcNow, CancellationToken cancellationToken);
 
     /// <summary>Provisório vira descartado; falso quando já não estava provisório.</summary>
-    Task<bool> TryDiscardVoucherAsync(Guid voucherId, DateTime utcNow, CancellationToken cancellationToken);
+    /// <param name="cancelledByCampaign">Descarte pelo cancelamento da campanha: grava também <c>cancelled_at</c> (GH-061, D-11).</param>
+    Task<bool> TryDiscardVoucherAsync(Guid voucherId, DateTime utcNow, CancellationToken cancellationToken, bool cancelledByCampaign = false);
 
     /// <summary>Reserva consumida em definitivo: <c>reserved - 1</c>, <c>issued + 1</c>, na campanha e no alvo.</summary>
     Task ConsumeReservationAsync(Guid campaignId, Guid campaignItemId, CancellationToken cancellationToken);

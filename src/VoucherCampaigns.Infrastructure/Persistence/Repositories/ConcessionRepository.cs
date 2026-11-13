@@ -130,7 +130,10 @@ public class ConcessionRepository(AppDbContext context) : IConcessionRepository
         return itemRows == 0 ? ReserveOutcome.TargetSoldOut : ReserveOutcome.Reserved;
     }
 
-    public async Task<CampaignStatus?> GetCampaignStatusAsync(Guid campaignId, CancellationToken cancellationToken) =>
+    public Task<CampaignStatus?> LockCampaignAsync(Guid campaignId, CancellationToken cancellationToken) =>
+        CampaignRowLock.LockAsync(context, campaignId, cancellationToken);
+
+    private async Task<CampaignStatus?> GetCampaignStatusAsync(Guid campaignId, CancellationToken cancellationToken) =>
         await context.Campaigns.AsNoTracking()
             .Where(campaign => campaign.Id == campaignId)
             .Select(campaign => (CampaignStatus?)campaign.Status)
@@ -188,7 +191,8 @@ public class ConcessionRepository(AppDbContext context) : IConcessionRepository
         return rows == 1;
     }
 
-    public async Task<bool> TryDiscardVoucherAsync(Guid voucherId, DateTime utcNow, CancellationToken cancellationToken)
+    public async Task<bool> TryDiscardVoucherAsync(
+        Guid voucherId, DateTime utcNow, CancellationToken cancellationToken, bool cancelledByCampaign = false)
     {
         var rows = await context.Vouchers
             .Where(voucher => voucher.Id == voucherId && voucher.Status == VoucherStatus.Provisional)
@@ -196,6 +200,7 @@ public class ConcessionRepository(AppDbContext context) : IConcessionRepository
                 setters => setters
                     .SetProperty(voucher => voucher.Status, VoucherStatus.Discarded)
                     .SetProperty(voucher => voucher.DiscardedAt, utcNow)
+                    .SetProperty(voucher => voucher.CancelledAt, voucher => cancelledByCampaign ? utcNow : voucher.CancelledAt)
                     .SetProperty(voucher => voucher.ReservedUntil, (DateTime?)null),
                 cancellationToken);
 

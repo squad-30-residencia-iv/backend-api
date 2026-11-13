@@ -31,7 +31,7 @@ public class CampaignVoucherCanceller(IConcessionRepository concessions, IRedemp
         // Mesmo caminho do desfazimento da concessão: quem descarta é quem devolve a reserva (D-6).
         foreach (var provisional in await concessions.GetLiveProvisionalAsync(campaignId, utcNow, cancellationToken))
         {
-            if (!await concessions.TryDiscardVoucherAsync(provisional.VoucherId, utcNow, cancellationToken))
+            if (!await concessions.TryDiscardVoucherAsync(provisional.VoucherId, utcNow, cancellationToken, cancelledByCampaign: true))
             {
                 continue;
             }

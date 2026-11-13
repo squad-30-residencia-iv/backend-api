@@ -274,6 +274,32 @@ public class CampaignCancellationEndpointTests : IClassFixture<ApiFactory>
         await AssertValidationAsync(response, "Reason", CampaignContract.CancellationReasonTooLong);
     }
 
+    [Fact]
+    public async Task Cancel_WithFiveHundredCharactersAndSpacesAround_IsAccepted()
+    {
+        var scenario = await ApprovedCampaignAsync(_factory);
+        var reason = new string('y', 500);
+
+        (await CancelAsync(User(_factory), scenario.CampaignId, $"  {reason}  ")).EnsureSuccessStatusCode();
+
+        Assert.Equal(reason, (await CancellationAuditAsync(scenario.CampaignId)).GetProperty("reason").GetString());
+    }
+
+    [Fact]
+    public async Task ConfirmingAConcessionUndoneBeforeTheCancel_KeepsTheAlreadyCancelledCode()
+    {
+        var scenario = await ApprovedCampaignAsync(_factory);
+        var satellite = Satellite(_factory);
+        var granted = await GrantedAsync(satellite, Purchase(scenario.StoreId, document: TestCpf.New()));
+        (await satellite.PostAsync($"{ConcessionsRoute}/{granted.ConcessionId}/cancel", null)).EnsureSuccessStatusCode();
+        (await CancelAsync(User(_factory), scenario.CampaignId)).EnsureSuccessStatusCode();
+
+        var confirm = await satellite.PostAsync($"{ConcessionsRoute}/{granted.ConcessionId}/confirm", null);
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, confirm.StatusCode);
+        Assert.Equal("CONCESSION_ALREADY_CANCELLED", (await confirm.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString());
+    }
+
     // ---------- D-13: estorno depois do cancelamento ----------
 
     [Fact]
@@ -291,6 +317,12 @@ public class CampaignCancellationEndpointTests : IClassFixture<ApiFactory>
 
         var stored = await QueryAsync(_factory, db => db.Vouchers.AsNoTracking().SingleAsync(item => item.Id == voucher.Id));
         Assert.Equal((VoucherStatus.Cancelled, 0), (stored.Status, stored.UsesCount));
+        Assert.NotNull(stored.CancelledAt);
+
+        // O histórico conta o estorno e o cancelamento (US-05.4); com o relógio parado, os dois têm o mesmo instante.
+        var events = await EventsOfAsync(voucher.Id);
+        Assert.Single(events, type => type == VoucherEventTypes.Cancelled);
+        Assert.Contains(VoucherEventTypes.RedemptionReversed, events);
     }
 
     // ---------- Concorrência (D-9, D-12) ----------
@@ -379,6 +411,65 @@ public class CampaignCancellationEndpointTests : IClassFixture<ApiFactory>
             Assert.True(status is VoucherStatus.Redeemed or VoucherStatus.Cancelled, status.ToString());
             Assert.Equal(status == VoucherStatus.Redeemed ? (1, 0) : (0, 1), (effective, cancelledEvents));
         }
+    }
+
+    [Fact]
+    public async Task ConcurrentReversalsAndCancel_NoVoucherReturnsToAvailable()
+    {
+        var scenario = await ApprovedCampaignAsync(_factory);
+        var satellite = Satellite(_factory);
+        var redemptions = new List<(Guid VoucherId, Guid RedemptionId)>();
+
+        for (var index = 0; index < 8; index++)
+        {
+            var document = TestCpf.New();
+            var voucher = await AvailableVoucherAsync(satellite, scenario, document);
+            redemptions.Add((voucher.Id, (await RedeemedAsync(satellite, Redeem(voucher.Id, scenario.StoreId, document: document))).RedemptionId));
+        }
+
+        var reversals = redemptions.Select(item => satellite.PostAsync($"{RedemptionsRoute}/{item.RedemptionId}/reverse", null)).ToList();
+        var cancel = CancelAsync(User(_factory), scenario.CampaignId);
+        await Task.WhenAll(reversals);
+        (await cancel).EnsureSuccessStatusCode();
+
+        Assert.All(reversals, reversal => Assert.True(reversal.Result.IsSuccessStatusCode, reversal.Result.StatusCode.ToString()));
+        foreach (var (voucherId, _) in redemptions)
+        {
+            Assert.Equal(VoucherStatus.Cancelled, await StatusOfAsync(voucherId));
+            Assert.Single(await EventsOfAsync(voucherId), type => type == VoucherEventTypes.Cancelled);
+        }
+    }
+
+    [Fact]
+    public async Task ConcurrentConfirmationsAndCancel_NeverFailWithAServerError()
+    {
+        var scenario = await ApprovedCampaignAsync(_factory);
+        var satellite = Satellite(_factory);
+        var concessions = new List<Guid>();
+
+        for (var index = 0; index < 8; index++)
+        {
+            concessions.Add((await GrantedAsync(satellite, Purchase(scenario.StoreId, document: TestCpf.New()))).ConcessionId);
+        }
+
+        var confirmations = concessions.Select(id => satellite.PostAsync($"{ConcessionsRoute}/{id}/confirm", null)).ToList();
+        var cancel = CancelAsync(User(_factory), scenario.CampaignId);
+        await Task.WhenAll(confirmations);
+        (await cancel).EnsureSuccessStatusCode();
+
+        foreach (var confirmation in confirmations.Select(task => task.Result))
+        {
+            Assert.True(confirmation.StatusCode is HttpStatusCode.OK or HttpStatusCode.UnprocessableEntity, confirmation.StatusCode.ToString());
+            if (confirmation.StatusCode == HttpStatusCode.UnprocessableEntity)
+            {
+                Assert.Equal("CONCESSION_CAMPAIGN_CANCELLED", (await confirmation.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString());
+            }
+        }
+
+        var alive = await QueryAsync(_factory, db => db.Vouchers.CountAsync(voucher => voucher.CampaignId == scenario.CampaignId
+            && (voucher.Status == VoucherStatus.Provisional || voucher.Status == VoucherStatus.Available)));
+        Assert.Equal(0, alive);
+        Assert.Equal(0, (await StoredCampaignAsync(_factory, scenario.CampaignId)).ReservedVouchers);
     }
 
     // ---------- Autorização e duplicação ----------

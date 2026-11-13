@@ -174,6 +174,11 @@ public class CampaignService(
             throw new RequestValidationException(nameof(request.Reason), CampaignContract.CancellationReasonRequired);
         }
 
+        if (reason.Length > CampaignContract.MaxCancellationReasonLength)
+        {
+            throw new RequestValidationException(nameof(request.Reason), CampaignContract.CancellationReasonTooLong);
+        }
+
         var campaign = await RequireExistingAsync(id, cancellationToken);
         var utcNow = timeProvider.GetUtcNow().UtcDateTime;
         var statusEvent = campaign.Cancel(currentUser.UserId, reason, utcNow);

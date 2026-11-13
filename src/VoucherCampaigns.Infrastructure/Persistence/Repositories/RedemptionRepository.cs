@@ -71,24 +71,39 @@ public class RedemptionRepository(AppDbContext context) : IRedemptionRepository
         return rows == 1;
     }
 
-    public async Task<bool> TryReturnUseAsync(Guid voucherId, CancellationToken cancellationToken)
+    public Task<CampaignStatus?> LockCampaignAsync(Guid campaignId, CancellationToken cancellationToken) =>
+        CampaignRowLock.LockAsync(context, campaignId, cancellationToken);
+
+    public async Task<ReturnUseOutcome> TryReturnUseAsync(Guid voucherId, bool campaignCancelled, DateTime utcNow, CancellationToken cancellationToken)
     {
+        if (campaignCancelled)
+        {
+            var cancelled = await context.Vouchers
+                .Where(voucher => voucher.Id == voucherId && voucher.UsesCount > 0 && voucher.Status == VoucherStatus.Redeemed)
+                .ExecuteUpdateAsync(
+                    setters => setters
+                        .SetProperty(voucher => voucher.UsesCount, voucher => voucher.UsesCount - 1)
+                        .SetProperty(voucher => voucher.Status, VoucherStatus.Cancelled)
+                        .SetProperty(voucher => voucher.CancelledAt, utcNow),
+                    cancellationToken);
+
+            if (cancelled == 1)
+            {
+                return ReturnUseOutcome.ReturnedAndCancelled;
+            }
+        }
+
         var rows = await context.Vouchers
             .Where(voucher => voucher.Id == voucherId && voucher.UsesCount > 0)
             .ExecuteUpdateAsync(
                 setters => setters
                     .SetProperty(voucher => voucher.UsesCount, voucher => voucher.UsesCount - 1)
-                    // Campanha cancelada (GH-061, D-13): a utilização volta, mas o voucher não volta a valer.
                     .SetProperty(
                         voucher => voucher.Status,
-                        voucher => voucher.Status == VoucherStatus.Redeemed
-                            ? (context.Campaigns.Any(campaign => campaign.Id == voucher.CampaignId && campaign.Status == CampaignStatus.Cancelled)
-                                ? VoucherStatus.Cancelled
-                                : VoucherStatus.Available)
-                            : voucher.Status),
+                        voucher => voucher.Status == VoucherStatus.Redeemed ? VoucherStatus.Available : voucher.Status),
                 cancellationToken);
 
-        return rows == 1;
+        return rows == 1 ? ReturnUseOutcome.Returned : ReturnUseOutcome.NotReturned;
     }
 
     public async Task<bool> TryReverseAsync(Guid redemptionId, DateTime reversedAt, CancellationToken cancellationToken)

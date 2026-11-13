@@ -186,9 +186,9 @@ public class ConcessionService(
                 case ConcessionStatus.Confirmed:
                     return Map(concession, utcNow);
                 case ConcessionStatus.Cancelled:
-                    // Descartada pelo cancelamento da campanha (GH-061, D-11): o PDV recebe o motivo próprio.
-                    if (concession.Voucher is { } discarded
-                        && await concessions.GetCampaignStatusAsync(discarded.CampaignId, cancellationToken) == CampaignStatus.Cancelled)
+                    // Descartada pelo cancelamento da campanha (GH-061, D-11): o PDV recebe o motivo próprio. A desfeita
+                    // pelo próprio PDV antes do cancelamento continua "já desfeita" (sem cancelled_at).
+                    if (concession.Voucher?.CancelledAt is not null)
                     {
                         throw new BusinessRuleException(ConcessionErrors.CampaignCancelledCode, ConcessionErrors.CampaignCancelledMessage);
                     }
@@ -203,6 +203,9 @@ public class ConcessionService(
 
             await using (var transaction = await concessions.BeginTransactionAsync(cancellationToken))
             {
+                // Campanha antes do voucher, na ordem do cancelamento (GH-061, 7.1): sem deadlock com ele.
+                await concessions.LockCampaignAsync(voucher.CampaignId, cancellationToken);
+
                 // O voucher vira disponível ou, se já foi resgatado na própria compra até o limite (GH-049, D-10), resgatado.
                 if (await concessions.TryConfirmVoucherAsync(voucher.Id, utcNow, cancellationToken))
                 {
@@ -250,6 +253,8 @@ public class ConcessionService(
 
             await using (var transaction = await concessions.BeginTransactionAsync(cancellationToken))
             {
+                await concessions.LockCampaignAsync(voucher.CampaignId, cancellationToken);
+
                 if (await concessions.TryDiscardVoucherAsync(voucher.Id, utcNow, cancellationToken))
                 {
                     await concessions.ReleaseReservationAsync(voucher.CampaignId, voucher.CampaignItemId, cancellationToken);

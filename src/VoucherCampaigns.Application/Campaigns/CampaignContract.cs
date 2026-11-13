@@ -19,6 +19,7 @@ public static class CampaignContract
 
     public const string RejectionReasonTooLong = "O motivo deve ter no máximo 500 caracteres.";
 
+    public const int MaxCancellationReasonLength = 500;
     public const string CancellationReasonRequired = "Informe o motivo do cancelamento.";
     public const string CancellationReasonTooLong = "O motivo deve ter no máximo 500 caracteres.";
 
