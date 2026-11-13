@@ -8,9 +8,15 @@ namespace VoucherCampaigns.Application.Vouchers;
 public enum ReserveOutcome
 {
     Reserved,
+
+    /// <summary>O status gravado não é agendada nem ativa: pausada, encerrada ou cancelada no meio da concessão (GH-061, D-9).</summary>
+    CampaignNotActive,
     CampaignSoldOut,
     TargetSoldOut
 }
+
+/// <summary>Provisório com a reserva em dia, a descartar no cancelamento da campanha (GH-061, D-6).</summary>
+public record LiveProvisionalVoucher(Guid VoucherId, Guid CampaignId, Guid CampaignItemId, Guid ConcessionId);
 
 /// <summary>Reserva provisória vencida, a liberar (PR-17).</summary>
 public record ExpiredReservation(Guid VoucherId, Guid CampaignId, Guid CampaignItemId, Guid ConcessionId);
@@ -59,6 +65,21 @@ public interface IConcessionRepository
     /// Deve ser o primeiro comando da transação, para serializar as concessões da mesma campanha.
     /// </summary>
     Task<ReserveOutcome> TryReserveAsync(Guid campaignId, Guid campaignItemId, CancellationToken cancellationToken);
+
+    /// <summary>Status gravado da campanha, ou null se ela não existe.</summary>
+    Task<CampaignStatus?> GetCampaignStatusAsync(Guid campaignId, CancellationToken cancellationToken);
+
+    /// <summary>Provisórios da campanha com a reserva em dia (GH-061, D-6).</summary>
+    Task<IReadOnlyList<LiveProvisionalVoucher>> GetLiveProvisionalAsync(Guid campaignId, DateTime utcNow, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Leva a <c>Cancelled</c>, num comando só, os vouchers <c>Available</c> da campanha dentro da validade, com
+    /// <c>cancelled_at</c> (GH-061, D-5, D-7 e D-12). Devolve quantos mudaram.
+    /// </summary>
+    Task<int> CancelAvailableVouchersAsync(Guid campaignId, DateTime utcNow, CancellationToken cancellationToken);
+
+    /// <summary>Ids dos vouchers <c>Cancelled</c> da campanha, para o evento de cada um (GH-061, D-8).</summary>
+    Task<IReadOnlyList<Guid>> GetCancelledVoucherIdsAsync(Guid campaignId, CancellationToken cancellationToken);
 
     /// <summary>Provisório com a reserva ainda válida vira disponível; falso quando outro pedido chegou antes ou a reserva venceu.</summary>
     Task<bool> TryConfirmVoucherAsync(Guid voucherId, DateTime utcNow, CancellationToken cancellationToken);

@@ -70,7 +70,12 @@ public class ConcessionService(
 
             if (outcome != ReserveOutcome.Reserved)
             {
-                refusal ??= outcome == ReserveOutcome.CampaignSoldOut ? ConcessionRefusal.CampaignSoldOut : ConcessionRefusal.TargetSoldOut;
+                refusal ??= outcome switch
+                {
+                    ReserveOutcome.CampaignNotActive => ConcessionRefusal.CampaignNotActive,
+                    ReserveOutcome.CampaignSoldOut => ConcessionRefusal.CampaignSoldOut,
+                    _ => ConcessionRefusal.TargetSoldOut
+                };
                 refusedCampaignId ??= eligible.Campaign.Id;
                 continue;
             }
@@ -181,6 +186,13 @@ public class ConcessionService(
                 case ConcessionStatus.Confirmed:
                     return Map(concession, utcNow);
                 case ConcessionStatus.Cancelled:
+                    // Descartada pelo cancelamento da campanha (GH-061, D-11): o PDV recebe o motivo próprio.
+                    if (concession.Voucher is { } discarded
+                        && await concessions.GetCampaignStatusAsync(discarded.CampaignId, cancellationToken) == CampaignStatus.Cancelled)
+                    {
+                        throw new BusinessRuleException(ConcessionErrors.CampaignCancelledCode, ConcessionErrors.CampaignCancelledMessage);
+                    }
+
                     throw new BusinessRuleException(ConcessionErrors.AlreadyCancelledCode, ConcessionErrors.AlreadyCancelledMessage);
                 case ConcessionStatus.Expired:
                     await releaser.ReleaseExpiredAsync(app.NetworkId, utcNow, cancellationToken);

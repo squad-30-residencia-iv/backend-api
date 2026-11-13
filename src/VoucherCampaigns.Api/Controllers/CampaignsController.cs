@@ -252,6 +252,23 @@ public class CampaignsController(ICampaignService campaignService) : ControllerB
     public async Task<ActionResult<CampaignResponse>> End(Guid id, CancellationToken cancellationToken) =>
         Ok(await campaignService.EndAsync(id, cancellationToken));
 
+    /// <summary>
+    /// Cancela a campanha agendada, ativa, pausada ou esgotada e invalida os vouchers não utilizados (US-01.8, RN10;
+    /// spec GH-061). Motivo obrigatório. Analista e gestor.
+    /// </summary>
+    [HttpPost("{id:guid}/cancel")]
+    [ProducesResponseType<CampaignResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<ActionResult<CampaignResponse>> Cancel(
+        Guid id,
+        CancelCampaignRequest request,
+        CancellationToken cancellationToken) =>
+        Ok(await campaignService.CancelAsync(id, request, cancellationToken));
+
     /// <summary>Cadastra a campanha em rascunho (US-01.1). Datas na hora local da rede, sem fuso.</summary>
     [HttpPost]
     [ValidateTenantScope]

@@ -130,4 +130,8 @@ public static class CampaignErrors
 
     public const string EndNotAllowedCode = "CAMPAIGN_END_NOT_ALLOWED";
     public const string EndNotAllowedMessage = "Somente uma campanha ativa ou pausada pode ser encerrada.";
+
+    /// <summary>Spec GH-061, D-2: cancela pelo status efetivo; encerrada fica de fora (PA-2).</summary>
+    public const string CancelNotAllowedCode = "CAMPAIGN_CANCEL_NOT_ALLOWED";
+    public const string CancelNotAllowedMessage = "Somente uma campanha agendada, ativa, pausada ou esgotada pode ser cancelada.";
 }

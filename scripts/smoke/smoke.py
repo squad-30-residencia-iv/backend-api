@@ -273,7 +273,11 @@ def run_base(base_url: str) -> int:
     status, body = api.call("GET", f"/api/v1/dashboard/export?networkId={Demo.NETWORK}", token=analista)
     check("GET /dashboard/export (CSV)", status, 200, body)
     status, body = api.call("GET", f"/api/v1/dashboard/export?networkId={Demo.NETWORK}&status=Cancelled", token=analista)
-    check("GET /dashboard/export (sem dados)", status, 422, body, "EXPORT_EMPTY")
+    if status == 200:
+        # O roteiro do cancelamento (cancelamento.py) já rodou nesta base: há campanha cancelada para exportar.
+        print("OK    GET /dashboard/export?status=Cancelled -> 200 (já há campanha cancelada nesta base)")
+    else:
+        check("GET /dashboard/export (sem dados)", status, 422, body, "EXPORT_EMPTY")
     status, body = api.call("GET", f"/api/v1/campaigns/{campaign_id}/audit/export", token=analista)
     check("GET /campaigns/{id}/audit/export (CSV)", status, 200, body)
 

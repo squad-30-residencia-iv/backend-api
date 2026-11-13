@@ -1073,6 +1073,10 @@ namespace VoucherCampaigns.Infrastructure.Migrations.Sqlite.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("campaign_item_id");
 
+                    b.Property<DateTime?>("CancelledAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("cancelled_at");
+
                     b.Property<string>("Channel")
                         .IsRequired()
                         .HasMaxLength(20)

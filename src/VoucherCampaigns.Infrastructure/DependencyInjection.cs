@@ -63,6 +63,7 @@ public static class DependencyInjection
         services.AddScoped<IRedemptionRepository, RedemptionRepository>();
         services.AddScoped<IDashboardRepository, DashboardRepository>();
         services.AddScoped<IRedemptionReverser, RedemptionReverser>();
+        services.AddScoped<ICampaignVoucherCanceller, CampaignVoucherCanceller>();
         services.AddSingleton(provider => ReadVoucherOptions(provider.GetRequiredService<IConfiguration>()));
 
         services.AddSingleton(provider =>

@@ -12,6 +12,7 @@ public static class AuditEventTypes
     public const string CampaignRejected = "CampaignRejected";
     public const string CampaignPaused = "CampaignPaused";
     public const string CampaignEnded = "CampaignEnded";
+    public const string CampaignCancelled = "CampaignCancelled";
     public const string CampaignDuplicated = "CampaignDuplicated";
 
     /// <summary>Motor de concessão (spec GH-045, D-20); autor <see cref="AuditActorType.Application"/>.</summary>

@@ -144,36 +144,36 @@ Auditoria nova: `AuditEventTypes.CampaignCancelled`. Evento de voucher: `Voucher
 
 ## 4. Checklist de Implementação
 
-- [ ] 1. Domínio: `Campaign.Cancel` (D-2, D-3, D-4), `Voucher.CancelledAt`, `CampaignErrors` e `ConcessionErrors` novos, `AuditEventTypes.CampaignCancelled`.
-- [ ] 2. Infraestrutura: coluna e migração (D-7); repositório do lote (D-5, D-7, D-12); `TryReserveAsync` com o status gravado (D-9); `TryReturnUseAsync` olhando a campanha (D-13).
-- [ ] 3. Application: `CampaignService.CancelAsync` (passos 1 a 7 da 1.3), reaproveitando o descarte do provisório do `ConcessionService` num serviço comum (D-6); confirmação com `CONCESSION_CAMPAIGN_CANCELLED` (D-11).
-- [ ] 4. API: `POST /campaigns/{id}/cancel` no `CampaignsController`.
-- [ ] 5. Testes unitários e de integração (seção 5); smoke `scripts/smoke/cancelamento.py`.
-- [ ] 6. Documentação: README, `docs/ROADMAP.md`, `docs/PROJECT_STATE.md`, PA-1 da GH-049 e PA-13 da GH-045 marcados como resolvidos.
+- [x] 1. Domínio: `Campaign.Cancel` (D-2, D-3, D-4), `Voucher.CancelledAt`, `CampaignErrors` e `ConcessionErrors` novos, `AuditEventTypes.CampaignCancelled`.
+- [x] 2. Infraestrutura: coluna e migração (D-7); repositório do lote (D-5, D-7, D-12); `TryReserveAsync` com o status gravado (D-9); `TryReturnUseAsync` olhando a campanha (D-13).
+- [x] 3. Application: `CampaignService.CancelAsync` (passos 1 a 7 da 1.3), reaproveitando o descarte do provisório do `ConcessionService` num serviço comum (D-6); confirmação com `CONCESSION_CAMPAIGN_CANCELLED` (D-11).
+- [x] 4. API: `POST /campaigns/{id}/cancel` no `CampaignsController`.
+- [x] 5. Testes unitários e de integração (seção 5); smoke `scripts/smoke/cancelamento.py`.
+- [x] 6. Documentação: README, `docs/ROADMAP.md`, `docs/PROJECT_STATE.md`, PA-1 da GH-049 e PA-13 da GH-045 marcados como resolvidos.
 - [ ] 7. `dotnet build -warnaserror`, `dotnet test` em SQLite e PostgreSQL, smoke com a API no ar, agente `testador-de-branch` (Opus).
 
 ---
 
 ## 5. Casos de Teste Essenciais
 
-- [ ] US-01.8 cenário 3: 3 vouchers usados até o fim, 2 não usados → cancelada; os 2 viram `Cancelled`, os 3 seguem `Redeemed`; dashboard `cancelledUnused = 2`, `redeemed = 3`, e a soma confere.
-- [ ] US-01.8 cenário 5: uma encerrada e uma cancelada, cada uma com vouchers disponíveis → os da encerrada seguem `Available`, os da cancelada viram `Cancelled`.
-- [ ] US-05.5 cenário 2: depois do cancelamento, verificação e resgate do voucher recusam com `Cancelled`.
-- [ ] US-05.5 cenário 3: resgate anterior intacto (`redemptions`, eventos e auditoria), e o voucher `Redeemed` não ganha evento novo.
-- [ ] Voucher de vários usos usado em parte → `Cancelled`, com `uses_count` mantido; dashboard o conta em `redeemed` (D-5).
-- [ ] `Available` vencido fica de fora e segue `Expired` na leitura (D-5).
-- [ ] Provisório em dia → `Discarded`, reserva devolvida (`reservedVouchers` da campanha e do alvo), concessão `Cancelled`; resgate na própria compra estornado; confirmação depois → `422 CONCESSION_CAMPAIGN_CANCELLED`; desfazimento depois → `200` com o estado atual (D-6, D-11).
-- [ ] Cancelável a partir de agendada, ativa, agendada já iniciada (histórico de `Active`), pausada e esgotada (histórico de `SoldOut`) (D-2, D-3).
-- [ ] `422 CAMPAIGN_CANCEL_NOT_ALLOWED` para rascunho, em aprovação, reprovada, encerrada (inclusive pausada depois do fim) e cancelada.
-- [ ] Motivo: ausente, em branco e com 501 caracteres → `400`; com espaços nas pontas → gravado sem eles; vai para o histórico e para a auditoria (D-4).
-- [ ] Um `VoucherEvent` `Cancelled` por voucher cancelado, com o ator; uma entrada `CampaignCancelled` com as contagens; nenhuma auditoria por voucher (D-8, D-10).
-- [ ] Depois do cancelamento: a concessão não emite (`CampaignNotActive`) e `GET /satellite/campaigns` não lista a campanha.
-- [ ] Concessões simultâneas ao cancelamento: nenhum provisório sobra em campanha cancelada e nenhum voucher novo fica `Available` (D-9).
-- [ ] Resgates simultâneos ao cancelamento: cada voucher termina `Redeemed` com o resgate gravado ou `Cancelled` sem ele, com exatamente um evento `Cancelled` para os cancelados (D-12).
-- [ ] Estorno, depois do cancelamento, de um resgate que tinha consumido a última utilização → utilização devolvida e voucher `Cancelled` (D-13).
-- [ ] Dois cancelamentos simultâneos → um `200` e um `422` (`CAMPAIGN_CONCURRENT_UPDATE` ou `CAMPAIGN_CANCEL_NOT_ALLOWED`), um único evento por voucher.
-- [ ] Autorização: administrador `403`, outra rede `403`, sem token `401`, campanha inexistente `404`.
-- [ ] A cancelada pode ser duplicada (D-15).
+- [x] US-01.8 cenário 3: 3 vouchers usados até o fim, 2 não usados → cancelada; os 2 viram `Cancelled`, os 3 seguem `Redeemed`; dashboard `cancelledUnused = 2`, `redeemed = 3`, e a soma confere.
+- [x] US-01.8 cenário 5: uma encerrada e uma cancelada, cada uma com vouchers disponíveis → os da encerrada seguem `Available`, os da cancelada viram `Cancelled`.
+- [x] US-05.5 cenário 2: depois do cancelamento, verificação e resgate do voucher recusam com `Cancelled`.
+- [x] US-05.5 cenário 3: resgate anterior intacto (`redemptions`, eventos e auditoria), e o voucher `Redeemed` não ganha evento novo.
+- [x] Voucher de vários usos usado em parte → `Cancelled`, com `uses_count` mantido; dashboard o conta em `redeemed` (D-5).
+- [x] `Available` vencido fica de fora e segue `Expired` na leitura (D-5).
+- [x] Provisório em dia → `Discarded`, reserva devolvida (`reservedVouchers` da campanha e do alvo), concessão `Cancelled`; resgate na própria compra estornado; confirmação depois → `422 CONCESSION_CAMPAIGN_CANCELLED`; desfazimento depois → `200` com o estado atual (D-6, D-11).
+- [x] Cancelável a partir de agendada, ativa, agendada já iniciada (histórico de `Active`), pausada e esgotada (histórico de `SoldOut`) (D-2, D-3).
+- [x] `422 CAMPAIGN_CANCEL_NOT_ALLOWED` para rascunho, em aprovação, reprovada, encerrada (inclusive pausada depois do fim) e cancelada.
+- [x] Motivo: ausente, em branco e com 501 caracteres → `400`; com espaços nas pontas → gravado sem eles; vai para o histórico e para a auditoria (D-4).
+- [x] Um `VoucherEvent` `Cancelled` por voucher cancelado, com o ator; uma entrada `CampaignCancelled` com as contagens; nenhuma auditoria por voucher (D-8, D-10).
+- [x] Depois do cancelamento: a concessão não emite (`CampaignNotActive`) e `GET /satellite/campaigns` não lista a campanha.
+- [x] Concessões simultâneas ao cancelamento: nenhum provisório sobra em campanha cancelada e nenhum voucher novo fica `Available` (D-9).
+- [x] Resgates simultâneos ao cancelamento: cada voucher termina `Redeemed` com o resgate gravado ou `Cancelled` sem ele, com exatamente um evento `Cancelled` para os cancelados (D-12).
+- [x] Estorno, depois do cancelamento, de um resgate que tinha consumido a última utilização → utilização devolvida e voucher `Cancelled` (D-13).
+- [x] Dois cancelamentos simultâneos → um `200` e um `422` (`CAMPAIGN_CONCURRENT_UPDATE` ou `CAMPAIGN_CANCEL_NOT_ALLOWED`), um único evento por voucher.
+- [x] Autorização: administrador `403`, outra rede `403`, sem token `401`, campanha inexistente `404`.
+- [x] A cancelada pode ser duplicada (D-15).
 
 ---
 
@@ -194,4 +194,21 @@ Debatidos com o usuário em 2026-11-13: os seis ficam fora desta fatia, a D-2 se
 
 ## 7. Notas da implementação
 
-(Preencher na implementação: diferenças em relação ao texto acima e a verificação.)
+### 7.1 Diferenças em relação ao texto acima
+
+| Ponto | Como ficou | Por quê |
+|---|---|---|
+| Ordem das respostas | O `400` do motivo vem antes do `404`, do `403` e do `422`: o `[Required]` e o `[StringLength]` do `CancelCampaignRequest` rodam na validação do modelo. O serviço repete a checagem do motivo em branco para quem o chama direto. | Mesmo comportamento das outras rotas com corpo. |
+| Estorno dos provisórios (D-6, D-10) | O estorno do resgate feito na própria compra grava o evento `RedemptionReversed` no voucher, mas não a auditoria `VoucherRedemptionReversed`, que só existe quando o ator é a aplicação satélite (como na liberação da reserva vencida). A quantidade vai em `reversedRedemptions` na auditoria `CampaignCancelled`. | O ator é o usuário que cancelou; a trilha da campanha já tem a entrada com a contagem. |
+| Eventos em lote (D-16) | Os `VoucherEvent` vão no mesmo `SaveChanges` da campanha; o EF agrupa os `INSERT` em lotes. | Mais simples que salvar em blocos, e o volume do projeto cabe. Se ficar lento, é o PA-3. |
+| Reserva recusada (D-9) | Quando o `UPDATE` da reserva não muda nenhuma linha, uma leitura do status gravado separa `CampaignNotActive` de `CampaignSoldOut`. | O motivo da recusa continua certo para o satélite. |
+| Ids dos cancelados (D-7, D-12) | A leitura dos ids para os eventos pega os vouchers `Cancelled` da campanha, sem comparar `cancelled_at`. | Só o cancelamento leva voucher a `Cancelled` e ele acontece uma vez por campanha (status e trava); comparar o instante falharia no PostgreSQL, que guarda microssegundos. |
+| Trava da campanha (1.3, passo 2) | `ICampaignRepository.SaveIfUnchangedAsync` ganhou `withinTransaction`: o trabalho dos vouchers roda depois da trava e antes do `SaveChanges`, na mesma transação. | Reaproveita a trava do PA-10 da GH-047 sem abrir uma segunda transação. |
+| `smoke.py` | A checagem de `GET /dashboard/export?status=Cancelled` aceita `200` quando já há campanha cancelada na base. | O roteiro do cancelamento cria uma; a ordem dos roteiros deixa de importar. |
+
+### 7.2 Verificação
+
+- `dotnet build -warnaserror`: sem avisos.
+- `dotnet test`: 305 unitários e 527 de integração em SQLite (18 novos em `CampaignCancellationEndpointTests`). No PostgreSQL local, 526 de 527: a falha foi `PortalCorsTests`, pelo timeout conhecido do `DROP DATABASE` na limpeza; os testes de cancelamento, concorrência e satélite passaram duas vezes seguidas (75 de 75).
+- O teste determinístico da reserva depois do cancelamento (`ReservationOfAConcessionEvaluatedBeforeTheCancel...`) falha sem a condição de status no `TryReserveAsync`; o teste concorrente sozinho não pega a corrida no SQLite.
+- Smoke com a API no ar: `smoke.py`, `motor.py`, `publico.py`, o novo `cancelamento.py` e `smoke.py` de novo, todos OK.

@@ -43,4 +43,7 @@ public interface ICampaignService
     Task<CampaignResponse> PauseAsync(Guid id, CancellationToken cancellationToken);
 
     Task<CampaignResponse> EndAsync(Guid id, CancellationToken cancellationToken);
+
+    /// <summary>Cancela a campanha e invalida os vouchers não utilizados (US-01.8, RN10; spec GH-061).</summary>
+    Task<CampaignResponse> CancelAsync(Guid id, CancelCampaignRequest request, CancellationToken cancellationToken);
 }

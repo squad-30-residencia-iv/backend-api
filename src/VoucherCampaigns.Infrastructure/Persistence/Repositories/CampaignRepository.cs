@@ -62,7 +62,8 @@ public class CampaignRepository(AppDbContext context) : ICampaignRepository
         context.CampaignEligibleCustomers.AnyAsync(
             customer => customer.CampaignId == campaignId && customer.Document == document, cancellationToken);
 
-    public async Task<bool> SaveIfUnchangedAsync(Campaign campaign, CancellationToken cancellationToken)
+    public async Task<bool> SaveIfUnchangedAsync(
+        Campaign campaign, CancellationToken cancellationToken, Func<CancellationToken, Task>? withinTransaction = null)
     {
         var loadedUpdatedAt = DateTime.SpecifyKind(
             context.Entry(campaign).Property(item => item.UpdatedAt).OriginalValue, DateTimeKind.Utc);
@@ -84,6 +85,11 @@ public class CampaignRepository(AppDbContext context) : ICampaignRepository
         if (claimed == 0)
         {
             return false;
+        }
+
+        if (withinTransaction is not null)
+        {
+            await withinTransaction(cancellationToken);
         }
 
         await context.SaveChangesAsync(cancellationToken);

@@ -529,6 +529,27 @@ public class Campaign
     }
 
     /// <summary>
+    /// Cancela a campanha agendada, ativa, pausada ou esgotada pelo status efetivo (US-01.8, RN10; spec GH-061, D-2 a D-4).
+    /// O histórico registra o status efetivo de origem e o motivo sem espaços nas pontas. Os vouchers ficam com o serviço.
+    /// </summary>
+    /// <exception cref="BusinessRuleException">Status efetivo fora de agendada, ativa, pausada ou esgotada.</exception>
+    public CampaignStatusEvent Cancel(Guid actorUserId, string reason, DateTime utcNow)
+    {
+        EnsureUtc(utcNow, nameof(utcNow));
+        ArgumentException.ThrowIfNullOrWhiteSpace(reason);
+
+        var current = EffectiveStatus(utcNow);
+
+        if (current is not (CampaignStatus.Scheduled or CampaignStatus.Active or CampaignStatus.Paused or CampaignStatus.SoldOut))
+        {
+            throw new BusinessRuleException(CampaignErrors.CancelNotAllowedCode, CampaignErrors.CancelNotAllowedMessage);
+        }
+
+        Status = current;
+        return MoveTo(CampaignStatus.Cancelled, actorUserId, reason.Trim(), utcNow);
+    }
+
+    /// <summary>
     /// Rascunho novo com a configuração desta campanha, de qualquer status (US-01.10), na mesma rede e com a RN02.
     /// Teto e data fixa da validade só vêm se continuarem coerentes com a nova vigência (spec US-01.10, D-2).
     /// </summary>

@@ -1,6 +1,7 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using VoucherCampaigns.Application.Vouchers;
+using VoucherCampaigns.Domain.Campaigns;
 using VoucherCampaigns.Domain.Vouchers;
 
 namespace VoucherCampaigns.Infrastructure.Persistence.Repositories;
@@ -77,9 +78,14 @@ public class RedemptionRepository(AppDbContext context) : IRedemptionRepository
             .ExecuteUpdateAsync(
                 setters => setters
                     .SetProperty(voucher => voucher.UsesCount, voucher => voucher.UsesCount - 1)
+                    // Campanha cancelada (GH-061, D-13): a utilização volta, mas o voucher não volta a valer.
                     .SetProperty(
                         voucher => voucher.Status,
-                        voucher => voucher.Status == VoucherStatus.Redeemed ? VoucherStatus.Available : voucher.Status),
+                        voucher => voucher.Status == VoucherStatus.Redeemed
+                            ? (context.Campaigns.Any(campaign => campaign.Id == voucher.CampaignId && campaign.Status == CampaignStatus.Cancelled)
+                                ? VoucherStatus.Cancelled
+                                : VoucherStatus.Available)
+                            : voucher.Status),
                 cancellationToken);
 
         return rows == 1;
