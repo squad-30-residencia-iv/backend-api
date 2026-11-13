@@ -1,4 +1,5 @@
 using VoucherCampaigns.Domain.Campaigns;
+using VoucherCampaigns.Domain.Eligibility;
 
 namespace VoucherCampaigns.Domain.Vouchers;
 
@@ -23,11 +24,13 @@ public static class ConcessionEvaluator
 {
     /// <param name="candidates">Campanhas aprovadas da rede cujo escopo contempla a loja e o canal.</param>
     /// <param name="customerVouchers">Vouchers não descartados do cliente, por campanha (RF06c).</param>
+    /// <param name="eligibility">Resultado do público restrito por campanha (spec GH-047); ausente = todos os clientes.</param>
     public static EvaluationResult Evaluate(
         IReadOnlyList<Campaign> candidates,
         Purchase purchase,
         IReadOnlyDictionary<Guid, int> customerVouchers,
-        DateTime utcNow)
+        DateTime utcNow,
+        IReadOnlyDictionary<Guid, EligibilityResult>? eligibility = null)
     {
         // D1: maior benefício nesta compra → termina primeiro → aprovada primeiro → id, para a repetição escolher igual.
         var satisfied = candidates
@@ -54,7 +57,7 @@ public static class ConcessionEvaluator
 
         foreach (var (campaign, target, benefit) in satisfied)
         {
-            var block = Block(campaign, target, customerVouchers, utcNow);
+            var block = Block(campaign, target, customerVouchers, eligibility, utcNow);
 
             if (block is null)
             {
@@ -93,7 +96,11 @@ public static class ConcessionEvaluator
     }
 
     private static ConcessionRefusal? Block(
-        Campaign campaign, CampaignItem target, IReadOnlyDictionary<Guid, int> customerVouchers, DateTime utcNow)
+        Campaign campaign,
+        CampaignItem target,
+        IReadOnlyDictionary<Guid, int> customerVouchers,
+        IReadOnlyDictionary<Guid, EligibilityResult>? eligibility,
+        DateTime utcNow)
     {
         var status = campaign.EffectiveStatus(utcNow);
 
@@ -105,6 +112,12 @@ public static class ConcessionEvaluator
         if (status != CampaignStatus.Active)
         {
             return ConcessionRefusal.CampaignNotActive;
+        }
+
+        // Elegibilidade depois das condições e do status, antes do limite e da cota (spec GH-047, 1.3 e D-14).
+        if (eligibility is not null && eligibility.TryGetValue(campaign.Id, out var result) && !result.Eligible)
+        {
+            return ConcessionRefusal.CustomerNotEligible;
         }
 
         if (campaign.PerCustomerVoucherLimit is { } limit && customerVouchers.GetValueOrDefault(campaign.Id) >= limit)

@@ -38,9 +38,26 @@ public class ConcessionRepository(AppDbContext context) : IConcessionRepository
             .Include(campaign => campaign.Network)
             .Include(campaign => campaign.Items.OrderBy(item => item.Id))
             .Include(campaign => campaign.Conditions.OrderBy(condition => condition.Id))
+            .Include(campaign => campaign.EligibilityCriteria.OrderBy(criterion => criterion.Id))
             .Include(campaign => campaign.Scopes)
             .AsSplitQuery()
             .ToListAsync(cancellationToken);
+
+    public async Task<IReadOnlySet<Guid>> GetCampaignsListingCustomerAsync(
+        IReadOnlyCollection<Guid> campaignIds, string customerDocument, CancellationToken cancellationToken)
+    {
+        if (campaignIds.Count == 0)
+        {
+            return new HashSet<Guid>();
+        }
+
+        var listed = await context.CampaignEligibleCustomers.AsNoTracking()
+            .Where(customer => customer.Document == customerDocument && campaignIds.Contains(customer.CampaignId))
+            .Select(customer => customer.CampaignId)
+            .ToListAsync(cancellationToken);
+
+        return listed.ToHashSet();
+    }
 
     public async Task<IReadOnlyDictionary<Guid, int>> CountCustomerVouchersAsync(
         Guid networkId, string customerDocument, CancellationToken cancellationToken)

@@ -42,10 +42,6 @@ public static class CampaignErrors
     public const string QuotasExceedTotalMessage =
         "A soma das quantidades por alvo ({0}) ultrapassa a quantidade total da campanha ({1})";
 
-    public const string AudienceRestrictedUnavailableCode = "CAMPAIGN_AUDIENCE_RESTRICTED_UNAVAILABLE";
-    public const string AudienceRestrictedUnavailableMessage =
-        "O público restrito ainda não está disponível: os critérios de elegibilidade serão configurados no EP-06.";
-
     public const string VoucherValidUntilBeforeEndCode = "CAMPAIGN_VOUCHER_VALID_UNTIL_BEFORE_END";
     public const string VoucherValidUntilBeforeEndMessage = "A validade fixa do voucher não pode ser anterior ao fim da campanha";
 

@@ -2,11 +2,14 @@ using VoucherCampaigns.Application.Audit;
 using VoucherCampaigns.Application.Authentication;
 using VoucherCampaigns.Application.Common;
 using VoucherCampaigns.Application.DTOs.Organization;
+using VoucherCampaigns.Application.Eligibility;
+using VoucherCampaigns.Application.Vouchers;
 using VoucherCampaigns.Application.Ports;
 using VoucherCampaigns.Domain.Audit;
 using VoucherCampaigns.Domain.Campaigns;
 using VoucherCampaigns.Domain.Catalog;
 using VoucherCampaigns.Domain.Common;
+using VoucherCampaigns.Domain.Eligibility;
 using VoucherCampaigns.Domain.Organization;
 
 namespace VoucherCampaigns.Application.Campaigns;
@@ -209,6 +212,12 @@ public class CampaignService(
 
         NetworkScope.Ensure(currentUser, source.NetworkId);
 
+        // A lista de clientes específicos não vem na leitura comum (D-18).
+        foreach (var document in await campaigns.GetEligibleDocumentsAsync(source.Id, cancellationToken))
+        {
+            source.EligibleCustomers.Add(new CampaignEligibleCustomer { CampaignId = source.Id, Document = document });
+        }
+
         var timeZone = NetworkTime.Resolve(source.Network!.TimeZone);
         var utcNow = timeProvider.GetUtcNow().UtcDateTime;
         var startsAt = request?.StartsAt is { } start ? NetworkTime.ToUtc(start, timeZone, nameof(request.StartsAt)) : source.StartsAt;
@@ -261,15 +270,83 @@ public class CampaignService(
     {
         var audienceType = ParseEnum<CampaignAudienceType>(
             request.AudienceType, nameof(request.AudienceType), CampaignContract.AudienceTypeInvalid);
+        var now = timeProvider.GetUtcNow();
+        var audience = EligibilityParsing.ParseCriteria(audienceType, request.Criteria, now);
         var campaign = await RequireForUpdateAsync(id, cancellationToken);
-        var utcNow = timeProvider.GetUtcNow().UtcDateTime;
+        var utcNow = now.UtcDateTime;
 
-        var before = new AudienceSnapshot(campaign.AudienceType?.ToString());
-        campaign.SetAudience(audienceType, utcNow);
-        AuditSection(campaign, "audience", before, new AudienceSnapshot(campaign.AudienceType?.ToString()), utcNow);
+        // Categoria do histórico: existir basta, ativa ou não (o critério olha compras passadas, US-06.2 cenário 3).
+        for (var index = 0; index < audience.Criteria.Count; index++)
+        {
+            if (audience.Criteria[index].CategoryId is { } categoryId
+                && await catalog.GetCategoryByIdAsync(categoryId, cancellationToken) is null)
+            {
+                throw new RequestValidationException($"Criteria[{index}].CategoryId", EligibilityContract.CategoryNotFound);
+            }
+        }
+
+        await campaigns.LoadEligibleCustomersAsync(campaign, cancellationToken);
+
+        var before = SnapshotAudience(campaign);
+        campaign.SetAudience(audienceType, audience.Criteria, audience.Documents, utcNow);
+        AuditSection(campaign, "audience", before, SnapshotAudience(campaign), utcNow);
         await campaigns.SaveChangesAsync(cancellationToken);
 
         return Map(campaign, campaign.Network!, utcNow);
+    }
+
+    public async Task<EligibleCustomersResponse> GetEligibleCustomersAsync(
+        Guid id, int? page, int? pageSize, CancellationToken cancellationToken)
+    {
+        var number = page ?? 1;
+        var size = pageSize ?? EligibilityContract.DefaultCustomersPageSize;
+
+        if (number < 1)
+        {
+            throw new RequestValidationException("page", EligibilityContract.PageInvalid);
+        }
+
+        if (size is < 1 or > EligibilityContract.MaxCustomersPageSize)
+        {
+            throw new RequestValidationException("pageSize", EligibilityContract.PageSizeInvalid);
+        }
+
+        var campaign = await campaigns.FindByIdAsync(id, cancellationToken)
+            ?? throw new ResourceNotFoundException(CampaignContract.CampaignNotFound);
+
+        NetworkScope.Ensure(currentUser, campaign.NetworkId);
+
+        var (total, documents) = await campaigns.GetEligibleDocumentsPageAsync(id, (number - 1) * size, size, cancellationToken);
+        return new EligibleCustomersResponse(number, size, total, documents);
+    }
+
+    public async Task<EligibilitySimulationResponse> SimulateEligibilityAsync(
+        Guid id, EligibilitySimulationRequest request, CancellationToken cancellationToken)
+    {
+        var utcNow = timeProvider.GetUtcNow().UtcDateTime;
+        var field = nameof(request.Customer);
+        var document = PurchaseParsing.ParseDocument(request.Customer!.Document, $"{field}.{nameof(ConcessionCustomerRequest.Document)}");
+        var parsed = EligibilityParsing.ParseProfile(request.Customer, document, utcNow, field);
+
+        var campaign = await campaigns.FindByIdAsync(id, cancellationToken)
+            ?? throw new ResourceNotFoundException(CampaignContract.CampaignNotFound);
+
+        NetworkScope.Ensure(currentUser, campaign.NetworkId);
+
+        // "Todos os clientes" é elegível sem avaliar critérios (US-04.2 cenário 3).
+        if (campaign.AudienceType != CampaignAudienceType.Restricted)
+        {
+            return new EligibilitySimulationResponse(campaign.Id, campaign.AudienceType?.ToString(), true, []);
+        }
+
+        var profile = await EligibilityParsing.ResolveAsync(catalog, parsed, cancellationToken);
+        var listed = campaign.EligibilityCriteria.Any(criterion => criterion.Type == EligibilityCriterionType.SpecificCustomers)
+            && await campaigns.IsCustomerListedAsync(campaign.Id, document, cancellationToken);
+        var today = DateOnly.FromDateTime(NetworkTime.ToLocal(utcNow, NetworkTime.Resolve(campaign.Network!.TimeZone)).DateTime);
+        var result = EligibilityEvaluator.Evaluate(campaign.EligibilityCriteria, profile, today, listed);
+
+        return new EligibilitySimulationResponse(
+            campaign.Id, campaign.AudienceType.ToString(), result.Eligible, EligibilityParsing.MapResults(result));
     }
 
     public async Task<CampaignResponse> UpdateAsync(Guid id, UpdateCampaignRequest request, CancellationToken cancellationToken)
@@ -615,6 +692,23 @@ public class CampaignService(
             .Select(item => new ItemSnapshot(item.TargetType.ToString(), item.CategoryId, item.ProductId, item.BenefitType.ToString(), Money(item.BenefitValue), item.VoucherLimit))
             .ToList();
 
+    // A lista entra só como quantidade e resumo (D-20): a trilha detecta a troca sem copiar CPFs.
+    private static AudienceSnapshot SnapshotAudience(Campaign campaign) =>
+        new(campaign.AudienceType?.ToString(), campaign.EligibilityCriteria.OrderBy(criterion => criterion.Id)
+            .Select(criterion => new CriterionSnapshot(
+                criterion.Type.ToString(),
+                criterion.MinAge,
+                criterion.MaxAge,
+                criterion.States.Count > 0 ? criterion.States : null,
+                criterion.CityCodes.Count > 0 ? criterion.CityCodes : null,
+                Money(criterion.MinAmount),
+                criterion.MinPurchases,
+                criterion.CategoryId,
+                criterion.WindowDays,
+                criterion.CustomerCount,
+                criterion.CustomersDigest))
+            .ToList());
+
     private static QuantitiesSnapshot SnapshotQuantities(Campaign campaign) =>
         new(campaign.TotalVoucherLimit, campaign.PerCustomerVoucherLimit);
 
@@ -648,7 +742,20 @@ public class CampaignService(
 
     private sealed record QuantitiesSnapshot(int? TotalVoucherLimit, int? PerCustomerVoucherLimit);
 
-    private sealed record AudienceSnapshot(string? AudienceType);
+    private sealed record AudienceSnapshot(string? AudienceType, IReadOnlyList<CriterionSnapshot> Criteria);
+
+    private sealed record CriterionSnapshot(
+        string Type,
+        int? MinAge,
+        int? MaxAge,
+        IReadOnlyList<string>? States,
+        IReadOnlyList<string>? CityCodes,
+        decimal? MinAmount,
+        int? MinPurchases,
+        Guid? CategoryId,
+        int? WindowDays,
+        int? CustomerCount,
+        string? CustomersDigest);
 
     private sealed record RestrictionsSnapshot(decimal? MinPurchaseAmount, decimal? MaxPurchaseAmount, int? MaxUsesPerVoucher);
 
@@ -916,8 +1023,27 @@ public class CampaignService(
             campaign.AllowUseInSamePurchase,
             campaign.RejectionReason,
             MapScopes(campaign.Scopes),
-            campaign.ReservedVouchers);
+            campaign.ReservedVouchers,
+            MapEligibility(campaign));
     }
+
+    private static CampaignEligibilityResponse? MapEligibility(Campaign campaign) =>
+        campaign.AudienceType == CampaignAudienceType.Restricted
+            ? new CampaignEligibilityResponse(campaign.EligibilityCriteria.OrderBy(criterion => criterion.Id)
+                .Select(criterion => new EligibilityCriterionResponse(
+                    criterion.Id,
+                    criterion.Type.ToString(),
+                    criterion.MinAge,
+                    criterion.MaxAge,
+                    criterion.Type == EligibilityCriterionType.Location ? criterion.States : null,
+                    criterion.Type == EligibilityCriterionType.Location ? criterion.CityCodes : null,
+                    criterion.MinAmount,
+                    criterion.MinPurchases,
+                    criterion.CategoryId,
+                    criterion.WindowDays,
+                    criterion.CustomerCount))
+                .ToList())
+            : null;
 
     /// <summary>Junta as linhas de cada local (uma por canal), na ordem em que o local foi informado.</summary>
     private static List<CampaignScopeResponse> MapScopes(IEnumerable<CampaignScope> scopes) =>

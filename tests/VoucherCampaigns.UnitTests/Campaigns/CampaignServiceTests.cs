@@ -299,6 +299,19 @@ public class CampaignServiceTests
 
         public Task<Campaign?> FindForUpdateAsync(Guid id, CancellationToken cancellationToken) => FindByIdAsync(id, cancellationToken);
 
+        public Task LoadEligibleCustomersAsync(Campaign campaign, CancellationToken cancellationToken) => Task.CompletedTask;
+
+        public Task<IReadOnlyList<string>> GetEligibleDocumentsAsync(Guid campaignId, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<string>>(
+                Added.Single(campaign => campaign.Id == campaignId).EligibleCustomers.Select(customer => customer.Document).Order().ToList());
+
+        public Task<(int Total, IReadOnlyList<string> Documents)> GetEligibleDocumentsPageAsync(
+            Guid campaignId, int skip, int take, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
+        public Task<bool> IsCustomerListedAsync(Guid campaignId, string document, CancellationToken cancellationToken) =>
+            Task.FromResult(Added.Single(campaign => campaign.Id == campaignId).EligibleCustomers.Any(customer => customer.Document == document));
+
         public void AddStatusEvent(CampaignStatusEvent statusEvent)
         {
         }

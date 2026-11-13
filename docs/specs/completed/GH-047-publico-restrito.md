@@ -1,6 +1,6 @@
 # 📋 Especificação Técnica: GH-047 - Público restrito: critérios de elegibilidade e avaliação na emissão (EP-06, US-04.2)
 
-> Status: In Progress (decisões D-1 a D-20 aguardando aprovação)
+> Status: Completed (decisões D-1 a D-20 aprovadas pelo usuário em 2026-11-13, como propostas)
 > História de Usuário Relacionada: issue #47 (última fatia da #27). Cobre US-06.1 a US-06.5 e US-04.2; US-06.6 proposta na D-17.
 > Responsável: @iagovrocha
 > Data: 2026-11-13
@@ -50,7 +50,7 @@ Os passos da GH-045 (1.2) continuam; a elegibilidade entra depois das condiçõe
 | D-1 | Recorte. | US-06.1, 06.2, 06.3, 06.4, 06.5 e US-04.2 completas, mais a simulação da US-06.6 (D-17). Fica de fora a consulta em massa (06.6 cenário 4) e grupos reutilizáveis (PA-1). |
 | D-2 | De onde vêm os atributos do cliente. | **Da requisição de concessão** (PR-08, D4). O objeto `customer` ganha campos opcionais: `birthDate`, `state`, `cityCode`, `loyaltyMember` e `history`. O satélite só precisa mandar o que as campanhas da rede exigem; o `GET /satellite/campaigns` lista isso (D-15). Nada é gravado como cadastro, só como snapshot da decisão (D-12). |
 | D-3 | Tipos de critério. | **Perfil:** `AgeRange` (`minAge` e/ou `maxAge`, anos completos), `Location` (lista de UFs e/ou de municípios), `LoyaltyMember` (cliente do clube de vantagens, o exemplo das US-01.5 e 04.2). **Histórico:** `TotalSpent` (`minAmount` em `windowDays`), `PurchaseFrequency` (`minPurchases` em `windowDays`), `PurchasedCategory` (`categoryId` em `windowDays`). **Clientes:** `SpecificCustomers` (lista de CPFs, D-8). Um critério de cada tipo por campanha, exceto `PurchasedCategory`, que pode repetir com categorias diferentes. "Dados cadastrais" do backlog fica só com o clube; outros atributos (gênero, tags de CRM) vão para o PA-2. |
-| D-4 | Como o histórico chega com a janela da campanha (RN12) sem a plataforma guardar compras (D2). | O satélite manda **agregados por janela**: `history: [{ windowDays, totalSpent, purchaseCount, categoryCodes }]`. O critério usa a entrada com o mesmo `windowDays`; sem ela, o atributo conta como ausente (D-5). `windowDays` livre de **1 a 365**. *Alternativa:* janelas fixas (30, 60, 90, 180, 365), que simplificam o satélite mas limitam o analista. |
+| D-4 | Como o histórico chega com a janela da campanha (RN12) sem a plataforma guardar compras (D2). | O satélite manda **agregados por janela**: `history: [{ windowDays, totalSpent, purchaseCount, productCodes }]` (a categoria sai do catálogo pelo produto, ver 7.1). O critério usa a entrada com o mesmo `windowDays`; sem ela, o atributo conta como ausente (D-5). `windowDays` livre de **1 a 365**. *Alternativa:* janelas fixas (30, 60, 90, 180, 365), que simplificam o satélite mas limitam o analista. |
 | D-5 | Atributo ausente na requisição. | O critério **não é atendido** (o cliente não é elegível) e o snapshot registra `missing`. Elegibilidade nunca é presumida: o backlog quer "impedir concessão indevida" (EP-06). |
 | D-6 | Combinação (US-06.3). | **AND entre todos os critérios**, inclusive `SpecificCustomers`. Dentro de `Location`, UFs e municípios valem como **OU** (mora em SP **ou** em Curitiba). O texto da US-06.5 cenário 2 ("somente esses clientes, independentemente de outros segmentos") é lido como "a lista basta": o analista que quer só a lista configura só a lista. *Divergência:* se o PO quiser que a lista **ignore** os outros critérios, ela vira um modo exclusivo do público. |
 | D-7 | "Grupo" (US-06.4 cenário 1). | O grupo **é a combinação de critérios da campanha**. Não há entidade de grupo nomeado e reaproveitável; o backlog não descreve cadastro de grupos (PA-1). |
@@ -144,7 +144,7 @@ public record CustomerHistoryRequest(
     [Required, Range(1, 365)] int? WindowDays,
     [Range(0, 99_999_999.99)] decimal? TotalSpent,
     [Range(0, int.MaxValue)] int? PurchaseCount,
-    [MaxLength(200)] IReadOnlyList<string?>? CategoryCodes);   // códigos de categoria do catálogo
+    [MaxLength(500)] IReadOnlyList<string?>? ProductCodes);   // produtos comprados na janela; a categoria vem do catálogo (7.1)
 
 // Simulação
 public record EligibilitySimulationResponse(Guid CampaignId, string AudienceType, bool Eligible,
@@ -212,15 +212,15 @@ Parâmetro de outro tipo informado → `400` no campo ("Este parâmetro não se 
 
 ## 4. Checklist de Implementação
 
-- [ ] 1. Domínio: `EligibilityCriterionType`, `CampaignEligibilityCriterion`, `CampaignEligibleCustomer`, `Campaign.SetAudience(type, criteria, documents)` com as regras da 2.1; remover `EligibilityCriterion` e `CriterionType` do #36.
-- [ ] 2. Domínio: `CustomerProfile`, `EligibilityEvaluator` (idade no fuso da rede, AND, `missing`) e `ConcessionRefusal.CustomerNotEligible`; passo novo no `ConcessionEvaluator.Block`.
-- [ ] 3. Validação de CPF com dígito verificador (para a lista) e de UF e código IBGE.
-- [ ] 4. Infra: configurações EF, `CHECK` por tipo, `Concession.Eligibility`, repositório (critérios no carregamento das aprovadas; `IsListedAsync(campaignIds, document)` em uma consulta) e migração dupla.
-- [ ] 5. Application: `UpdateAudienceAsync` com critérios e auditoria (D-20), leitura da lista paginada, simulação, `ConcessionService` com perfil e snapshot (D-12), `SatelliteCampaignService` (D-15), duplicação (D-18).
-- [ ] 6. API: rotas novas no `CampaignsController`; contratos da concessão.
-- [ ] 7. Testes unitários (avaliador, validação) e de integração (rotas, concessão, resgate, simulação, auditoria).
-- [ ] 8. `dotnet test` em SQLite e PostgreSQL local, sem warnings; smoke (`smoke.py` e `motor.py`) com público restrito.
-- [ ] 9. Documentação: README, `agents.md` se houver padrão novo, `PROJECT_STATE.md`, `ROADMAP.md` (US-06.1 a 06.6, 04.2, P1 e P2) e a spec em `completed/`.
+- [x] 1. Domínio: `EligibilityCriterionType`, `CampaignEligibilityCriterion`, `CampaignEligibleCustomer`, `Campaign.SetAudience(type, criteria, documents)` com as regras da 2.1; remover `EligibilityCriterion` e `CriterionType` do #36.
+- [x] 2. Domínio: `CustomerProfile`, `EligibilityEvaluator` (idade no fuso da rede, AND, `missing`) e `ConcessionRefusal.CustomerNotEligible`; passo novo no `ConcessionEvaluator.Block`.
+- [x] 3. Validação de CPF com dígito verificador (para a lista) e de UF e código IBGE.
+- [x] 4. Infra: configurações EF, `CHECK` por tipo, `Concession.Eligibility`, repositório (critérios no carregamento das aprovadas; `IsListedAsync(campaignIds, document)` em uma consulta) e migração dupla.
+- [x] 5. Application: `UpdateAudienceAsync` com critérios e auditoria (D-20), leitura da lista paginada, simulação, `ConcessionService` com perfil e snapshot (D-12), `SatelliteCampaignService` (D-15), duplicação (D-18).
+- [x] 6. API: rotas novas no `CampaignsController`; contratos da concessão.
+- [x] 7. Testes unitários (avaliador, validação) e de integração (rotas, concessão, resgate, simulação, auditoria).
+- [x] 8. `dotnet test` em SQLite e PostgreSQL local, sem warnings; smoke (`smoke.py` e `motor.py`) com público restrito.
+- [x] 9. Documentação: README, `agents.md` se houver padrão novo, `PROJECT_STATE.md`, `ROADMAP.md` (US-06.1 a 06.6, 04.2, P1 e P2) e a spec em `completed/`.
 
 ---
 
@@ -228,34 +228,34 @@ Parâmetro de outro tipo informado → `400` no campo ("Este parâmetro não se 
 
 **Configuração**
 
-- [ ] `Restricted` com `LoyaltyMember` → `200`; `GET` devolve o critério (US-06.1 cenário 1).
-- [ ] `Restricted` sem critérios → `400`; `AllCustomers` com critérios → `400`; trocar para `AllCustomers` apaga critérios e lista.
-- [ ] `AgeRange` com `minAge 40, maxAge 30` → `400` com a mensagem do backlog (US-06.1 cenário 3).
-- [ ] Histórico sem `windowDays` → `400` pedindo o período (US-06.2 cenário 2); `minAmount` negativo, `minPurchases 0` e categoria inexistente → `400` no parâmetro (cenário 3).
-- [ ] Lista com CPFs inválidos → `400` com as posições, nada gravado; repetidos unificados; 10.001 CPFs → `400` (US-06.5 cenário 3).
-- [ ] `GET .../audience/customers` paginado; `CampaignResponse` só com `customerCount`.
-- [ ] Fora de `Draft` → `422`; outra rede → `403`; administrador → `403`; sem token → `401`.
-- [ ] Edição auditada com antes e depois; repetição idêntica não gera evento; a lista aparece só como quantidade e resumo (D-20).
-- [ ] Duplicar copia critérios e lista.
+- [x] `Restricted` com `LoyaltyMember` → `200`; `GET` devolve o critério (US-06.1 cenário 1).
+- [x] `Restricted` sem critérios → `400`; `AllCustomers` com critérios → `400`; trocar para `AllCustomers` apaga critérios e lista.
+- [x] `AgeRange` com `minAge 40, maxAge 30` → `400` com a mensagem do backlog (US-06.1 cenário 3).
+- [x] Histórico sem `windowDays` → `400` pedindo o período (US-06.2 cenário 2); `minAmount` negativo, `minPurchases 0` e categoria inexistente → `400` no parâmetro (cenário 3).
+- [x] Lista com CPFs inválidos → `400` com as posições, nada gravado; repetidos unificados; 10.001 CPFs → `400` (US-06.5 cenário 3).
+- [x] `GET .../audience/customers` paginado; `CampaignResponse` só com `customerCount`.
+- [x] Fora de `Draft` → `422`; outra rede → `403`; administrador → `403`; sem token → `401`.
+- [x] Edição auditada com antes e depois; repetição idêntica não gera evento; a lista aparece só como quantidade e resumo (D-20).
+- [x] Duplicar copia critérios e lista.
 
 **Concessão**
 
-- [ ] Clube: cliente com `loyaltyMember: true` recebe voucher e o snapshot registra o atributo (US-04.2 cenário 1, US-06.5 cenário 1).
-- [ ] Clube: cliente sem o atributo ou com `false` → `NotGranted` `CustomerNotEligible`, saldo da campanha e do alvo intactos, auditoria com o critério que falhou (US-04.2 cenário 2, US-06.4 cenário 2).
-- [ ] `AllCustomers` concede sem avaliar e grava `eligibility = null` (US-04.2 cenário 3).
-- [ ] AND: perfil atendido e histórico não → inelegível, com o critério de histórico indicado (US-06.3 cenário 2).
-- [ ] Histórico usa só a janela do critério: entrada de 30 dias não serve para critério de 90 (US-06.2 cenário 1, D-4).
-- [ ] Idade no limite: aniversário no dia da compra, no fuso da rede (D-11).
-- [ ] Lista de clientes: CPF da lista recebe; fora da lista não (US-06.5 cenário 2).
-- [ ] Inelegível na campanha de maior benefício, elegível em outra → a outra concede (D-14).
-- [ ] Idempotência: repetir a transação devolve a mesma decisão, mesmo com atributos diferentes.
-- [ ] Edição antes da ativação: as concessões seguintes usam a combinação nova (US-06.3 cenário 3).
+- [x] Clube: cliente com `loyaltyMember: true` recebe voucher e o snapshot registra o atributo (US-04.2 cenário 1, US-06.5 cenário 1).
+- [x] Clube: cliente sem o atributo ou com `false` → `NotGranted` `CustomerNotEligible`, saldo da campanha e do alvo intactos, auditoria com o critério que falhou (US-04.2 cenário 2, US-06.4 cenário 2).
+- [x] `AllCustomers` concede sem avaliar e grava `eligibility = null` (US-04.2 cenário 3).
+- [x] AND: perfil atendido e histórico não → inelegível, com o critério de histórico indicado (US-06.3 cenário 2).
+- [x] Histórico usa só a janela do critério: entrada de 30 dias não serve para critério de 90 (US-06.2 cenário 1, D-4).
+- [x] Idade no limite: aniversário no dia da compra, no fuso da rede (D-11).
+- [x] Lista de clientes: CPF da lista recebe; fora da lista não (US-06.5 cenário 2).
+- [x] Inelegível na campanha de maior benefício, elegível em outra → a outra concede (D-14).
+- [x] Idempotência: repetir a transação devolve a mesma decisão, mesmo com atributos diferentes.
+- [x] Edição antes da ativação: as concessões seguintes usam a combinação nova (US-06.3 cenário 3).
 
 **Resgate, simulação e satélite**
 
-- [ ] Resgate não reavalia: voucher do elegível é resgatado mesmo com atributos que hoje o recusariam (US-06.4 cenário 3).
-- [ ] Simulação elegível e não elegível, critério a critério, sem voucher, sem saldo e sem auditoria (US-06.6 cenários 1 e 2).
-- [ ] `GET /satellite/campaigns` mostra `Restricted`, `requiredAttributes` e `historyWindows`, sem limites nem CPFs.
+- [x] Resgate não reavalia: voucher do elegível é resgatado mesmo com atributos que hoje o recusariam (US-06.4 cenário 3).
+- [x] Simulação elegível e não elegível, critério a critério, sem voucher, sem saldo e sem auditoria (US-06.6 cenários 1 e 2).
+- [x] `GET /satellite/campaigns` mostra `Restricted`, `requiredAttributes` e `historyWindows`, sem limites nem CPFs.
 
 ---
 
@@ -271,3 +271,25 @@ Parâmetro de outro tipo informado → `400` no campo ("Este parâmetro não se 
 | PA-6 | Alterar o público depois do vigor (US-01.7, RN03b). | D6: a mecânica congela na aprovação. | Spec da US-01.7 após o vigor. |
 | PA-7 | Janelas fixas no histórico (D-4, alternativa). | A janela livre atende RN12 sem pedir decisão ao satélite. | Time do PDV dizer que não consegue calcular janelas arbitrárias. |
 | PA-8 | Município pelo nome (1.6, alternativa). | O código IBGE evita ambiguidade. | Satélite não tiver o código IBGE do cliente. |
+
+---
+
+## 7. Notas da implementação
+
+### 7.1 Diferenças em relação ao texto acima
+
+| Ponto | Como ficou | Por quê |
+|---|---|---|
+| Histórico de categoria (D-4) | O satélite manda `productCodes` na janela, e não `categoryCodes`. A categoria sai do catálogo pelo produto; código desconhecido é ignorado. | As categorias do catálogo não têm código, só id. O PDV já conhece o código do produto, o mesmo dos itens da compra. |
+| Quantidade e resumo da lista (D-10, D-20) | Ficam na própria linha do critério `SpecificCustomers` (`customer_count`, `customers_digest`). | A leitura da campanha e a auditoria não precisam abrir a tabela de CPFs. |
+| Snapshot (D-12) | `concessions.eligibility` é texto sem limite. | Com até 20 critérios e 100 municípios, um limite fixo poderia recusar a gravação no PostgreSQL. |
+| Auditoria da recusa (D-12, D-13) | `VoucherIssuanceRefused` ganha `failedCriterion` e `failedOutcome` (`NotMet` ou `Missing`). O `VoucherIssued` e o evento `Issued` levam o resumo em `eligibility`. | Indica o critério que falhou, para auditoria (US-06.3 cenário 2). |
+| `requiredAttributes` (D-15) | Nomes dos campos de `customer`: `birthDate`, `state`, `cityCode`, `loyaltyMember`, `history.totalSpent`, `history.purchaseCount`, `history.productCodes`. A lista de CPFs não pede atributo além do `document`. | O satélite monta o corpo da concessão direto desses nomes. |
+| Janelas repetidas | A mesma categoria pode repetir com janelas diferentes; tipo, categoria e janela iguais são `400`. | Extensão natural da regra da D-3. |
+| Categoria inexistente | `400` no campo `Criteria[i].CategoryId`, como diz a 2.1; categoria inativa é aceita. | O critério olha compras passadas: a categoria pode ter sido inativada depois. |
+
+### 7.2 Verificação
+
+- `dotnet build -warnaserror`: sem avisos.
+- `dotnet test`: 300 unitários e 495 de integração em SQLite. No PostgreSQL local, 494 de 495: a única falha foi `DatabaseSchemaTests`, pelo timeout conhecido do `DROP DATABASE` na limpeza da fábrica, sem relação com esta entrega.
+- Smoke com a API no ar: `smoke.py`, `motor.py` e o novo `scripts/smoke/publico.py` (público restrito) OK.
