@@ -1,10 +1,10 @@
-# 📋 Especificação Técnica: US-01.8 - Cancelar campanha e invalidar os vouchers não utilizados (RN10, US-05.5)
+# 📋 Especificação Técnica: GH-061 - Cancelar campanha e invalidar os vouchers não utilizados (RN10, US-05.5)
 
-> Status: In Progress (decisões D-1 a D-16 propostas, aguardando aprovação)
-> História de Usuário Relacionada: US-01.8 (EP-01), cenários 3 e 5; US-05.5 (EP-05), cenários 2 e 3. Fecha o PA-1 da spec `GH-049` e o PA-13 da `GH-045`. Issue no GitHub: a abrir.
+> Status: In Progress (decisões D-1 a D-16 aprovadas pelo usuário em 2026-11-13, como propostas; pontos em aberto em debate)
+> História de Usuário Relacionada: US-01.8 (EP-01), cenários 3 e 5; US-05.5 (EP-05), cenários 2 e 3. Fecha o PA-1 da spec `GH-049` e o PA-13 da `GH-045`. Issue #61.
 > Responsável: @iagovrocha
 > Data: 2026-11-13
-> Branch: `feat/US-01.8-cancelar-campanha` → PR para a `staging`
+> Branch: `feat/GH-061-cancelar-campanha` → PR para a `staging`
 > Depende de: pausar e encerrar (spec `US-01.8-pausar-e-encerrar-campanha.md`), motor de concessão (GH-045), resgate e estorno (GH-049), acompanhamento (GH-050) e a trava de gravação simultânea (GH-047, PA-10)
 
 ---
