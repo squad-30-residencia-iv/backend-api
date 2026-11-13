@@ -287,10 +287,19 @@ public class CampaignService(
 
         await campaigns.LoadEligibleCustomersAsync(campaign, cancellationToken);
 
+        // Substituir a lista por diferença exige que ninguém a tenha mudado no meio (clique duplo no portal):
+        // a marca nova é sempre diferente da lida, mesmo com o relógio parado, para a segunda requisição perder.
+        var loaded = DateTime.SpecifyKind(campaign.UpdatedAt, DateTimeKind.Utc);
+        var stamp = utcNow > loaded ? utcNow : loaded.AddMilliseconds(1);
+
         var before = SnapshotAudience(campaign);
-        campaign.SetAudience(audienceType, audience.Criteria, audience.Documents, utcNow);
+        campaign.SetAudience(audienceType, audience.Criteria, audience.Documents, stamp);
         AuditSection(campaign, "audience", before, SnapshotAudience(campaign), utcNow);
-        await campaigns.SaveChangesAsync(cancellationToken);
+
+        if (!await campaigns.SaveIfUnchangedAsync(campaign, loaded, cancellationToken))
+        {
+            throw new BusinessRuleException(CampaignErrors.ConcurrentUpdateCode, CampaignErrors.ConcurrentUpdateMessage);
+        }
 
         return Map(campaign, campaign.Network!, utcNow);
     }

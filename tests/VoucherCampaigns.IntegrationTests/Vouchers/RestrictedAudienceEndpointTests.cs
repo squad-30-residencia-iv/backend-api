@@ -418,6 +418,120 @@ public class RestrictedAudienceEndpointTests : IClassFixture<ApiFactory>
         Assert.DoesNotContain("minAge", campaign.GetRawText());
     }
 
+    // ---------- Ajustes do agente de testes (PR #60) ----------
+
+    [Fact]
+    public async Task PutAudience_ConcurrentEdits_NeverMergeTheLists()
+    {
+        _factory.Clock.UtcNow = Setup;
+        var analista = User(_factory);
+        var id = await ReadyCampaign.CreateAsync(analista);
+        var lists = Enumerable.Range(0, 4).Select(_ => Enumerable.Range(0, 50).Select(_ => TestCpf.New()).ToArray()).ToList();
+
+        var responses = await Task.WhenAll(lists.Select(list =>
+            PutAudienceAsync(User(_factory), id, Loyalty, new { type = "SpecificCustomers", documents = list })));
+
+        Assert.All(responses, response => Assert.True(
+            response.StatusCode is HttpStatusCode.OK or HttpStatusCode.UnprocessableEntity, response.StatusCode.ToString()));
+        Assert.Contains(responses, response => response.StatusCode == HttpStatusCode.OK);
+        foreach (var refused in responses.Where(response => response.StatusCode != HttpStatusCode.OK))
+        {
+            Assert.Equal("CAMPAIGN_CONCURRENT_UPDATE", (await refused.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString());
+        }
+
+        var criteria = await QueryAsync(_factory, db => db.CampaignEligibilityCriteria.AsNoTracking().Where(item => item.CampaignId == id).ToListAsync());
+        var stored = await QueryAsync(_factory, db => db.CampaignEligibleCustomers.AsNoTracking()
+            .Where(item => item.CampaignId == id).Select(item => item.Document).ToListAsync());
+        Assert.Equal(2, criteria.Count);
+        Assert.Contains(lists, list => list.Order().SequenceEqual(stored.Order()));
+    }
+
+    [Fact]
+    public async Task Grant_RepeatedTransactionWithInvalidAttributes_StillReturnsTheFirstDecision()
+    {
+        var scenario = await RestrictedCampaignAsync(Loyalty);
+        var satellite = Satellite(_factory);
+        var first = await GrantedAsync(satellite, PurchaseFor(scenario, new { document = _document, loyaltyMember = true }, "TRX-REPEAT-INVALID-047"));
+
+        var repeated = await GrantAsync(satellite, PurchaseFor(scenario, new { document = _document, birthDate = "2099-01-01" }, "TRX-REPEAT-INVALID-047"));
+
+        repeated.Response.EnsureSuccessStatusCode();
+        Assert.Equal(first.ConcessionId, repeated.Body!.ConcessionId);
+    }
+
+    [Fact]
+    public async Task Grant_AgeUsesTheNetworkDate_EvenWhenUtcIsAlreadyTheNextDay()
+    {
+        var scenario = await RestrictedCampaignAsync(new { type = "AgeRange", minAge = 18 });
+        var satellite = Satellite(_factory);
+
+        // 23:30 de 10/10 em Brasília já é 11/10 em UTC: quem nasceu em 11/10/2008 ainda tem 17 na data da rede.
+        _factory.Clock.UtcNow = new DateTimeOffset(2026, 10, 10, 23, 30, 0, TimeSpan.FromHours(-3));
+
+        await NotGrantedAsync(satellite, PurchaseFor(scenario, new { document = _document, birthDate = "2008-10-11" }), "CustomerNotEligible");
+        await GrantedAsync(satellite, PurchaseFor(scenario, new { document = _document, birthDate = "2008-10-10" }));
+    }
+
+    [Fact]
+    public async Task PutAudience_EditedInDraft_TheConcessionUsesOnlyTheCurrentCombination()
+    {
+        var scenario = await ApprovedCampaignAsync(_factory, async (analista, id) =>
+        {
+            (await PutAudienceAsync(analista, id, Loyalty)).EnsureSuccessStatusCode();
+            (await PutAudienceAsync(analista, id, new { type = "AgeRange", minAge = 60 })).EnsureSuccessStatusCode();
+        });
+        var satellite = Satellite(_factory);
+
+        await NotGrantedAsync(satellite, PurchaseFor(scenario, new { document = _document, loyaltyMember = true }), "CustomerNotEligible");
+        await GrantedAsync(satellite, PurchaseFor(scenario, new { document = _document, birthDate = "1950-01-01" }));
+    }
+
+    [Fact]
+    public async Task PutAudience_MoreThanTenThousandDocuments_IsRejected()
+    {
+        _factory.Clock.UtcNow = Setup;
+        var analista = User(_factory);
+        var id = await ReadyCampaign.CreateAsync(analista);
+        var documents = Enumerable.Range(0, EligibilityContract.MaxDocuments + 1).Select(_ => "11144477735").ToArray();
+
+        var response = await PutAudienceAsync(analista, id, new { type = "SpecificCustomers", documents });
+
+        await AssertValidationAsync(response, "Criteria[0].Documents", EligibilityContract.DocumentsTooMany);
+    }
+
+    [Theory]
+    [InlineData("page=0", "page", EligibilityContract.PageInvalid)]
+    [InlineData("pageSize=0", "pageSize", EligibilityContract.PageSizeInvalid)]
+    [InlineData("pageSize=501", "pageSize", EligibilityContract.PageSizeInvalid)]
+    public async Task GetEligibleCustomers_WithInvalidPage_ReturnsValidationProblem(string query, string field, string message)
+    {
+        _factory.Clock.UtcNow = Setup;
+        var analista = User(_factory);
+        var id = await ReadyCampaign.CreateAsync(analista);
+
+        var response = await analista.GetAsync($"{ReadyCampaign.Route}/{id}/audience/customers?{query}");
+
+        await AssertValidationAsync(response, field, message);
+    }
+
+    [Fact]
+    public async Task NewRoutes_RequireAnAnalystOrManager()
+    {
+        _factory.Clock.UtcNow = Setup;
+        var id = await ReadyCampaign.CreateAsync(User(_factory));
+        var customers = $"{ReadyCampaign.Route}/{id}/audience/customers";
+        var simulate = $"{ReadyCampaign.Route}/{id}/eligibility/simulate";
+        var body = new { customer = new { document = _document } };
+        var admin = User(_factory, Roles.Administrador);
+        var anonymous = _factory.CreateClient();
+
+        Assert.Equal(HttpStatusCode.Forbidden, (await admin.GetAsync(customers)).StatusCode);
+        Assert.Equal(HttpStatusCode.Forbidden, (await admin.PostAsJsonAsync(simulate, body)).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.GetAsync(customers)).StatusCode);
+        Assert.Equal(HttpStatusCode.Unauthorized, (await anonymous.PostAsJsonAsync(simulate, body)).StatusCode);
+        Assert.Equal(HttpStatusCode.OK, (await User(_factory, Roles.Gestor).PostAsJsonAsync(simulate, body)).StatusCode);
+    }
+
     // ---------- Apoio ----------
 
     private async Task<Scenario> RestrictedCampaignAsync(params object[] criteria) =>

@@ -149,7 +149,7 @@ public record CustomerHistoryRequest(
 // Simulação
 public record EligibilitySimulationResponse(Guid CampaignId, string AudienceType, bool Eligible,
     IReadOnlyList<CriterionResultResponse> Criteria);
-public record CriterionResultResponse(string Type, string Outcome, object? Observed);
+public record CriterionResultResponse(string Type, string Outcome, object Parameters, object? Observed);
 
 // SatelliteCampaignResponse: audience All|Restricted + RequiredAttributes + HistoryWindows (D-15)
 ```
@@ -174,7 +174,7 @@ Parâmetro de outro tipo informado → `400` no campo ("Este parâmetro não se 
 |---|---|---|
 | `EligibilityCriteriaRequired` | 400 | "Informe ao menos um critério para o público restrito." |
 | `EligibilityCriteriaNotAllowed` | 400 | "O público 'todos os clientes' não aceita critérios." |
-| `AgeRangeInverted` | 400 | "A idade mínima não pode ser maior que a idade máxima." |
+| `AgeRangeInverted` | 400 | "A idade mínima não pode ser maior que a idade máxima" (sem ponto final, como no texto do backlog) |
 | `HistoryWindowRequired` | 400 | "Informe o período, em dias, a ser considerado no histórico de compras." |
 | `CategoryNotFound` | 400 | "A categoria informada não existe." |
 | `DocumentsInvalid` | 400 | "CPFs inválidos nas posições: 3, 17." |
@@ -271,6 +271,9 @@ Parâmetro de outro tipo informado → `400` no campo ("Este parâmetro não se 
 | PA-6 | Alterar o público depois do vigor (US-01.7, RN03b). | D6: a mecânica congela na aprovação. | Spec da US-01.7 após o vigor. |
 | PA-7 | Janelas fixas no histórico (D-4, alternativa). | A janela livre atende RN12 sem pedir decisão ao satélite. | Time do PDV dizer que não consegue calcular janelas arbitrárias. |
 | PA-8 | Município pelo nome (1.6, alternativa). | O código IBGE evita ambiguidade. | Satélite não tiver o código IBGE do cliente. |
+| PA-9 | Aniversário em 29/02: nos anos não bissextos, a idade conta a partir de 28/02. | Regra comum (`AddYears`), não definida no backlog. | PO definir 28/02 ou 01/03. |
+| PA-10 | Edição simultânea das outras seções do rascunho (`/items`, `/conditions`, `/scopes`...). | A corrida já existia antes desta fatia e não afeta a elegibilidade; só o público ganhou a trava. | Defeito visto no portal, ou um token de concorrência geral na campanha. |
+| PA-11 | O resumo SHA-256 da lista na auditoria não tem sal: quem já conhece os candidatos consegue confirmar uma lista pequena. | Serve para detectar a troca, não para proteger o conteúdo; a lista em si não vai para a trilha. | Junto do PA-4 (LGPD). |
 
 ---
 
@@ -287,9 +290,13 @@ Parâmetro de outro tipo informado → `400` no campo ("Este parâmetro não se 
 | `requiredAttributes` (D-15) | Nomes dos campos de `customer`: `birthDate`, `state`, `cityCode`, `loyaltyMember`, `history.totalSpent`, `history.purchaseCount`, `history.productCodes`. A lista de CPFs não pede atributo além do `document`. | O satélite monta o corpo da concessão direto desses nomes. |
 | Janelas repetidas | A mesma categoria pode repetir com janelas diferentes; tipo, categoria e janela iguais são `400`. | Extensão natural da regra da D-3. |
 | Categoria inexistente | `400` no campo `Criteria[i].CategoryId`, como diz a 2.1; categoria inativa é aceita. | O critério olha compras passadas: a categoria pode ter sido inativada depois. |
+| Edição simultânea do público | A `PUT /audience` só grava se a campanha não mudou desde a leitura (`UPDATE ... WHERE updated_at = @lido`, primeiro comando da transação). A segunda requisição recebe `422 CAMPAIGN_CONCURRENT_UPDATE`. | O agente de testes viu quatro `PUT` simultâneos somarem as listas e repetirem critérios. Um clique duplo no portal deixaria elegíveis CPFs que ninguém pediu. As outras seções do rascunho (`/items` e afins) têm a mesma corrida, sem efeito na elegibilidade (PA-10). |
+| Idempotência | Os atributos do cliente são validados depois da busca pela transação: a repetição devolve a decisão original mesmo com um atributo inválido. | Seção 5: "mesma decisão, mesmo com atributos diferentes". |
+| Resultado da simulação | `CriterionResultResponse` também traz `parameters`. | O analista vê o limite ao lado do valor observado. |
 
 ### 7.2 Verificação
 
 - `dotnet build -warnaserror`: sem avisos.
 - `dotnet test`: 300 unitários e 495 de integração em SQLite. No PostgreSQL local, 494 de 495: a única falha foi `DatabaseSchemaTests`, pelo timeout conhecido do `DROP DATABASE` na limpeza da fábrica, sem relação com esta entrega.
 - Smoke com a API no ar: `smoke.py`, `motor.py` e o novo `scripts/smoke/publico.py` (público restrito) OK.
+- Agente `testador-de-branch` (Opus) no PR #60: aprovado com ressalvas, 145 cenários manuais sem falha. As ressalvas viraram a trava de edição simultânea, a ordem da idempotência, os testes de autorização, limites, edição no rascunho e virada do dia no fuso, e os PA-9 a PA-11.

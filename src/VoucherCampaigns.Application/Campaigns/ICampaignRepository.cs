@@ -31,6 +31,12 @@ public interface ICampaignRepository
     /// <summary>Verdadeiro quando o CPF está na lista de clientes específicos da campanha.</summary>
     Task<bool> IsCustomerListedAsync(Guid campaignId, string document, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Grava a campanha rastreada só se ninguém a alterou desde a leitura: o primeiro comando da transação é um
+    /// <c>UPDATE ... WHERE updated_at = @lido</c>. Falso quando outra requisição gravou antes (nada é gravado).
+    /// </summary>
+    Task<bool> SaveIfUnchangedAsync(Campaign campaign, DateTime loadedUpdatedAt, CancellationToken cancellationToken);
+
     void AddStatusEvent(CampaignStatusEvent statusEvent);
 
     Task SaveChangesAsync(CancellationToken cancellationToken);

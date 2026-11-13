@@ -33,7 +33,6 @@ public class ConcessionService(
         var input = PurchaseParsing.Parse(request);
         var networkId = app.NetworkId;
         var utcNow = timeProvider.GetUtcNow().UtcDateTime;
-        var profile = EligibilityParsing.ParseProfile(request.Customer!, input.Document, utcNow, nameof(request.Customer));
 
         var establishment = await RequireEstablishmentAsync(input, networkId, cancellationToken);
 
@@ -44,6 +43,9 @@ public class ConcessionService(
         {
             return Map(existing, utcNow);
         }
+
+        // Atributos do público só depois da idempotência: a repetição devolve a decisão original, mesmo com outros atributos (GH-047).
+        var profile = EligibilityParsing.ParseProfile(request.Customer!, input.Document, utcNow, nameof(request.Customer));
 
         // Reservas vencidas liberam saldo antes da avaliação (D-6).
         await releaser.ReleaseExpiredAsync(networkId, utcNow, cancellationToken);

@@ -62,6 +62,27 @@ public class CampaignRepository(AppDbContext context) : ICampaignRepository
         context.CampaignEligibleCustomers.AnyAsync(
             customer => customer.CampaignId == campaignId && customer.Document == document, cancellationToken);
 
+    public async Task<bool> SaveIfUnchangedAsync(Campaign campaign, DateTime loadedUpdatedAt, CancellationToken cancellationToken)
+    {
+        await using var transaction = await context.Database.BeginTransactionAsync(cancellationToken);
+
+        // A marca é o primeiro comando: no PostgreSQL a segunda requisição espera o bloqueio da linha e, depois do
+        // commit da primeira, não encontra mais o updated_at que leu; no SQLite o escritor é único.
+        var claimed = await context.Campaigns
+            .Where(item => item.Id == campaign.Id && item.UpdatedAt == loadedUpdatedAt)
+            .ExecuteUpdateAsync(setters => setters.SetProperty(item => item.UpdatedAt, campaign.UpdatedAt), cancellationToken);
+
+        if (claimed == 0)
+        {
+            return false;
+        }
+
+        await context.SaveChangesAsync(cancellationToken);
+        await transaction.CommitAsync(cancellationToken);
+
+        return true;
+    }
+
     public void AddStatusEvent(CampaignStatusEvent statusEvent) => context.CampaignStatusEvents.Add(statusEvent);
 
     public Task SaveChangesAsync(CancellationToken cancellationToken) => context.SaveChangesAsync(cancellationToken);
