@@ -26,7 +26,13 @@ public class ConcessionConcurrencyTests : IClassFixture<ApiFactory>
         var results = await Task.WhenAll(Enumerable.Range(0, 20).Select(index =>
             GrantAsync(satellite, Purchase(scenario.StoreId, document: $"{10_000_000_000 + index:D11}"))));
 
-        Assert.All(results, result => Assert.Equal(HttpStatusCode.OK, result.Response.StatusCode));
+        var grantFailures = new List<string>();
+        foreach (var result in results.Where(result => result.Response.StatusCode != HttpStatusCode.OK))
+        {
+            grantFailures.Add($"{(int)result.Response.StatusCode} {await result.Response.Content.ReadAsStringAsync()}");
+        }
+
+        Assert.True(grantFailures.Count == 0, string.Join(Environment.NewLine, grantFailures));
         var bodies = results.Select(result => result.Body!).ToList();
         Assert.Single(bodies, body => body.Status == "Provisional");
         Assert.Equal(19, bodies.Count(body => body.Status == "NotGranted" && body.Reason == "CampaignSoldOut"));
@@ -47,7 +53,14 @@ public class ConcessionConcurrencyTests : IClassFixture<ApiFactory>
             satellite.PostAsync($"{ConcessionsRoute}/{granted.ConcessionId}/{(index % 2 == 0 ? "confirm" : "cancel")}", null)));
         var state = await satellite.GetFromJsonAsync<ConcessionResponseDto>($"{ConcessionsRoute}/{granted.ConcessionId}");
 
-        Assert.All(responses, response => Assert.Contains(response.StatusCode, new[] { HttpStatusCode.OK, HttpStatusCode.UnprocessableEntity }));
+        var decisionFailures = new List<string>();
+        foreach (var response in responses.Where(response =>
+            response.StatusCode is not HttpStatusCode.OK and not HttpStatusCode.UnprocessableEntity))
+        {
+            decisionFailures.Add($"{(int)response.StatusCode} {await response.Content.ReadAsStringAsync()}");
+        }
+
+        Assert.True(decisionFailures.Count == 0, string.Join(Environment.NewLine, decisionFailures));
         var stored = await StoredCampaignAsync(_factory, scenario.CampaignId);
         Assert.Equal(0, stored.ReservedVouchers);
         Assert.Equal(state!.Status == "Confirmed" ? 1 : 0, stored.IssuedVouchers);
