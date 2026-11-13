@@ -15,4 +15,9 @@ public static class AuditEventTypes
     public const string VoucherConfirmed = "VoucherConfirmed";
     public const string VoucherCancelled = "VoucherCancelled";
     public const string VoucherIssuanceRefused = "VoucherIssuanceRefused";
+
+    /// <summary>Resgate (spec GH-049): utilização consumida, recusa com o motivo e estorno.</summary>
+    public const string VoucherRedeemed = "VoucherRedeemed";
+    public const string VoucherRedemptionRefused = "VoucherRedemptionRefused";
+    public const string VoucherRedemptionReversed = "VoucherRedemptionReversed";
 }

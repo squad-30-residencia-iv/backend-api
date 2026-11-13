@@ -162,6 +162,17 @@ Com o carrinho fechado e antes do pagamento, o satélite pede a concessão; depo
 
 Regras aplicadas: só campanha efetivamente ativa, cujo escopo contempla a loja e o canal, com as condições de geração satisfeitas; uma compra gera no máximo um voucher (maior benefício nesta compra, depois a que termina primeiro, depois a aprovada primeiro); saldo da campanha, cota do alvo e limite por cliente; validade calculada na emissão (prazo relativo com teto, ou data fixa, até 23:59:59). Loja inativa, inexistente ou que não opera o canal → `422` com `code` `ISSUANCE_*`. O smoke test `python -I scripts/smoke/motor.py http://localhost:5026` percorre o fluxo com a API no ar.
 
+### Verificação de aplicáveis e resgate (EP-05, US-07.1 e US-07.3)
+
+Com o cliente identificado e o carrinho fechado, o satélite pergunta quais vouchers servem nesta compra, mostra ao cliente e resgata o escolhido. Rotas com o escopo `vouchers:redeem` (`GET /campaigns` com `campaigns:read`); a rede é a da aplicação do token. Spec `docs/specs/completed/GH-049-resgate-de-vouchers.md`.
+
+1. `POST /api/v1/satellite/vouchers/check` com a mesma compra da concessão (`transactionId`, `customer.document`, `establishmentId`, `channel`, `totalAmount`, `items[]`). Resposta `200`: `applicable[]` (voucher, `discountAmount` previsto, `recommended` no de maior desconto) e `notApplicable[]` com `reason` (`NotConfirmed`, `SamePurchaseNotAllowed`, `Expired`, `NoUsesLeft`, `Cancelled`, `CampaignCancelled`, `OutOfScope`, `AmountBelowMinimum`, `AmountAboveMaximum`, `TargetNotInPurchase`, `TransactionAlreadyRedeemed`, `AlreadyRedeemedInThisPurchase`) e `detail`. Não grava nada. Um voucher provisório da própria compra entra como aplicável se a campanha permite uso na mesma compra.
+2. `POST /api/v1/satellite/redemptions` com `voucherId` mais a compra: consome uma utilização (`Available` com `remainingUses` menor, ou `Redeemed` ao chegar ao limite), grava `redemptions`, o evento `Redeemed` e a auditoria. Um voucher por compra: a mesma `transactionId` com o mesmo voucher devolve o resgate original; com outro voucher, `422 REDEMPTION_TRANSACTION_ALREADY_REDEEMED`. Recusas: `422 REDEMPTION_<motivo>` (ex.: `REDEMPTION_EXPIRED`, `REDEMPTION_NO_USES_LEFT`, `REDEMPTION_OUT_OF_SCOPE`); loja e canal, `REDEMPTION_ESTABLISHMENT_NOT_FOUND`, `REDEMPTION_ESTABLISHMENT_INACTIVE` e `REDEMPTION_CHANNEL_NOT_ENABLED`; voucher de outro CPF ou de outra rede, `404`. Um provisório resgatado na própria compra fica `Provisional` até a confirmação da concessão (que o leva a `Available` ou `Redeemed`); desfazer a concessão ou a reserva expirar estorna o resgate.
+3. `POST /api/v1/satellite/redemptions/{id}/reverse` estorna (a utilização volta ao voucher; `Redeemed` vira `Available`), idempotente; `GET /api/v1/satellite/redemptions/{id}` consulta.
+4. `GET /api/v1/satellite/campaigns?establishmentId=&channel=` lista as campanhas efetivamente ativas da rede (sem saldo), filtradas pela loja (`404` se não existir na rede) e pelo canal.
+
+Pausa, encerramento e esgotamento da campanha não impedem o resgate; a validade própria do voucher (inclusiva até 23:59:59) e as restrições de valor da campanha valem sempre. Voucher vencido na tentativa de resgate passa a `Expired` no banco.
+
 ### Estrutura da Solution (`VoucherCampaigns.slnx`)
 
 | Projeto | Responsabilidade |

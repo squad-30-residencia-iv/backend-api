@@ -22,7 +22,7 @@ public record ConcessionRequest(
     [MinLength(1, ErrorMessage = ConcessionContract.ItemsRequired)]
     [MaxLength(ConcessionContract.MaxItems, ErrorMessage = ConcessionContract.ItemsTooMany)]
     IReadOnlyList<PurchaseItemRequest?>? Items,
-    [Range(0, int.MaxValue, ErrorMessage = ConcessionContract.CustomerPurchaseCountRange)] int? CustomerPurchaseCount);
+    [Range(0, int.MaxValue, ErrorMessage = ConcessionContract.CustomerPurchaseCountRange)] int? CustomerPurchaseCount) : IPurchaseRequest;
 
 public record ConcessionCustomerRequest(
     [Required(ErrorMessage = ConcessionContract.CustomerDocumentRequired)] string? Document);

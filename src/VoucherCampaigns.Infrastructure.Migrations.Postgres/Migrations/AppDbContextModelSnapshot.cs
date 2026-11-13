@@ -900,6 +900,103 @@ namespace VoucherCampaigns.Infrastructure.Migrations.Postgres.Migrations
                     b.ToTable("concessions", (string)null);
                 });
 
+            modelBuilder.Entity("VoucherCampaigns.Domain.Vouchers.Redemption", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("CampaignId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("campaign_id");
+
+                    b.Property<string>("Channel")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("channel");
+
+                    b.Property<string>("CustomerDocument")
+                        .IsRequired()
+                        .HasMaxLength(11)
+                        .HasColumnType("character varying(11)")
+                        .HasColumnName("customer_document");
+
+                    b.Property<decimal>("DiscountAmount")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("numeric(10,2)")
+                        .HasColumnName("discount_amount");
+
+                    b.Property<Guid>("EstablishmentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("establishment_id");
+
+                    b.Property<int>("ItemCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("item_count");
+
+                    b.Property<Guid>("NetworkId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("network_id");
+
+                    b.Property<DateTime>("RedeemedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("redeemed_at");
+
+                    b.Property<DateTime?>("ReversedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("reversed_at");
+
+                    b.Property<Guid>("SatelliteAppId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("satellite_app_id");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
+
+                    b.Property<decimal>("TotalAmount")
+                        .HasPrecision(10, 2)
+                        .HasColumnType("numeric(10,2)")
+                        .HasColumnName("total_amount");
+
+                    b.Property<string>("TransactionId")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("transaction_id");
+
+                    b.Property<Guid>("VoucherId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("voucher_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_redemptions");
+
+                    b.HasIndex("CampaignId")
+                        .HasDatabaseName("ix_redemptions_campaign_id");
+
+                    b.HasIndex("EstablishmentId")
+                        .HasDatabaseName("ix_redemptions_establishment_id");
+
+                    b.HasIndex("NetworkId", "RedeemedAt")
+                        .HasDatabaseName("ix_redemptions_network_id_redeemed_at");
+
+                    b.HasIndex("NetworkId", "TransactionId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_redemptions_network_id_transaction_id");
+
+                    b.HasIndex("VoucherId", "Status")
+                        .HasDatabaseName("ix_redemptions_voucher_id_status");
+
+                    b.ToTable("redemptions", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_redemptions_amounts", "total_amount >= 0 AND discount_amount >= 0");
+                        });
+                });
+
             modelBuilder.Entity("VoucherCampaigns.Domain.Vouchers.Voucher", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1216,6 +1313,32 @@ namespace VoucherCampaigns.Infrastructure.Migrations.Postgres.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_concessions_establishments_establishment_id");
+                });
+
+            modelBuilder.Entity("VoucherCampaigns.Domain.Vouchers.Redemption", b =>
+                {
+                    b.HasOne("VoucherCampaigns.Domain.Campaigns.Campaign", null)
+                        .WithMany()
+                        .HasForeignKey("CampaignId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_redemptions_campaigns_campaign_id");
+
+                    b.HasOne("VoucherCampaigns.Domain.Organization.Establishment", null)
+                        .WithMany()
+                        .HasForeignKey("EstablishmentId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_redemptions_establishments_establishment_id");
+
+                    b.HasOne("VoucherCampaigns.Domain.Vouchers.Voucher", "Voucher")
+                        .WithMany()
+                        .HasForeignKey("VoucherId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_redemptions_vouchers_voucher_id");
+
+                    b.Navigation("Voucher");
                 });
 
             modelBuilder.Entity("VoucherCampaigns.Domain.Vouchers.Voucher", b =>

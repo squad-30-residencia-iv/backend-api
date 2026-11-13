@@ -5,8 +5,9 @@ namespace VoucherCampaigns.Application.Vouchers;
 /// <summary>
 /// Liberação das reservas vencidas (spec GH-045, D-6). Cada voucher é descartado por um comando condicional
 /// pelo status atual, numa transação própria: dois chamadores simultâneos não devolvem o saldo duas vezes.
+/// Um provisório resgatado na própria compra (GH-049, D-10) tem o resgate estornado junto.
 /// </summary>
-public class ReservationReleaser(IConcessionRepository concessions) : IReservationReleaser
+public class ReservationReleaser(IConcessionRepository concessions, IRedemptionReverser redemptionReverser) : IReservationReleaser
 {
     public async Task<int> ReleaseExpiredAsync(Guid? networkId, DateTime utcNow, CancellationToken cancellationToken)
     {
@@ -24,6 +25,7 @@ public class ReservationReleaser(IConcessionRepository concessions) : IReservati
 
             await concessions.ReleaseReservationAsync(expired.CampaignId, expired.CampaignItemId, cancellationToken);
             await concessions.MarkConcessionAsync(expired.ConcessionId, ConcessionStatus.Expired, utcNow, cancellationToken);
+            await redemptionReverser.ReverseAllOfVoucherAsync(expired.VoucherId, "ReservationExpired", null, utcNow, cancellationToken);
             concessions.Add(new VoucherEvent
             {
                 Id = Guid.CreateVersion7(new DateTimeOffset(utcNow)),

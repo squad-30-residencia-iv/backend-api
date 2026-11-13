@@ -115,7 +115,10 @@ public class ConcessionRepository(AppDbContext context) : IConcessionRepository
                 && voucher.ReservedUntil > utcNow)
             .ExecuteUpdateAsync(
                 setters => setters
-                    .SetProperty(voucher => voucher.Status, VoucherStatus.Available)
+                    // Resgatado na própria compra até o limite (GH-049, D-10) já nasce resgatado ao confirmar.
+                    .SetProperty(
+                        voucher => voucher.Status,
+                        voucher => voucher.UsesCount >= voucher.MaxUses ? VoucherStatus.Redeemed : VoucherStatus.Available)
                     .SetProperty(voucher => voucher.ConfirmedAt, utcNow)
                     .SetProperty(voucher => voucher.ReservedUntil, (DateTime?)null),
                 cancellationToken);

@@ -20,8 +20,8 @@ public class ApiExceptionHandler(IProblemDetailsService problemDetailsService, P
     {
         ProblemDetails? problem = exception switch
         {
-            BusinessRuleException rule => ApiProblems.Create(
-                httpContext, StatusCodes.Status422UnprocessableEntity, rule.Code, rule.Message),
+            BusinessRuleException rule => WithExtensions(
+                ApiProblems.Create(httpContext, StatusCodes.Status422UnprocessableEntity, rule.Code, rule.Message), rule.Extensions),
             RequestValidationException validation => ValidationProblem(httpContext, validation),
             ResourceNotFoundException notFound => ApiProblems.Create(
                 httpContext, StatusCodes.Status404NotFound, ErrorCodes.NotFound, notFound.Message),
@@ -43,6 +43,16 @@ public class ApiExceptionHandler(IProblemDetailsService problemDetailsService, P
             ProblemDetails = problem,
             Exception = exception
         });
+    }
+
+    private static ProblemDetails WithExtensions(ProblemDetails problem, IReadOnlyDictionary<string, object?> extensions)
+    {
+        foreach (var (key, value) in extensions)
+        {
+            problem.Extensions[key] = value;
+        }
+
+        return problem;
     }
 
     private ValidationProblemDetails ValidationProblem(HttpContext httpContext, RequestValidationException exception)

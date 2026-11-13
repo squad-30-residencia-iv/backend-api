@@ -59,6 +59,8 @@ public static class DependencyInjection
         services.AddScoped<IAuditTrail, AuditTrail>();
         services.AddScoped<IConcessionRepository, ConcessionRepository>();
         services.AddScoped<IReservationReleaser, ReservationReleaser>();
+        services.AddScoped<IRedemptionRepository, RedemptionRepository>();
+        services.AddScoped<IRedemptionReverser, RedemptionReverser>();
         services.AddSingleton(provider => ReadVoucherOptions(provider.GetRequiredService<IConfiguration>()));
 
         services.AddSingleton(provider =>

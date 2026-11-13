@@ -21,7 +21,8 @@ Objetivo: chegar o quanto antes a uma **base útil** (campanha configurada, apro
 | GH-023 Modelo único de condições | ✅ Mesclado | Fica `Domain.Campaigns.CampaignCondition` (`campaign_conditions`). Sai o modelo do #36. Migração `RemoveMotorCampaignConditions` |
 | US-01.6 / US-01.11 Submeter, aprovar e reprovar | ✅ Mesclado (#42, #43) | Analista submete, gestor aprova (`Scheduled`/`Active`) ou reprova; histórico em `campaign_status_events` |
 | Issue #26 Auditoria, status efetivo e US-07.5 | ✅ Concluído | `audit_entries` append-only; status efetivo na leitura (PR-04); client credentials das aplicações satélites (`satellite_apps`, esquema `Satellite`) |
-| Issue #45 Motor de concessão (EP-04, 07.2, 07.4) | ✅ Em PR para a `staging` | Concessão em duas fases (`concessions`, `vouchers`, `voucher_events`), saldo atômico, esgotada derivada, idempotência, rotas `/api/v1/satellite/concessions` e `/customers/{cpf}/vouchers` (spec `GH-045-motor-de-concessao.md`) |
+| Issue #45 Motor de concessão (EP-04, 07.2, 07.4) | ✅ Na `staging` e na `main` (PR #53, 2026-11-11) | Concessão em duas fases (`concessions`, `vouchers`, `voucher_events`), saldo atômico, esgotada derivada, idempotência, rotas `/api/v1/satellite/concessions` e `/customers/{cpf}/vouchers` (spec `GH-045-motor-de-concessao.md`) |
+| Issue #49 Resgate (EP-05, 07.1, 07.3) | ✅ Em PR para a `staging` | Verificação de aplicáveis com desconto previsto e recomendado, resgate com utilização atômica e um voucher por compra, estorno, provisório resgatável na própria compra, campanhas vigentes por API (spec `GH-049-resgate-de-vouchers.md`) |
 
 ---
 
@@ -183,7 +184,7 @@ Ciclo SDD já usado nas US-02.5 e US-01.1 (`docs/prompts/` e `agents.md`):
 - [x] Reconciliar o modelo de condições (GH-023): fica o da US-01.4
 - [x] Issue #26 antes da #27: US-01.6, US-01.11, status efetivo, auditoria e US-07.5
 - [x] Issue #45 (fatia da #27): motor de concessão, com `Concession`, `Voucher` e `VoucherEvent` em `Domain/Vouchers`
-- [ ] Issue #49 (fatia da #27): verificação de aplicáveis e resgate (EP-05, US-07.3) sobre o `Voucher` da #45
+- [x] Issue #49 (fatia da #27): verificação de aplicáveis, resgate, estorno e campanhas vigentes (EP-05, US-07.1, US-07.3) sobre o `Voucher` da #45
 - [x] D1 a D9 aceitas (`docs/ROADMAP.md` 2.5). D1, D2, D3, D4, D7 e D9 estão no código da issue #45. D6: agendada não se edita e o motivo da reprovação é opcional. D8: exportação em CSV
 - [x] US-02.3 escopo por região, loja e canal (issue #46, com 01.10 duplicar e 01.8 pausar e encerrar)
 - [ ] US-02.6 herança de fuso e moeda; EP-06 público restrito

@@ -26,6 +26,7 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<Concession> Concessions => Set<Concession>();
     public DbSet<Voucher> Vouchers => Set<Voucher>();
     public DbSet<VoucherEvent> VoucherEvents => Set<VoucherEvent>();
+    public DbSet<Redemption> Redemptions => Set<Redemption>();
     public DbSet<AuditEntry> AuditEntries => Set<AuditEntry>();
     public DbSet<CampaignCondition> CampaignConditions => Set<CampaignCondition>();
     public DbSet<EligibilityCriterion> EligibilityCriteria => Set<EligibilityCriterion>();
