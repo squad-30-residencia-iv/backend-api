@@ -204,7 +204,12 @@ public class ConcessionService(
             await using (var transaction = await concessions.BeginTransactionAsync(cancellationToken))
             {
                 // Campanha antes do voucher, na ordem do cancelamento (GH-061, 7.1): sem deadlock com ele.
-                await concessions.LockCampaignAsync(voucher.CampaignId, cancellationToken);
+                // O status lido sob a trava decide (F5): o cancelamento que passou à frente pode ter deixado de lado
+                // este provisório por já vê-lo vencido no relógio dele; a confirmação, com o relógio lido antes, não o valida.
+                if (await concessions.LockCampaignAsync(voucher.CampaignId, cancellationToken) == CampaignStatus.Cancelled)
+                {
+                    throw new BusinessRuleException(ConcessionErrors.CampaignCancelledCode, ConcessionErrors.CampaignCancelledMessage);
+                }
 
                 // O voucher vira disponível ou, se já foi resgatado na própria compra até o limite (GH-049, D-10), resgatado.
                 if (await concessions.TryConfirmVoucherAsync(voucher.Id, utcNow, cancellationToken))

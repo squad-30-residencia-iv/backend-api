@@ -150,7 +150,7 @@ Auditoria nova: `AuditEventTypes.CampaignCancelled`. Evento de voucher: `Voucher
 - [x] 4. API: `POST /campaigns/{id}/cancel` no `CampaignsController`.
 - [x] 5. Testes unitários e de integração (seção 5); smoke `scripts/smoke/cancelamento.py`.
 - [x] 6. Documentação: README, `docs/ROADMAP.md`, `docs/PROJECT_STATE.md`, PA-1 da GH-049 e PA-13 da GH-045 marcados como resolvidos.
-- [ ] 7. `dotnet build -warnaserror`, `dotnet test` em SQLite e PostgreSQL, smoke com a API no ar, agente `testador-de-branch` (Opus).
+- [x] 7. `dotnet build -warnaserror`, `dotnet test` em SQLite e PostgreSQL, smoke com a API no ar, agente `testador-de-branch` (Opus).
 
 ---
 
@@ -208,6 +208,7 @@ Debatidos com o usuário em 2026-11-13: os seis ficam fora desta fatia, a D-2 se
 | Estorno depois do cancelamento (D-13) | O voucher que volta a `Cancelled` pelo estorno ganha `cancelled_at` e um evento `Cancelled` (causa `CampaignCancelled`). | Coerência do histórico com o status (US-05.4). |
 | Motivo (D-4, agente F3) | O limite de 500 caracteres é conferido no serviço, depois do `trim`; o `[Required]` fica no corpo. | A D-4 fala em "1 a 500 depois do trim". |
 | Confirmação depois do cancelamento (D-11, agente F4) | O provisório descartado pelo cancelamento ganha `cancelled_at`; a confirmação só responde `CONCESSION_CAMPAIGN_CANCELLED` quando ele existe. A concessão desfeita pelo PDV antes continua `CONCESSION_ALREADY_CANCELLED`. | O código vale só para o que o cancelamento descartou. |
+| Confirmação com a reserva vencendo no meio (D-6/D-11, agente F5) | A confirmação usa o status da campanha lido sob a trava: se for `Cancelled`, responde `422 CONCESSION_CAMPAIGN_CANCELLED` sem confirmar. O provisório que o cancelamento deixou de lado por já estar vencido fica para a liberação da reserva. | O relógio da confirmação é lido antes da trava; sem isso, um cancelamento que passasse à frente no instante do vencimento deixava o voucher `Available` numa campanha cancelada (RN10). |
 | Sem corpo | `POST /cancel` sem corpo responde `415` (ProblemDetails do framework). | Comportamento padrão das rotas com corpo do projeto. |
 | `smoke.py` | A checagem de `GET /dashboard/export?status=Cancelled` aceita `200` quando já há campanha cancelada na base. | O roteiro do cancelamento cria uma; a ordem dos roteiros deixa de importar. |
 
@@ -219,3 +220,6 @@ Debatidos com o usuário em 2026-11-13: os seis ficam fora desta fatia, a D-2 se
 - Smoke com a API no ar: `smoke.py`, `motor.py`, `publico.py`, o novo `cancelamento.py` e `smoke.py` de novo, todos OK.
 - Agente `testador-de-branch` (Opus) no PR #63 (commit `82dbfa8`): reprovado. No SQLite tudo certo, inclusive as corridas; no PostgreSQL, F1 (estorno simultâneo devolvia o voucher a `Available`) e F2 (deadlock entre confirmação e cancelamento, `500`), mais F3 (limite antes do trim) e F4 (código da concessão desfeita antes). Corrigidos na mesma PR (linhas da 7.1 acima).
 - Depois das correções: 305 unitários e 531 de integração em SQLite; no PostgreSQL, 529 de 531 (as falhas foram `DatabaseSchemaTests` e `PortalCorsTests`, pelo timeout conhecido do `DROP DATABASE`). As corridas novas de estorno e de confirmação com o cancelamento passaram 3 de 3 no PostgreSQL; sem a correção, a do estorno falhou 3 de 3 e a da confirmação 2 de 3. Smoke dos quatro roteiros OK.
+- Agente `testador-de-branch` (Opus) de novo, no commit `676aceb`: aprovado com ressalva. F1 a F4 confirmados como corrigidos em SQLite e PostgreSQL (corridas de estorno, confirmação, desfazimento e resgate com o cancelamento, 3 rodadas cada, sem `5xx` nem voucher `Available`); ordem das travas conferida em todos os caminhos. Achou o F5 (linha da 7.1), reproduzido no PostgreSQL segurando uma trava de propósito.
+- Depois do F5: o teste `ConfirmationThatReadTheClockBeforeTheReservationExpired_IsRefusedAfterTheCancel` falha sem a correção (confirmação `200`) e passa com ela. 305 unitários e 532 de integração em SQLite; no PostgreSQL, 529 a 530 de 532, só com o timeout conhecido do `DROP DATABASE` (`DatabaseSchemaTests`, `PortalCorsTests`); os testes de cancelamento, concorrência e satélite passaram 3 de 3 (76 de 76). Smoke dos quatro roteiros OK.
+- Ressalvas do agente fora desta fatia: o `RedemptionReversed` e o `Cancelled` do estorno têm o mesmo `occurred_at` (a ordem entre eles depende do Guid v7); o resgate de voucher já esgotado de campanha cancelada responde `REDEMPTION_NO_USES_LEFT`, pela ordem do `RedemptionEvaluator` (GH-049).

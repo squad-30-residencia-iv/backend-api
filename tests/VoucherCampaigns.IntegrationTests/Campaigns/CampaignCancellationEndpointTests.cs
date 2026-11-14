@@ -300,6 +300,27 @@ public class CampaignCancellationEndpointTests : IClassFixture<ApiFactory>
         Assert.Equal("CONCESSION_ALREADY_CANCELLED", (await confirm.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString());
     }
 
+    [Fact]
+    public async Task ConfirmationThatReadTheClockBeforeTheReservationExpired_IsRefusedAfterTheCancel()
+    {
+        // F5: o cancelamento chega depois do vencimento da reserva e deixa o provisório para a liberação; a confirmação
+        // que leu o relógio antes do vencimento não pode validá-lo numa campanha cancelada.
+        var scenario = await ApprovedCampaignAsync(_factory);
+        var satellite = Satellite(_factory);
+        var before = _factory.Clock.GetUtcNow();
+        var granted = await GrantedAsync(satellite, Purchase(scenario.StoreId, document: TestCpf.New()));
+
+        _factory.Clock.UtcNow = before.AddMinutes(VoucherOptions.DefaultReservationMinutes + 1);
+        (await CancelAsync(User(_factory), scenario.CampaignId)).EnsureSuccessStatusCode();
+        _factory.Clock.UtcNow = before;
+
+        var confirm = await satellite.PostAsync($"{ConcessionsRoute}/{granted.ConcessionId}/confirm", null);
+
+        Assert.Equal(HttpStatusCode.UnprocessableEntity, confirm.StatusCode);
+        Assert.Equal("CONCESSION_CAMPAIGN_CANCELLED", (await confirm.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString());
+        Assert.NotEqual(VoucherStatus.Available, await StatusOfAsync(granted.Voucher!.Id));
+    }
+
     // ---------- D-13: estorno depois do cancelamento ----------
 
     [Fact]
