@@ -192,7 +192,7 @@ Ciclo SDD já usado nas US-02.5 e US-01.1 (`docs/prompts/` e `agents.md`):
 - [x] US-02.3 escopo por região, loja e canal (issue #46, com 01.10 duplicar e 01.8 pausar e encerrar)
 - [ ] US-02.6 herança de fuso e moeda
 - [x] Issue #47 (última fatia da #27): público restrito, US-04.2 com critérios, US-06.1 a 06.5 e a simulação da 06.6 (spec `GH-047`)
-- [x] US-01.8 cancelar campanha (RN10) com invalidação em lote dos vouchers não utilizados (US-05.5 cenários 2 e 3; PA-1 da spec `GH-049`): issue #61, spec `GH-061`; pontos em aberto na issue #62
+- [x] US-01.8 cancelar campanha (RN10) com invalidação em lote dos vouchers não utilizados (US-05.5 cenários 2 e 3; PA-1 da spec `GH-049`): issue #61, spec `GH-061`, na `staging` pelo PR #63 (2026-11-14); pontos em aberto na issue #62
 - [ ] US-01.7 edição da campanha após entrar em vigor (RN03b, RN02a)
 - [ ] Issue #57: pontos em aberto da spec `GH-045` (PA-4 a PA-14)
 - [ ] Avisar o frontend e o PDV das rotas novas (resgate, campanhas vigentes, dashboard) e conferir o formato do CSV
