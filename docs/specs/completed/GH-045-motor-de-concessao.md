@@ -409,5 +409,5 @@ Todas as rotas: policy `SatelliteIssueVouchers`; `401 AUTH_UNAUTHENTICATED` sem 
 | PA-10 | **Colisão do código do voucher.** | 60 bits aleatórios; a violação do índice único viraria `500`. | Se ocorrer, uma nova tentativa no serviço. |
 | PA-11 | **Condições `ProductCombination` e `PurchasePeriod`.** | Semântica indefinida no backlog (US-01.4 PA-4). | Refinar com o PO. |
 | PA-12 | **Indisponibilidade do motor (US-04.1, cenário 4).** | Não bloquear a venda é responsabilidade do satélite (timeout e seguir). A API só precisa responder rápido. | `README.md` para integradores; monitoramento no deploy. |
-| PA-13 | **Cancelamento da campanha invalidando vouchers** (RN10, US-05.5 cenário 2) e **vouchers emitidos quando o total é reduzido** (RN03b). | US-01.8 (cancelar) e US-01.7 após o vigor não existem. | Onda 3. |
+| PA-13 | **Resolvido pela issue #61 (spec `GH-061-cancelar-campanha.md`, 2026-11-13).** **Cancelamento da campanha invalidando vouchers** (RN10, US-05.5 cenário 2) e **vouchers emitidos quando o total é reduzido** (RN03b). | US-01.8 (cancelar) e US-01.7 após o vigor não existem. | Onda 3. |
 | PA-14 | **`reservedVouchers` e `SoldOut` no portal.** | Mudança de resposta sem rota nova. | Avisar o frontend ao abrir o PR. |

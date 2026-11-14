@@ -1078,6 +1078,10 @@ namespace VoucherCampaigns.Infrastructure.Migrations.Postgres.Migrations
                         .HasColumnType("uuid")
                         .HasColumnName("campaign_item_id");
 
+                    b.Property<DateTime?>("CancelledAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("cancelled_at");
+
                     b.Property<string>("Channel")
                         .IsRequired()
                         .HasMaxLength(20)

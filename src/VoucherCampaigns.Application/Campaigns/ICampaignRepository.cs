@@ -36,7 +36,12 @@ public interface ICampaignRepository
     /// <c>UPDATE ... WHERE updated_at = @lido</c>, com o valor lido do rastreamento. A marca nova é sempre maior que a
     /// lida, mesmo com o relógio parado. Falso quando outra requisição gravou antes (nada é gravado).
     /// </summary>
-    Task<bool> SaveIfUnchangedAsync(Campaign campaign, CancellationToken cancellationToken);
+    /// <param name="withinTransaction">
+    /// Trabalho extra na mesma transação, depois da trava e antes do <c>SaveChanges</c> (o cancelamento invalida os
+    /// vouchers aqui, spec GH-061).
+    /// </param>
+    Task<bool> SaveIfUnchangedAsync(
+        Campaign campaign, CancellationToken cancellationToken, Func<CancellationToken, Task>? withinTransaction = null);
 
     void AddStatusEvent(CampaignStatusEvent statusEvent);
 

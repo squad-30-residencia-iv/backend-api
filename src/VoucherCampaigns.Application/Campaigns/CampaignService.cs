@@ -21,6 +21,7 @@ public class CampaignService(
     IOrganizationRepository organization,
     ICurrentUser currentUser,
     IAuditTrail audit,
+    ICampaignVoucherCanceller voucherCanceller,
     TimeProvider timeProvider) : ICampaignService
 {
     public async Task<CampaignResponse> CreateAsync(CreateCampaignRequest request, CancellationToken cancellationToken)
@@ -160,6 +161,44 @@ public class CampaignService(
         var statusEvent = campaign.End(currentUser.UserId, utcNow);
         RecordStatusChange(campaign, statusEvent, AuditEventTypes.CampaignEnded);
         await SaveGuardedAsync(campaign, cancellationToken);
+        return Map(campaign, campaign.Network!, utcNow);
+    }
+
+    public async Task<CampaignResponse> CancelAsync(Guid id, CancelCampaignRequest request, CancellationToken cancellationToken)
+    {
+        // O [Required] já recusa ausente e em branco; aqui fica a garantia para quem chama o serviço direto (D-4).
+        var reason = request.Reason?.Trim();
+
+        if (string.IsNullOrEmpty(reason))
+        {
+            throw new RequestValidationException(nameof(request.Reason), CampaignContract.CancellationReasonRequired);
+        }
+
+        if (reason.Length > CampaignContract.MaxCancellationReasonLength)
+        {
+            throw new RequestValidationException(nameof(request.Reason), CampaignContract.CancellationReasonTooLong);
+        }
+
+        var campaign = await RequireExistingAsync(id, cancellationToken);
+        var utcNow = timeProvider.GetUtcNow().UtcDateTime;
+        var statusEvent = campaign.Cancel(currentUser.UserId, reason, utcNow);
+        campaigns.AddStatusEvent(statusEvent);
+
+        // A trava da campanha é o primeiro comando: bloqueia a linha contra reservas em andamento (D-9) e contra
+        // outro cancelamento; os vouchers são invalidados na mesma transação (1.3, passos 2 a 6).
+        await SaveGuardedAsync(campaign, cancellationToken, async token =>
+        {
+            var result = await voucherCanceller.CancelVouchersAsync(campaign.Id, currentUser.UserId, utcNow, token);
+
+            AppendAudit(campaign, AuditEventTypes.CampaignCancelled, currentUser.UserId, utcNow, new CancelledPayload(
+                statusEvent.FromStatus.ToString(),
+                statusEvent.ToStatus.ToString(),
+                reason,
+                result.CancelledVouchers,
+                result.DiscardedProvisional,
+                result.ReversedRedemptions));
+        });
+
         return Map(campaign, campaign.Network!, utcNow);
     }
 
@@ -679,9 +718,10 @@ public class CampaignService(
     /// Grava só se a campanha não mudou desde a leitura (PA-10): duas edições ou transições simultâneas não se somam,
     /// e a segunda recebe 422 <see cref="CampaignErrors.ConcurrentUpdateCode"/>.
     /// </summary>
-    private async Task SaveGuardedAsync(Campaign campaign, CancellationToken cancellationToken)
+    private async Task SaveGuardedAsync(
+        Campaign campaign, CancellationToken cancellationToken, Func<CancellationToken, Task>? withinTransaction = null)
     {
-        if (!await campaigns.SaveIfUnchangedAsync(campaign, cancellationToken))
+        if (!await campaigns.SaveIfUnchangedAsync(campaign, cancellationToken, withinTransaction))
         {
             throw new BusinessRuleException(CampaignErrors.ConcurrentUpdateCode, CampaignErrors.ConcurrentUpdateMessage);
         }
@@ -747,6 +787,9 @@ public class CampaignService(
                 location.Key.EstablishmentId,
                 location.Select(scope => scope.ChannelType).Distinct().Order().Select(channel => channel.ToString()).ToList()))
             .ToList();
+
+    private sealed record CancelledPayload(
+        string FromStatus, string ToStatus, string Reason, int CancelledVouchers, int DiscardedProvisional, int ReversedRedemptions);
 
     private sealed record CreatedPayload(string Name, DateTimeOffset StartsAt, DateTimeOffset EndsAt, Guid NetworkId);
 

@@ -17,7 +17,10 @@ public class ReservationReleaser(IConcessionRepository concessions, IRedemptionR
         {
             await using var transaction = await concessions.BeginTransactionAsync(cancellationToken);
 
-            // Primeiro comando da transação: quem conseguir mudar o status é quem devolve o saldo.
+            // Campanha antes do voucher, na ordem do cancelamento (GH-061, 7.1); depois, quem conseguir mudar o status
+            // é quem devolve o saldo.
+            await concessions.LockCampaignAsync(expired.CampaignId, cancellationToken);
+
             if (!await concessions.TryDiscardVoucherAsync(expired.VoucherId, utcNow, cancellationToken))
             {
                 continue;

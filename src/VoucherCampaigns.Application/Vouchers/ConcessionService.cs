@@ -70,7 +70,12 @@ public class ConcessionService(
 
             if (outcome != ReserveOutcome.Reserved)
             {
-                refusal ??= outcome == ReserveOutcome.CampaignSoldOut ? ConcessionRefusal.CampaignSoldOut : ConcessionRefusal.TargetSoldOut;
+                refusal ??= outcome switch
+                {
+                    ReserveOutcome.CampaignNotActive => ConcessionRefusal.CampaignNotActive,
+                    ReserveOutcome.CampaignSoldOut => ConcessionRefusal.CampaignSoldOut,
+                    _ => ConcessionRefusal.TargetSoldOut
+                };
                 refusedCampaignId ??= eligible.Campaign.Id;
                 continue;
             }
@@ -181,6 +186,13 @@ public class ConcessionService(
                 case ConcessionStatus.Confirmed:
                     return Map(concession, utcNow);
                 case ConcessionStatus.Cancelled:
+                    // Descartada pelo cancelamento da campanha (GH-061, D-11): o PDV recebe o motivo próprio. A desfeita
+                    // pelo próprio PDV antes do cancelamento continua "já desfeita" (sem cancelled_at).
+                    if (concession.Voucher?.CancelledAt is not null)
+                    {
+                        throw new BusinessRuleException(ConcessionErrors.CampaignCancelledCode, ConcessionErrors.CampaignCancelledMessage);
+                    }
+
                     throw new BusinessRuleException(ConcessionErrors.AlreadyCancelledCode, ConcessionErrors.AlreadyCancelledMessage);
                 case ConcessionStatus.Expired:
                     await releaser.ReleaseExpiredAsync(app.NetworkId, utcNow, cancellationToken);
@@ -191,6 +203,14 @@ public class ConcessionService(
 
             await using (var transaction = await concessions.BeginTransactionAsync(cancellationToken))
             {
+                // Campanha antes do voucher, na ordem do cancelamento (GH-061, 7.1): sem deadlock com ele.
+                // O status lido sob a trava decide (F5): o cancelamento que passou à frente pode ter deixado de lado
+                // este provisório por já vê-lo vencido no relógio dele; a confirmação, com o relógio lido antes, não o valida.
+                if (await concessions.LockCampaignAsync(voucher.CampaignId, cancellationToken) == CampaignStatus.Cancelled)
+                {
+                    throw new BusinessRuleException(ConcessionErrors.CampaignCancelledCode, ConcessionErrors.CampaignCancelledMessage);
+                }
+
                 // O voucher vira disponível ou, se já foi resgatado na própria compra até o limite (GH-049, D-10), resgatado.
                 if (await concessions.TryConfirmVoucherAsync(voucher.Id, utcNow, cancellationToken))
                 {
@@ -238,6 +258,8 @@ public class ConcessionService(
 
             await using (var transaction = await concessions.BeginTransactionAsync(cancellationToken))
             {
+                await concessions.LockCampaignAsync(voucher.CampaignId, cancellationToken);
+
                 if (await concessions.TryDiscardVoucherAsync(voucher.Id, utcNow, cancellationToken))
                 {
                     await concessions.ReleaseReservationAsync(voucher.CampaignId, voucher.CampaignItemId, cancellationToken);

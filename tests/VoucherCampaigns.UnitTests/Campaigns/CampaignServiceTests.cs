@@ -3,6 +3,7 @@ using VoucherCampaigns.Application.Authentication;
 using VoucherCampaigns.Application.Campaigns;
 using VoucherCampaigns.Application.Common;
 using VoucherCampaigns.Application.Ports;
+using VoucherCampaigns.Application.Vouchers;
 using VoucherCampaigns.Domain.Audit;
 using VoucherCampaigns.Domain.Catalog;
 using VoucherCampaigns.Domain.Campaigns;
@@ -271,7 +272,13 @@ public class CampaignServiceTests
     }
 
     private CampaignService CreateService(Network? network, DateTimeOffset? now = null) =>
-        new(new FakeNetworkRepository(network), _campaigns, _catalog, new FakeOrganizationRepository(), _user, _audit, new FixedTimeProvider(now ?? Now));
+        new(new FakeNetworkRepository(network), _campaigns, _catalog, new FakeOrganizationRepository(), _user, _audit, new NoVoucherCanceller(), new FixedTimeProvider(now ?? Now));
+
+    private sealed class NoVoucherCanceller : ICampaignVoucherCanceller
+    {
+        public Task<CampaignVoucherCancellation> CancelVouchersAsync(Guid campaignId, Guid actorUserId, DateTime utcNow, CancellationToken cancellationToken) =>
+            Task.FromResult(new CampaignVoucherCancellation(0, 0, 0));
+    }
 
     private static CreateCampaignRequest Request(DateTime startsAt, DateTime endsAt) =>
         new(Network.Id, "Volta às Aulas", null, startsAt, endsAt);
@@ -301,8 +308,16 @@ public class CampaignServiceTests
 
         public Task LoadEligibleCustomersAsync(Campaign campaign, CancellationToken cancellationToken) => Task.CompletedTask;
 
-        public Task<bool> SaveIfUnchangedAsync(Campaign campaign, CancellationToken cancellationToken) =>
-            Task.FromResult(true);
+        public async Task<bool> SaveIfUnchangedAsync(
+            Campaign campaign, CancellationToken cancellationToken, Func<CancellationToken, Task>? withinTransaction = null)
+        {
+            if (withinTransaction is not null)
+            {
+                await withinTransaction(cancellationToken);
+            }
+
+            return true;
+        }
 
         public Task<IReadOnlyList<string>> GetEligibleDocumentsAsync(Guid campaignId, CancellationToken cancellationToken) =>
             Task.FromResult<IReadOnlyList<string>>(
