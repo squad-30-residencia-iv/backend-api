@@ -7,15 +7,17 @@
 ## 📌 Contexto Geral
 
 - **Sprint:** Sprint 1
-- **Foco:** EP-03 / issue #50 (acompanhamento no portal) na branch `feat/EP-03-acompanhamento-portal`: rotas de leitura `GET /api/v1/vouchers`, `GET /api/v1/reports/*`, `GET /api/v1/audit-entries` e contadores `redeemedVouchers`/`expiredVouchers` no `CampaignResponse`. Concessão (#45), resgate (#49) e GH-028 já estão na `staging`/`main`. Público restrito (#47) e pontos abertos da GH-049 §6 seguem pendentes. As decisões D1 a D9 estão aceitas.
+- **Foco:** EP-03 / issue #50 concluído na branch `feat/EP-03-acompanhamento-portal` (commit `8a28bef`): rotas `GET /api/v1/vouchers`, `GET /api/v1/reports/*`, `GET /api/v1/audit-entries` e contadores `redeemedVouchers`/`expiredVouchers`. Próximo passo de entrega: abrir PR e mesclar na `staging`. Concessão (#45), resgate (#49) e GH-028 já estão na `staging`/`main`. Público restrito (#47) e pontos abertos da GH-049 §6 seguem pendentes. As decisões D1 a D9 estão aceitas.
+- **Última atualização:** 2026-11-16 (fechamento de sessão: EP-03 commitado; smoke `motor.py` e demo Postman do satélite validados localmente).
 - **Leitura da memória (2026-11-08):** o `docs/ROADMAP.md` foi alinhado a este arquivo. A spec `GH-023-base-motor-e-decisoes.md` continua em `completed/`, mas o corpo ainda diz Draft e descreve a `CampaignCondition` removida; vale a nota do topo e a spec `GH-023-reconciliar-condicoes-e-corrigir-main.md`. O modelo de condições em vigor é o da US-01.4.
 
 ---
 
 ## 🚧 Tarefas em Andamento
 
-- [x] [SQUAD-2] Issue #50 / EP-03 (fatias 1–4): consulta de vouchers e histórico no portal, contadores redeemed/expired na campanha, relatórios overview/catalog e leitura de `audit_entries`. Specs em `completed/GH-050-*`, `US-03.1-*`, `US-03.4-*`. Branch `feat/EP-03-acompanhamento-portal`.
-- [ ] [SQUAD-2] Avisar o frontend: novas rotas `GET /api/v1/vouchers`, `GET /api/v1/reports/overview|catalog`, `GET /api/v1/audit-entries`; `CampaignResponse` ganhou `redeemedVouchers` e `expiredVouchers`.
+- [x] [SQUAD-2] Issue #50 / EP-03 (fatias 1–4): consulta de vouchers e histórico no portal, contadores redeemed/expired na campanha, relatórios overview/catalog e leitura de `audit_entries`. Specs em `completed/GH-050-*`, `US-03.1-*`, `US-03.4-*`. Branch `feat/EP-03-acompanhamento-portal` (`8a28bef`).
+- [ ] [SQUAD-2] Abrir PR de `feat/EP-03-acompanhamento-portal` para `staging` e mesclar (entrega do MVP de acompanhamento).
+- [x] [SQUAD-2] Avisar o frontend: novas rotas `GET /api/v1/vouchers`, `GET /api/v1/reports/overview|catalog`, `GET /api/v1/audit-entries`; `CampaignResponse` ganhou `redeemedVouchers` e `expiredVouchers` — portal na US-025 (`feat/integracao-acompanhamento-api`).
 - [ ] [SQUAD-2] Avisar o frontend (frontend-web#42): o administrador grava categoria e produto; analista e gestor só consultam o catálogo (`403 AUTH_FORBIDDEN_ROLE` na escrita).
 - [ ] [SQUAD-2] Avisar o frontend (frontend-web#38 e #43): `PUT /api/v1/campaigns/{id}/scopes`, `POST .../duplicate`, `POST .../pause` e `POST .../end`; `scopes` no `CampaignResponse`; a submissão agora exige escopo (`422 CAMPAIGN_SUBMIT_SCOPE_REQUIRED`).
 - [x] [SQUAD-2] Motor (issue #45): concede só em loja e canal do escopo; pausada não emite. Encerrada não resgata fica para a #49.
@@ -98,6 +100,7 @@
 
 ## ⚠️ Bloqueios & Decisões Recentes
 
+- **Demo PDV / smoke (2026-11-16):** o “PDV” é a API satélite (`pdv-demo`). Validação local: `python scripts/smoke/motor.py http://localhost:5026` (sem `-I` no Windows; instalar `tzdata` se faltar fuso) e Postman (`/satellite/token` → concessions → confirm → check → redemptions). `transactionId` novo a cada emissão/compra de resgate.
 - **Datas de campanha:** sem fuso no request, interpretadas no fuso da rede; "agora" via `TimeProvider`, comparado na precisão de minuto. Herança de fuso por região/loja e moeda ficam para a US-02.6.
 - **Concessão (2026-11-09):** uma compra usa uma única campanha (D1). Se mais de uma servir, vence a de maior benefício naquela compra; no empate, a que termina primeiro; se ainda empatar, a aprovada primeiro. O satélite envia o CPF, os dados exigidos pelas condições (D4) e a quantidade de compras (D2). A plataforma não guarda o histórico de compras.
 - **Concessão em duas fases (D3, issue #45):** o voucher nasce `Provisional` com o saldo reservado; a confirmação da venda o torna `Available`; desfazer ou expirar descarta e devolve. O resgate (#49) só aceita `Available`. O prazo de reserva é configuração (`Vouchers:ReservationMinutes`), não há job dedicado além da varredura leve.

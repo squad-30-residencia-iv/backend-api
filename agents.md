@@ -65,6 +65,16 @@ Qualquer assistente que iniciar uma sessão de desenvolvimento deve seguir estri
 - Sem `.env`, a API usa SQLite e aplica as migrações na inicialização. Verifique com `GET /health` e `GET /api/v1/system/status`.
 - O banco é escolhido por `Database__Provider` (`Sqlite` | `Postgres`) e `Database__ConnectionString` (variáveis de ambiente, `.env` ou `appsettings.json`). Nunca referencie o provider fora de `VoucherCampaigns.Infrastructure/DependencyInjection.cs`.
 
+### [Skill] Smoke / demo do satélite (PDV)
+
+- Com a API no ar (Development + seed), na raiz do repositório:
+  ```bash
+  python scripts/smoke/smoke.py http://localhost:5026
+  python scripts/smoke/motor.py http://localhost:5026
+  ```
+- No Windows: instale `tzdata` (`py -3 -m pip install tzdata`) e **não** use `python -I` (o `-I` isola o site-packages do usuário e o fuso `America/Sao_Paulo` some).
+- Credenciais demo: `pdv-demo` / segredo em `appsettings.Development.json` (`Auth:Satellite:Apps`). Para repetir no Postman, mude o `transactionId` a cada nova concessão ou compra de resgate.
+
 ### [Skill] Criação de Migrações (EF Core)
 
 - Toda migração deve existir nos dois conjuntos (SQLite e PostgreSQL). Não use `dotnet ef migrations add` diretamente; use:
