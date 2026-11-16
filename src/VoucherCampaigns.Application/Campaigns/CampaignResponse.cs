@@ -15,6 +15,8 @@ namespace VoucherCampaigns.Application.Campaigns;
 /// <param name="AllowUseInSamePurchase">Uso na mesma compra que gerou o voucher (US-01.4); falso por padrão.</param>
 /// <param name="RejectionReason">Motivo da reprovação (US-01.11); nulo quando a campanha não foi reprovada.</param>
 /// <param name="Scopes">Onde a campanha vale (US-02.3), na ordem informada; vazio enquanto não definido.</param>
+/// <param name="RedeemedVouchers">Vouchers com status efetivo resgatado (GH-050 / #50).</param>
+/// <param name="ExpiredVouchers">Vouchers com status efetivo expirado (GH-050 / #50).</param>
 public record CampaignResponse(
     Guid Id,
     Guid NetworkId,
@@ -39,7 +41,9 @@ public record CampaignResponse(
     bool AllowUseInSamePurchase,
     string? RejectionReason,
     IReadOnlyList<CampaignScopeResponse> Scopes,
-    int ReservedVouchers);
+    int ReservedVouchers,
+    int RedeemedVouchers,
+    int ExpiredVouchers);
 
 /// <summary>Local do escopo: região ou loja (as duas nulas = rede inteira), com os canais em ordem fixa.</summary>
 /// <param name="Name">Nome da região ou da loja; nulo para a rede inteira.</param>

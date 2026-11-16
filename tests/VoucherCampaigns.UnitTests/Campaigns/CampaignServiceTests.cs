@@ -3,11 +3,13 @@ using VoucherCampaigns.Application.Authentication;
 using VoucherCampaigns.Application.Campaigns;
 using VoucherCampaigns.Application.Common;
 using VoucherCampaigns.Application.Ports;
+using VoucherCampaigns.Application.Vouchers;
 using VoucherCampaigns.Domain.Audit;
 using VoucherCampaigns.Domain.Catalog;
 using VoucherCampaigns.Domain.Campaigns;
 using VoucherCampaigns.Domain.Common;
 using VoucherCampaigns.Domain.Organization;
+using VoucherCampaigns.Domain.Vouchers;
 
 namespace VoucherCampaigns.UnitTests.Campaigns;
 
@@ -271,7 +273,15 @@ public class CampaignServiceTests
     }
 
     private CampaignService CreateService(Network? network, DateTimeOffset? now = null) =>
-        new(new FakeNetworkRepository(network), _campaigns, _catalog, new FakeOrganizationRepository(), _user, _audit, new FixedTimeProvider(now ?? Now));
+        new(
+            new FakeNetworkRepository(network),
+            _campaigns,
+            _catalog,
+            new FakeOrganizationRepository(),
+            new FakePortalVoucherReadRepository(),
+            _user,
+            _audit,
+            new FixedTimeProvider(now ?? Now));
 
     private static CreateCampaignRequest Request(DateTime startsAt, DateTime endsAt) =>
         new(Network.Id, "Volta às Aulas", null, startsAt, endsAt);
@@ -373,6 +383,22 @@ public class CampaignServiceTests
         public List<AuditEntry> Entries { get; } = [];
 
         public void Append(AuditEntry entry) => Entries.Add(entry);
+    }
+
+    private sealed class FakePortalVoucherReadRepository : IPortalVoucherReadRepository
+    {
+        public Task<IReadOnlyList<Voucher>> ListByNetworkAsync(Guid networkId, Guid? campaignId, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<Voucher>>([]);
+
+        public Task<Voucher?> FindByIdAsync(Guid id, CancellationToken cancellationToken) =>
+            Task.FromResult<Voucher?>(null);
+
+        public Task<Establishment?> FindEstablishmentAsync(Guid establishmentId, CancellationToken cancellationToken) =>
+            Task.FromResult<Establishment?>(null);
+
+        public Task<IReadOnlyList<Voucher>> ListForCampaignsAsync(
+            Guid networkId, IReadOnlyCollection<Guid> campaignIds, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<Voucher>>([]);
     }
 
     private sealed class FakeCurrentUser(Guid networkId) : ICurrentUser

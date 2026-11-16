@@ -6,6 +6,7 @@ using VoucherCampaigns.Application.Audit;
 using VoucherCampaigns.Application.Authentication;
 using VoucherCampaigns.Application.Campaigns;
 using VoucherCampaigns.Application.Ports;
+using VoucherCampaigns.Application.Reports;
 using VoucherCampaigns.Application.SystemStatus;
 using VoucherCampaigns.Application.Vouchers;
 using VoucherCampaigns.Infrastructure.Authentication;
@@ -61,6 +62,9 @@ public static class DependencyInjection
         services.AddScoped<IReservationReleaser, ReservationReleaser>();
         services.AddScoped<IRedemptionRepository, RedemptionRepository>();
         services.AddScoped<IRedemptionReverser, RedemptionReverser>();
+        services.AddScoped<IPortalVoucherReadRepository, PortalVoucherReadRepository>();
+        services.AddScoped<IReportReadRepository, ReportReadRepository>();
+        services.AddScoped<IAuditQueryRepository, AuditQueryRepository>();
         services.AddSingleton(provider => ReadVoucherOptions(provider.GetRequiredService<IConfiguration>()));
 
         services.AddSingleton(provider =>

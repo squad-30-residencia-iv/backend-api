@@ -3,11 +3,13 @@ using VoucherCampaigns.Application.Authentication;
 using VoucherCampaigns.Application.Common;
 using VoucherCampaigns.Application.DTOs.Organization;
 using VoucherCampaigns.Application.Ports;
+using VoucherCampaigns.Application.Vouchers;
 using VoucherCampaigns.Domain.Audit;
 using VoucherCampaigns.Domain.Campaigns;
 using VoucherCampaigns.Domain.Catalog;
 using VoucherCampaigns.Domain.Common;
 using VoucherCampaigns.Domain.Organization;
+using VoucherCampaigns.Domain.Vouchers;
 
 namespace VoucherCampaigns.Application.Campaigns;
 
@@ -16,6 +18,7 @@ public class CampaignService(
     ICampaignRepository campaigns,
     ICatalogRepository catalog,
     IOrganizationRepository organization,
+    IPortalVoucherReadRepository portalVouchers,
     ICurrentUser currentUser,
     IAuditTrail audit,
     TimeProvider timeProvider) : ICampaignService
@@ -62,11 +65,12 @@ public class CampaignService(
 
         var utcNow = timeProvider.GetUtcNow().UtcDateTime;
         var items = await campaigns.GetByNetworkAsync(scopedNetworkId, cancellationToken);
+        var counters = await LoadCountersAsync(scopedNetworkId, items.Select(campaign => campaign.Id).ToList(), utcNow, cancellationToken);
 
         // O filtro olha o status efetivo (PR-04), o mesmo devolvido em "status".
         return items
             .Where(campaign => statusFilter is null || campaign.EffectiveStatus(utcNow) == statusFilter)
-            .Select(campaign => Map(campaign, network, utcNow))
+            .Select(campaign => Map(campaign, network, utcNow, counters.GetValueOrDefault(campaign.Id)))
             .ToList();
     }
 
@@ -78,7 +82,10 @@ public class CampaignService(
         // A rede só é conhecida depois de carregar a campanha (US-02.5, cenário 3).
         NetworkScope.Ensure(currentUser, campaign.NetworkId);
 
-        return Map(campaign, campaign.Network!, timeProvider.GetUtcNow().UtcDateTime);
+        var utcNow = timeProvider.GetUtcNow().UtcDateTime;
+        var counters = await LoadCountersAsync(campaign.NetworkId, [campaign.Id], utcNow, cancellationToken);
+
+        return Map(campaign, campaign.Network!, utcNow, counters.GetValueOrDefault(campaign.Id));
     }
 
     public async Task<CampaignResponse> ReplaceItemsAsync(
@@ -795,8 +802,44 @@ public class CampaignService(
     private static CampaignStatus? ParseStatus(string? value) =>
         value is null ? null : ParseEnum<CampaignStatus>(value, "Status", CampaignContract.StatusInvalid);
 
-    // Status efetivo no instante da leitura (PR-04). IssuedVouchers = 0 até existir a emissão (spec US-01.9, PA-2).
-    private static CampaignResponse Map(Campaign campaign, Network network, DateTime utcNow)
+    private readonly record struct CampaignVoucherCounters(int Redeemed, int Expired);
+
+    private async Task<Dictionary<Guid, CampaignVoucherCounters>> LoadCountersAsync(
+        Guid networkId,
+        IReadOnlyCollection<Guid> campaignIds,
+        DateTime utcNow,
+        CancellationToken cancellationToken)
+    {
+        var vouchers = await portalVouchers.ListForCampaignsAsync(networkId, campaignIds, cancellationToken);
+        var result = campaignIds.ToDictionary(id => id, _ => new CampaignVoucherCounters());
+
+        foreach (var group in vouchers.GroupBy(voucher => voucher.CampaignId))
+        {
+            var redeemed = 0;
+            var expired = 0;
+
+            foreach (var voucher in group)
+            {
+                switch (voucher.EffectiveStatus(utcNow))
+                {
+                    case VoucherStatus.Redeemed:
+                        redeemed++;
+                        break;
+                    case VoucherStatus.Expired:
+                        expired++;
+                        break;
+                }
+            }
+
+            result[group.Key] = new CampaignVoucherCounters(redeemed, expired);
+        }
+
+        return result;
+    }
+
+    // Status efetivo no instante da leitura (PR-04). Contadores de resgate/expiração: GH-050.
+    private static CampaignResponse Map(
+        Campaign campaign, Network network, DateTime utcNow, CampaignVoucherCounters counters = default)
     {
         var timeZone = NetworkTime.Resolve(network.TimeZone);
 
@@ -825,7 +868,9 @@ public class CampaignService(
             campaign.AllowUseInSamePurchase,
             campaign.RejectionReason,
             MapScopes(campaign.Scopes),
-            campaign.ReservedVouchers);
+            campaign.ReservedVouchers,
+            counters.Redeemed,
+            counters.Expired);
     }
 
     /// <summary>Junta as linhas de cada local (uma por canal), na ordem em que o local foi informado.</summary>
