@@ -74,6 +74,13 @@ public class ConcessionRepository(AppDbContext context) : IConcessionRepository
         return counts.ToDictionary(entry => entry.CampaignId, entry => entry.Count);
     }
 
+    public Task<int> CountCustomerVouchersInCampaignAsync(Guid campaignId, string customerDocument, CancellationToken cancellationToken) =>
+        context.Vouchers.AsNoTracking()
+            .CountAsync(voucher => voucher.CampaignId == campaignId
+                && voucher.CustomerDocument == customerDocument
+                && voucher.Status != VoucherStatus.Discarded,
+                cancellationToken);
+
     public async Task<IReadOnlyList<Voucher>> GetCustomerVouchersAsync(
         Guid networkId, string customerDocument, CancellationToken cancellationToken) =>
         await context.Vouchers.AsNoTracking()

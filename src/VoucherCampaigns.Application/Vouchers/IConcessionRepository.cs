@@ -52,6 +52,12 @@ public interface IConcessionRepository
     /// <summary>Vouchers não descartados do cliente na rede, contados por campanha (RF06c).</summary>
     Task<IReadOnlyDictionary<Guid, int>> CountCustomerVouchersAsync(Guid networkId, string customerDocument, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// A mesma conta de <see cref="CountCustomerVouchersAsync"/> para uma campanha, lida dentro da transação da reserva depois
+    /// da trava da campanha (spec GH-066, D-4): vê o voucher de quem reservou antes e já gravou.
+    /// </summary>
+    Task<int> CountCustomerVouchersInCampaignAsync(Guid campaignId, string customerDocument, CancellationToken cancellationToken);
+
     /// <summary>Vouchers do cliente na rede, dos mais recentes para os mais antigos, com campanha, alvo e concessão.</summary>
     Task<IReadOnlyList<Voucher>> GetCustomerVouchersAsync(Guid networkId, string customerDocument, CancellationToken cancellationToken);
 
