@@ -1,16 +1,18 @@
 using VoucherCampaigns.Application.Audit;
 using VoucherCampaigns.Application.Authentication;
 using VoucherCampaigns.Application.Common;
+using VoucherCampaigns.Application.Dashboard;
 using VoucherCampaigns.Application.DTOs.Organization;
 using VoucherCampaigns.Application.Eligibility;
-using VoucherCampaigns.Application.Vouchers;
 using VoucherCampaigns.Application.Ports;
+using VoucherCampaigns.Application.Vouchers;
 using VoucherCampaigns.Domain.Audit;
 using VoucherCampaigns.Domain.Campaigns;
 using VoucherCampaigns.Domain.Catalog;
 using VoucherCampaigns.Domain.Common;
 using VoucherCampaigns.Domain.Eligibility;
 using VoucherCampaigns.Domain.Organization;
+using VoucherCampaigns.Domain.Vouchers;
 
 namespace VoucherCampaigns.Application.Campaigns;
 
@@ -19,6 +21,7 @@ public class CampaignService(
     ICampaignRepository campaigns,
     ICatalogRepository catalog,
     IOrganizationRepository organization,
+    IDashboardRepository voucherCounts,
     ICurrentUser currentUser,
     IAuditTrail audit,
     ICampaignVoucherCanceller voucherCanceller,
@@ -68,11 +71,12 @@ public class CampaignService(
 
         var utcNow = timeProvider.GetUtcNow().UtcDateTime;
         var items = await campaigns.GetByNetworkAsync(scopedNetworkId, cancellationToken);
+        var counters = await LoadCountersAsync(scopedNetworkId, null, utcNow, cancellationToken);
 
         // O filtro olha o status efetivo (PR-04), o mesmo devolvido em "status".
         return items
             .Where(campaign => statusFilter is null || campaign.EffectiveStatus(utcNow) == statusFilter)
-            .Select(campaign => Map(campaign, network, utcNow))
+            .Select(campaign => Map(campaign, network, utcNow, counters.GetValueOrDefault(campaign.Id)))
             .ToList();
     }
 
@@ -84,7 +88,7 @@ public class CampaignService(
         // A rede só é conhecida depois de carregar a campanha (US-02.5, cenário 3).
         NetworkScope.Ensure(currentUser, campaign.NetworkId);
 
-        return Map(campaign, campaign.Network!, timeProvider.GetUtcNow().UtcDateTime);
+        return await RespondAsync(campaign, campaign.Network!, timeProvider.GetUtcNow().UtcDateTime, cancellationToken);
     }
 
     public async Task<CampaignResponse> ReplaceItemsAsync(
@@ -111,7 +115,7 @@ public class CampaignService(
         AuditSection(campaign, "items", before, SnapshotItems(campaign), utcNow.UtcDateTime);
         await SaveGuardedAsync(campaign, cancellationToken);
 
-        return Map(campaign, campaign.Network!, utcNow.UtcDateTime);
+        return await RespondAsync(campaign, campaign.Network!, utcNow.UtcDateTime, cancellationToken);
     }
 
     public async Task<CampaignResponse> SubmitAsync(Guid id, CancellationToken cancellationToken)
@@ -121,7 +125,7 @@ public class CampaignService(
         var statusEvent = campaign.Submit(currentUser.UserId, utcNow);
         RecordStatusChange(campaign, statusEvent, AuditEventTypes.CampaignSubmitted);
         await SaveGuardedAsync(campaign, cancellationToken);
-        return Map(campaign, campaign.Network!, utcNow);
+        return await RespondAsync(campaign, campaign.Network!, utcNow, cancellationToken);
     }
 
     public async Task<CampaignResponse> ApproveAsync(Guid id, CancellationToken cancellationToken)
@@ -131,7 +135,7 @@ public class CampaignService(
         var statusEvent = campaign.Approve(currentUser.UserId, utcNow);
         RecordStatusChange(campaign, statusEvent, AuditEventTypes.CampaignApproved);
         await SaveGuardedAsync(campaign, cancellationToken);
-        return Map(campaign, campaign.Network!, utcNow);
+        return await RespondAsync(campaign, campaign.Network!, utcNow, cancellationToken);
     }
 
     public async Task<CampaignResponse> RejectAsync(Guid id, RejectCampaignRequest? request, CancellationToken cancellationToken)
@@ -141,7 +145,7 @@ public class CampaignService(
         var statusEvent = campaign.Reject(currentUser.UserId, request?.Reason, utcNow);
         RecordStatusChange(campaign, statusEvent, AuditEventTypes.CampaignRejected);
         await SaveGuardedAsync(campaign, cancellationToken);
-        return Map(campaign, campaign.Network!, utcNow);
+        return await RespondAsync(campaign, campaign.Network!, utcNow, cancellationToken);
     }
 
     public async Task<CampaignResponse> PauseAsync(Guid id, CancellationToken cancellationToken)
@@ -151,7 +155,7 @@ public class CampaignService(
         var statusEvent = campaign.Pause(currentUser.UserId, utcNow);
         RecordStatusChange(campaign, statusEvent, AuditEventTypes.CampaignPaused);
         await SaveGuardedAsync(campaign, cancellationToken);
-        return Map(campaign, campaign.Network!, utcNow);
+        return await RespondAsync(campaign, campaign.Network!, utcNow, cancellationToken);
     }
 
     public async Task<CampaignResponse> EndAsync(Guid id, CancellationToken cancellationToken)
@@ -161,7 +165,7 @@ public class CampaignService(
         var statusEvent = campaign.End(currentUser.UserId, utcNow);
         RecordStatusChange(campaign, statusEvent, AuditEventTypes.CampaignEnded);
         await SaveGuardedAsync(campaign, cancellationToken);
-        return Map(campaign, campaign.Network!, utcNow);
+        return await RespondAsync(campaign, campaign.Network!, utcNow, cancellationToken);
     }
 
     public async Task<CampaignResponse> CancelAsync(Guid id, CancelCampaignRequest request, CancellationToken cancellationToken)
@@ -199,7 +203,7 @@ public class CampaignService(
                 result.ReversedRedemptions));
         });
 
-        return Map(campaign, campaign.Network!, utcNow);
+        return await RespondAsync(campaign, campaign.Network!, utcNow, cancellationToken);
     }
 
     public async Task<CampaignResponse> ReplaceScopesAsync(
@@ -299,7 +303,7 @@ public class CampaignService(
         AuditSection(campaign, "quantities", before, SnapshotQuantities(campaign), utcNow);
         await SaveGuardedAsync(campaign, cancellationToken);
 
-        return Map(campaign, campaign.Network!, utcNow);
+        return await RespondAsync(campaign, campaign.Network!, utcNow, cancellationToken);
     }
 
     public async Task<CampaignResponse> UpdateAudienceAsync(
@@ -334,7 +338,7 @@ public class CampaignService(
         // Substituir a lista por diferença exige que ninguém a tenha mudado no meio (clique duplo no portal).
         await SaveGuardedAsync(campaign, cancellationToken);
 
-        return Map(campaign, campaign.Network!, utcNow);
+        return await RespondAsync(campaign, campaign.Network!, utcNow, cancellationToken);
     }
 
     public async Task<EligibleCustomersResponse> GetEligibleCustomersAsync(
@@ -409,7 +413,7 @@ public class CampaignService(
         AuditSection(campaign, "details", before, SnapshotDetails(campaign, timeZone), utcNow);
         await SaveGuardedAsync(campaign, cancellationToken);
 
-        return Map(campaign, campaign.Network, utcNow);
+        return await RespondAsync(campaign, campaign.Network, utcNow, cancellationToken);
     }
 
     public async Task<CampaignResponse> UpdateVoucherValidityAsync(
@@ -444,7 +448,7 @@ public class CampaignService(
         AuditSection(campaign, "voucherValidity", before, MapValidity(campaign, timeZone), utcNow);
         await SaveGuardedAsync(campaign, cancellationToken);
 
-        return Map(campaign, campaign.Network, utcNow);
+        return await RespondAsync(campaign, campaign.Network, utcNow, cancellationToken);
     }
 
     public async Task<CampaignResponse> UpdateUsageRestrictionsAsync(
@@ -467,7 +471,7 @@ public class CampaignService(
         AuditSection(campaign, "usageRestrictions", before, SnapshotRestrictions(campaign), utcNow);
         await SaveGuardedAsync(campaign, cancellationToken);
 
-        return Map(campaign, campaign.Network!, utcNow);
+        return await RespondAsync(campaign, campaign.Network!, utcNow, cancellationToken);
     }
 
     public async Task<CampaignResponse> ReplaceConditionsAsync(
@@ -498,7 +502,7 @@ public class CampaignService(
         AuditSection(campaign, "conditions", before, SnapshotConditions(campaign), utcNow.UtcDateTime);
         await SaveGuardedAsync(campaign, cancellationToken);
 
-        return Map(campaign, campaign.Network!, utcNow.UtcDateTime);
+        return await RespondAsync(campaign, campaign.Network!, utcNow.UtcDateTime, cancellationToken);
     }
 
     /// <summary>Prazo e unidade obrigatórios e dentro do limite (D-5); data fixa não se aplica (D-4).</summary>
@@ -950,7 +954,7 @@ public class CampaignService(
         var stored = await campaigns.FindByIdAsync(id, cancellationToken)
             ?? throw new ResourceNotFoundException(CampaignContract.CampaignNotFound);
 
-        return Map(stored, stored.Network!, utcNow);
+        return await RespondAsync(stored, stored.Network!, utcNow, cancellationToken);
     }
 
     /// <summary>Campanha existente (404) e da rede do usuário (403).</summary>
@@ -1065,8 +1069,33 @@ public class CampaignService(
     private static CampaignStatus? ParseStatus(string? value) =>
         value is null ? null : ParseEnum<CampaignStatus>(value, "Status", CampaignContract.StatusInvalid);
 
-    // Status efetivo no instante da leitura (PR-04). IssuedVouchers = 0 até existir a emissão (spec US-01.9, PA-2).
-    private static CampaignResponse Map(Campaign campaign, Network network, DateTime utcNow)
+    private readonly record struct CampaignVoucherCounters(int Redeemed, int Expired);
+
+    private static readonly VoucherFilter NoVoucherFilter = new(null, null, null, null, null);
+
+    /// <summary>
+    /// Contadores de vouchers por campanha numa agregação só, no SQL e pela mesma regra do dashboard (spec GH-050, D-3):
+    /// resgatados são os emitidos com ao menos uma utilização; expirados, os vencidos sem utilização.
+    /// </summary>
+    private async Task<Dictionary<Guid, CampaignVoucherCounters>> LoadCountersAsync(
+        Guid networkId, Guid? campaignId, DateTime utcNow, CancellationToken cancellationToken)
+    {
+        var counts = await voucherCounts.CountVouchersAsync(networkId, campaignId, NoVoucherFilter, utcNow, cancellationToken);
+
+        return counts.ToDictionary(count => count.CampaignId, count => new CampaignVoucherCounters(count.Redeemed, count.ExpiredUnused));
+    }
+
+    /// <summary>Resposta de uma campanha já gravada, com os contadores de vouchers (as mudanças de status também os devolvem).</summary>
+    private async Task<CampaignResponse> RespondAsync(Campaign campaign, Network network, DateTime utcNow, CancellationToken cancellationToken)
+    {
+        var counters = await LoadCountersAsync(campaign.NetworkId, campaign.Id, utcNow, cancellationToken);
+
+        return Map(campaign, network, utcNow, counters.GetValueOrDefault(campaign.Id));
+    }
+
+    // Status efetivo no instante da leitura (PR-04). Contadores de resgate/expiração: GH-050.
+    private static CampaignResponse Map(
+        Campaign campaign, Network network, DateTime utcNow, CampaignVoucherCounters counters = default)
     {
         var timeZone = NetworkTime.Resolve(network.TimeZone);
 
@@ -1096,6 +1125,8 @@ public class CampaignService(
             campaign.RejectionReason,
             MapScopes(campaign.Scopes),
             campaign.ReservedVouchers,
+            counters.Redeemed,
+            counters.Expired,
             MapEligibility(campaign));
     }
 

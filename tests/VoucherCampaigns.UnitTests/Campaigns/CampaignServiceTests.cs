@@ -2,6 +2,7 @@ using VoucherCampaigns.Application.Audit;
 using VoucherCampaigns.Application.Authentication;
 using VoucherCampaigns.Application.Campaigns;
 using VoucherCampaigns.Application.Common;
+using VoucherCampaigns.Application.Dashboard;
 using VoucherCampaigns.Application.Ports;
 using VoucherCampaigns.Application.Vouchers;
 using VoucherCampaigns.Domain.Audit;
@@ -9,6 +10,7 @@ using VoucherCampaigns.Domain.Catalog;
 using VoucherCampaigns.Domain.Campaigns;
 using VoucherCampaigns.Domain.Common;
 using VoucherCampaigns.Domain.Organization;
+using VoucherCampaigns.Domain.Vouchers;
 
 namespace VoucherCampaigns.UnitTests.Campaigns;
 
@@ -272,7 +274,16 @@ public class CampaignServiceTests
     }
 
     private CampaignService CreateService(Network? network, DateTimeOffset? now = null) =>
-        new(new FakeNetworkRepository(network), _campaigns, _catalog, new FakeOrganizationRepository(), _user, _audit, new NoVoucherCanceller(), new FixedTimeProvider(now ?? Now));
+        new(
+            new FakeNetworkRepository(network),
+            _campaigns,
+            _catalog,
+            new FakeOrganizationRepository(),
+            new NoVoucherCounts(),
+            _user,
+            _audit,
+            new NoVoucherCanceller(),
+            new FixedTimeProvider(now ?? Now));
 
     private sealed class NoVoucherCanceller : ICampaignVoucherCanceller
     {
@@ -404,6 +415,19 @@ public class CampaignServiceTests
         public List<AuditEntry> Entries { get; } = [];
 
         public void Append(AuditEntry entry) => Entries.Add(entry);
+    }
+
+    private sealed class NoVoucherCounts : IDashboardRepository
+    {
+        public Task<IReadOnlyList<CampaignCounts>> CountVouchersAsync(
+            Guid networkId, Guid? campaignId, VoucherFilter filter, DateTime utcNow, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<CampaignCounts>>([]);
+
+        public Task<IReadOnlyList<AuditEntry>> GetCampaignAuditAsync(Guid campaignId, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<AuditEntry>>([]);
+
+        public Task<IReadOnlyDictionary<Guid, AuditActor>> GetUsersAsync(IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyDictionary<Guid, AuditActor>>(new Dictionary<Guid, AuditActor>());
     }
 
     private sealed class FakeCurrentUser(Guid networkId) : ICurrentUser
