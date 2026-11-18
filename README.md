@@ -97,7 +97,8 @@ dotnet run --project src/VoucherCampaigns.Api    # sobe a API em http://localhos
 Sem nenhuma configuração extra, a API usa **SQLite** (`src/VoucherCampaigns.Api/vouchercampaigns.db`) e aplica as migrações pendentes na inicialização. Rotas de verificação:
 
 - `GET /health`: estado da aplicação e do banco.
-- `GET /api/v1/system/status`: provider ativo, teste de conexão e migrações aplicadas.
+- `GET /api/v1/system/status`: provider ativo, teste de conexão e migrações aplicadas; só o administrador (spec `GH-066`, D-8). O `/health` segue anônimo.
+- `POST /api/v1/auth/login` aceita até `Auth:LoginRateLimit:PermitLimit` tentativas (padrão 10) por IP a cada `WindowSeconds` (padrão 60); acima disso, `429 AUTH_LOGIN_RATE_LIMITED` com `Retry-After`. Fora de Development, a API não sobe com a chave JWT de desenvolvimento do `appsettings.Development.json`.
 
 ### Autenticação (provisória)
 
@@ -168,7 +169,7 @@ A campanha pode ser para todos os clientes ou para um público restrito, com cri
 
 - `PUT /api/v1/campaigns/{id}/audience` com `{ "audienceType": "Restricted", "criteria": [...] }`, só em rascunho. Tipos: `AgeRange` (`minAge`, `maxAge`), `Location` (`states`, `cityCodes` IBGE), `LoyaltyMember`, `TotalSpent` (`minAmount`, `windowDays`), `PurchaseFrequency` (`minPurchases`, `windowDays`), `PurchasedCategory` (`categoryId`, `windowDays`) e `SpecificCustomers` (`documents`, até 10.000 CPFs com dígito verificador). `AllCustomers` não aceita critérios e apaga os anteriores. O `CampaignResponse` traz `eligibility.criteria`; a lista de CPFs aparece só como `customerCount` e sai paginada em `GET /api/v1/campaigns/{id}/audience/customers?page=&pageSize=`.
 - `POST /api/v1/campaigns/{id}/eligibility/simulate` com `{ "customer": {...} }`: resultado critério a critério (`Met`, `NotMet`, `Missing`), sem emitir voucher nem gravar nada.
-- Na concessão, o satélite manda em `customer` os atributos que a campanha pede (`birthDate`, `state`, `cityCode`, `loyaltyMember` e `history[]` com `windowDays`, `totalSpent`, `purchaseCount`, `productCodes`). `GET /api/v1/satellite/campaigns` informa `requiredAttributes` e `historyWindows` de cada campanha. Atributo ausente conta como não atendido. O inelegível não reserva saldo; se outra campanha servir, ela concede, senão a resposta é `NotGranted` com `CustomerNotEligible`. A concessão guarda os atributos usados e o resultado de cada critério; o resgate não reavalia o público. Na auditoria da edição, a lista aparece só como quantidade e quantos CPFs entraram e saíram (`customerChanges`). Quem nasceu em 29/02 completa a idade em 28/02 nos anos não bissextos. Smoke: `python -I scripts/smoke/publico.py http://localhost:5091`.
+- Na concessão, o satélite manda em `customer` os atributos que a campanha pede (`birthDate`, `state`, `cityCode`, `loyaltyMember` e `history[]` com `windowDays`, `totalSpent`, `purchaseCount`, `productCodes`). `GET /api/v1/satellite/campaigns` informa `requiredAttributes` e `historyWindows` de cada campanha. Atributo ausente conta como não atendido. O inelegível não reserva saldo; se outra campanha servir, ela concede, senão a resposta é `NotGranted` com `CustomerNotEligible`. A concessão guarda os atributos usados e o resultado de cada critério; o resgate não reavalia o público. Na auditoria da edição, a lista aparece só como quantidade e quantos CPFs entraram e saíram (`customerChanges`). Quem nasceu em 29/02 completa a idade em 28/02 nos anos não bissextos. Smoke: `python -I scripts/smoke/publico.py http://localhost:5091`. Contrato completo para o PDV, com exemplo: `docs/integracao-satelite-publico-elegivel.md`. A consulta de vouchers do cliente passou para `POST /api/v1/satellite/customers/vouchers/search` com o CPF no corpo; a `GET .../customers/{cpf}/vouchers` responde com `Deprecation` até o PDV migrar (spec `GH-066`, D-9).
 
 ### Verificação de aplicáveis e resgate (EP-05, US-07.1 e US-07.3)
 
@@ -203,7 +204,7 @@ Rotas de leitura para analista e gestor da rede (policy `ManageCampaigns`). Spec
 
 ### Trocando de banco (SQLite ⇄ PostgreSQL)
 
-A troca é apenas configuracional. Copie `.env.example` para `.env` na raiz do repositório e ajuste:
+A troca é apenas configuracional. Copie `.env.example` para `.env` na raiz do repositório e ajuste (o `.env` só é lido com `ASPNETCORE_ENVIRONMENT=Development`; fora disso, use variáveis de ambiente):
 
 ```dotenv
 Database__Provider=Postgres

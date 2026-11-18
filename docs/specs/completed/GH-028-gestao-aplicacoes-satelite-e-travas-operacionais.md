@@ -22,7 +22,7 @@ Esta especificação cobre a governança completa de **Aplicações Satélite** 
 - **Escopos:**
   - Permitidos exclusivamente os três escopos oficiais definidos no sistema:
     - Leitura de campanhas: `campaigns:read` (ou alias `campaign:read`)
-    - Concessão de vouchers: `vouchers:issue` (ou alias `voucher:issue`, `voucher:read`)
+    - Concessão de vouchers: `vouchers:issue` (ou alias `voucher:issue`; o alias `voucher:read` saiu na GH-066, D-5, porque concedia emissão)
     - Resgate de vouchers: `vouchers:redeem` (ou alias `voucher:redeem`)
   - Qualquer escopo desconhecido resulta em `400 VALIDATION_ERROR` ("Escopo informado inválido.").
 - **Geração e Armazenamento de Segredo:**

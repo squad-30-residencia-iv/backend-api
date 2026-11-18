@@ -58,6 +58,8 @@ public static class DependencyInjection
         services.AddScoped<ICampaignRepository, CampaignRepository>();
         services.AddScoped<ICatalogRepository, CatalogRepository>();
         services.AddScoped<IOrganizationRepository, OrganizationRepository>();
+        services.AddScoped<IEstablishmentImportStore, OrganizationRepository>();
+        services.AddScoped<IProductImportStore, CatalogRepository>();
         services.AddScoped<IAuditTrail, AuditTrail>();
         services.AddScoped<IConcessionRepository, ConcessionRepository>();
         services.AddScoped<IReservationReleaser, ReservationReleaser>();

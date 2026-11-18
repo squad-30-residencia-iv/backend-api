@@ -110,7 +110,9 @@ public class ApiFactory : WebApplicationFactory<Program>
             ["Database:Provider"] = Provider,
             ["Database:ConnectionString"] = ConnectionString,
             // A varredura de reservas roda por relógio real; nos testes a liberação é chamada pelo próprio fluxo.
-            ["Vouchers:ReservationSweepSeconds"] = "0"
+            ["Vouchers:ReservationSweepSeconds"] = "0",
+            // Os testes fazem muitos logins da mesma origem; o limite do login (spec GH-066, D-6) tem teste próprio.
+            ["Auth:LoginRateLimit:PermitLimit"] = "100000"
         };
 
         if (_seedDemoData is not null)

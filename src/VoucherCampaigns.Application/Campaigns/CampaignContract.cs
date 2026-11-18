@@ -48,11 +48,12 @@ public static class CampaignContract
     public const int MaxValidityHours = 87_600;
 
     public const string ValidityTypeRequired = "Informe o tipo de validade do voucher.";
-    public const string ValidityTypeInvalid = "Tipo de validade inválido. Use Relative ou FixedDate.";
+    public const string ValidityTypeInvalid = "Tipo de validade inválido. Use Relative.";
+    public const string ValidityOnlyDays = "A validade do voucher é em dias, contados a partir da emissão. Use type Relative com unit Days.";
     public const string ValidityAmountRequired = "Informe o prazo de validade do voucher.";
-    public const string ValidityAmountRange = "O prazo de validade deve ser de 1 a 3.650 dias ou de 1 a 87.600 horas.";
+    public const string ValidityAmountRange = "O prazo de validade deve ser de 1 a 3.650 dias.";
     public const string ValidityUnitRequired = "Informe a unidade do prazo de validade.";
-    public const string ValidityUnitInvalid = "Unidade inválida. Use Days ou Hours.";
+    public const string ValidityUnitInvalid = "Unidade inválida. Use Days.";
     public const string ValidUntilRequired = "Informe a data de validade do voucher.";
     public const string ValidityRelativeWithDate = "A validade relativa não aceita data fixa.";
     public const string ValidityFixedWithRelative = "A validade por data fixa não aceita prazo, unidade nem teto.";

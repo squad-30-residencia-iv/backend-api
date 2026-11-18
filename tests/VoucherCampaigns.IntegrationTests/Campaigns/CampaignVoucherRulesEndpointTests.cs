@@ -59,25 +59,6 @@ public class CampaignVoucherRulesEndpointTests : IClassFixture<ApiFactory>
     }
 
     [Fact]
-    public async Task PutValidity_FixedDate_IsStoredWithNetworkOffset()
-    {
-        var campaign = await CreateCampaignAsync();
-
-        await PutValidityAsync(campaign, new { type = "FixedDate", validUntil = "2026-11-15T23:59:00" });
-
-        var validity = (await Client().GetFromJsonAsync<CampaignResponse>($"{Route}/{campaign}"))!.VoucherValidity!;
-        Assert.Equal("FixedDate", validity.Type);
-        Assert.Equal(new DateTimeOffset(2026, 11, 15, 23, 59, 0, Brasilia), validity.ValidUntil);
-        Assert.Equal(Brasilia, validity.ValidUntil!.Value.Offset);
-        Assert.Null(validity.Amount);
-        Assert.Null(validity.Unit);
-
-        await using var scope = _factory.Services.CreateAsyncScope();
-        var stored = await scope.ServiceProvider.GetRequiredService<AppDbContext>().Campaigns.SingleAsync(c => c.Id == campaign);
-        Assert.Equal(new DateTime(2026, 11, 16, 2, 59, 0), stored.VoucherValidUntil);
-    }
-
-    [Fact]
     public async Task PutValidity_60DaysWithCapOnCampaignEnd_IsStored()
     {
         var campaign = await CreateCampaignAsync();
@@ -87,43 +68,6 @@ public class CampaignVoucherRulesEndpointTests : IClassFixture<ApiFactory>
 
         Assert.Equal(60, validity.Amount);
         Assert.Equal(new DateTimeOffset(2026, 10, 31, 23, 59, 0, Brasilia), validity.Cap);
-    }
-
-    [Fact]
-    public async Task PutValidity_48Hours_IsStored()
-    {
-        var campaign = await CreateCampaignAsync();
-
-        var validity = (await PutValidityAsync(campaign, new { type = "relative", amount = 48, unit = "hours" })).VoucherValidity!;
-
-        Assert.Equal(48, validity.Amount);
-        Assert.Equal("Hours", validity.Unit);
-    }
-
-    [Fact]
-    public async Task PutValidity_RelativeToFixed_ClearsAmountUnitAndCap()
-    {
-        var campaign = await CreateCampaignAsync();
-        await PutValidityAsync(campaign, new { type = "Relative", amount = 60, unit = "Days", cap = "2026-10-31T23:59:00" });
-
-        var validity = (await PutValidityAsync(campaign, new { type = "FixedDate", validUntil = "2026-10-31T23:59:00" })).VoucherValidity!;
-
-        Assert.Equal("FixedDate", validity.Type);
-        Assert.Null(validity.Amount);
-        Assert.Null(validity.Unit);
-        Assert.Null(validity.Cap);
-    }
-
-    [Fact]
-    public async Task PutValidity_FixedDateBeforeCampaignEnd_IsRejected()
-    {
-        var campaign = await CreateCampaignAsync();
-
-        var response = await Client().PutAsJsonAsync(
-            ValidityRoute(campaign), new { type = "FixedDate", validUntil = "2026-10-31T23:58:00" });
-
-        await AssertBusinessRuleAsync(
-            response, "CAMPAIGN_VOUCHER_VALID_UNTIL_BEFORE_END", "A validade fixa do voucher não pode ser anterior ao fim da campanha");
     }
 
     [Theory]
@@ -148,8 +92,15 @@ public class CampaignVoucherRulesEndpointTests : IClassFixture<ApiFactory>
     [Fact]
     public async Task PutCampaign_EndAfterFixedValidity_IsRejectedAndKeepsPeriod()
     {
+        // Data fixa gravada antes da GH-066 (D-1): a API não aceita mais, mas a regra do domínio continua valendo.
         var campaign = await CreateCampaignAsync();
-        await PutValidityAsync(campaign, new { type = "FixedDate", validUntil = "2026-11-15T23:59:00" });
+        await using (var scope = _factory.Services.CreateAsyncScope())
+        {
+            var db = scope.ServiceProvider.GetRequiredService<AppDbContext>();
+            var stored = await db.Campaigns.SingleAsync(c => c.Id == campaign);
+            stored.SetFixedValidity(new DateTime(2026, 11, 16, 2, 59, 0, DateTimeKind.Utc), _factory.Clock.GetUtcNow().UtcDateTime);
+            await db.SaveChangesAsync();
+        }
 
         var response = await Client().PutAsJsonAsync(
             $"{Route}/{campaign}",
@@ -181,13 +132,12 @@ public class CampaignVoucherRulesEndpointTests : IClassFixture<ApiFactory>
     [InlineData("""{"type":"Relative","unit":"Days"}""", "Amount", CampaignContract.ValidityAmountRequired)]
     [InlineData("""{"type":"Relative","amount":0,"unit":"Days"}""", "Amount", CampaignContract.ValidityAmountRange)]
     [InlineData("""{"type":"Relative","amount":3651,"unit":"Days"}""", "Amount", CampaignContract.ValidityAmountRange)]
-    [InlineData("""{"type":"Relative","amount":87601,"unit":"Hours"}""", "Amount", CampaignContract.ValidityAmountRange)]
+    [InlineData("""{"type":"Relative","amount":48,"unit":"Hours"}""", "Unit", CampaignContract.ValidityOnlyDays)]
     [InlineData("""{"type":"Relative","amount":30}""", "Unit", CampaignContract.ValidityUnitRequired)]
     [InlineData("""{"type":"Relative","amount":30,"unit":"Weeks"}""", "Unit", CampaignContract.ValidityUnitInvalid)]
     [InlineData("""{"type":"Relative","amount":30,"unit":"Days","validUntil":"2026-11-15T23:59:00"}""", "ValidUntil", CampaignContract.ValidityRelativeWithDate)]
-    [InlineData("""{"type":"FixedDate"}""", "ValidUntil", CampaignContract.ValidUntilRequired)]
-    [InlineData("""{"type":"FixedDate","validUntil":"2026-11-15T23:59:00","amount":30}""", "Amount", CampaignContract.ValidityFixedWithRelative)]
-    [InlineData("""{"type":"FixedDate","validUntil":"2026-11-15T23:59:00","cap":"2026-11-15T23:59:00"}""", "Cap", CampaignContract.ValidityFixedWithRelative)]
+    [InlineData("""{"type":"FixedDate"}""", "Type", CampaignContract.ValidityOnlyDays)]
+    [InlineData("""{"type":"FixedDate","validUntil":"2026-11-15T23:59:00"}""", "Type", CampaignContract.ValidityOnlyDays)]
     public async Task PutValidity_WithInvalidContract_ReturnsValidationProblem(string json, string field, string message)
     {
         var campaign = await CreateCampaignAsync();

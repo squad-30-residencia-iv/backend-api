@@ -1,6 +1,8 @@
 using System.Net;
 using System.Net.Http.Json;
+using VoucherCampaigns.Application.Authentication;
 using VoucherCampaigns.Application.SystemStatus;
+using VoucherCampaigns.IntegrationTests.Authentication;
 
 namespace VoucherCampaigns.IntegrationTests;
 
@@ -9,7 +11,7 @@ public class SystemStatusEndpointTests(ApiFactory factory) : IClassFixture<ApiFa
     [Fact]
     public async Task GetStatus_ReturnsProviderConnectionAndAppliedMigrations()
     {
-        var client = factory.CreateClient();
+        var client = factory.CreateClient().WithBearer(TestAuth.CreateToken(factory, Roles.Administrador));
 
         var response = await client.GetAsync("/api/v1/system/status");
 
@@ -21,6 +23,16 @@ public class SystemStatusEndpointTests(ApiFactory factory) : IClassFixture<ApiFa
         Assert.Equal(factory.Provider, status.Provider);
         Assert.True(status.CanConnect);
         Assert.Single(status.AppliedMigrations, migration => migration.EndsWith("_InitialCreate"));
+    }
+
+    [Fact]
+    public async Task GetStatus_WithoutTokenOrByAnalista_IsRefused()
+    {
+        // SEC-08 da auditoria (spec GH-066, D-8): provider e migrações só para o administrador.
+        Assert.Equal(HttpStatusCode.Unauthorized, (await factory.CreateClient().GetAsync("/api/v1/system/status")).StatusCode);
+
+        var analista = factory.CreateClient().WithBearer(TestAuth.CreateToken(factory, Roles.Analista));
+        Assert.Equal(HttpStatusCode.Forbidden, (await analista.GetAsync("/api/v1/system/status")).StatusCode);
     }
 
     [Fact]

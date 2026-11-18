@@ -80,6 +80,17 @@ public class ConcessionService(
                 continue;
             }
 
+            // Limite por cliente atômico (spec GH-066, D-4; SEC-02 da auditoria): a contagem da avaliação foi lida antes da
+            // transação. Com a linha da campanha já travada pela reserva, as concessões da mesma campanha passam uma de cada
+            // vez e a recontagem vê o voucher de quem chegou antes; atingido o limite, a transação é descartada com a reserva.
+            if (eligible.Campaign.PerCustomerVoucherLimit is { } customerLimit
+                && await concessions.CountCustomerVouchersInCampaignAsync(eligible.Campaign.Id, input.Document, cancellationToken) >= customerLimit)
+            {
+                refusal ??= ConcessionRefusal.CustomerLimitReached;
+                refusedCampaignId ??= eligible.Campaign.Id;
+                continue;
+            }
+
             var concession = NewConcession(input, purchase, networkId, utcNow);
             concession.Status = ConcessionStatus.Provisional;
             concession.ReservedUntil = utcNow.AddMinutes(options.ReservationMinutes);

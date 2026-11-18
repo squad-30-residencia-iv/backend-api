@@ -26,6 +26,7 @@ ASPNETCORE_ENVIRONMENT=Development \
 Database__Provider=Sqlite \
 Database__ConnectionString="Data Source=$DB_PATH" \
 Database__SeedDemoData=true \
+Auth__LoginRateLimit__PermitLimit=1000 \
 nohup dotnet run --project src/VoucherCampaigns.Api --no-launch-profile --urls "http://localhost:$PORT" \
   > "$RUN_DIR/api.log" 2>&1 &
 

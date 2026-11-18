@@ -147,7 +147,7 @@ def run_base(base_url: str) -> int:
     status, body = api.call("GET", "/health")
     check("GET /health", status, 200, body)
     status, body = api.call("GET", "/api/v1/system/status")
-    check("GET /api/v1/system/status (público)", status, 200, body)
+    check("GET /api/v1/system/status (sem token)", status, 401, body, "AUTH_UNAUTHENTICATED")
 
     tokens = {}
     for role, email in (("analista", "analista@empresa.com"), ("gestor", "gestor@empresa.com"), ("admin", "admin@empresa.com")):
@@ -161,6 +161,12 @@ def run_base(base_url: str) -> int:
         print("Sem os três tokens: o restante do roteiro base não roda.")
         return 1
     analista, gestor, admin = tokens["analista"], tokens["gestor"], tokens["admin"]
+
+    # /system/status só para o administrador (spec GH-066, D-8).
+    status, body = api.call("GET", "/api/v1/system/status", token=analista)
+    check("GET /api/v1/system/status (analista)", status, 403, body, "AUTH_FORBIDDEN_ROLE")
+    status, body = api.call("GET", "/api/v1/system/status", token=admin)
+    check("GET /api/v1/system/status (admin)", status, 200, body)
 
     status, body = api.call("POST", "/api/v1/satellite/token", {"clientId": Demo.SATELLITE_CLIENT, "clientSecret": Demo.SATELLITE_SECRET})
     satellite = body.get("accessToken") if check("POST /satellite/token", status, 200, body) else None

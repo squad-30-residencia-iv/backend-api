@@ -43,6 +43,20 @@ public class EstablishmentsController(IEstablishmentService establishmentService
         return Created($"/api/v1/establishments/{result.Id}", result);
     }
 
+    /// <summary>Lojas em lote, código e nome (spec GH-066, D-2): tudo ou nada.</summary>
+    [HttpPost("import")]
+    [Authorize(Policy = AuthorizationPolicies.ManageHierarchy)]
+    [ProducesResponseType<ImportEstablishmentsResponse>(StatusCodes.Status201Created)]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<ActionResult<ImportEstablishmentsResponse>> Import(
+        [FromBody] ImportEstablishmentsRequest request, CancellationToken cancellationToken)
+    {
+        var result = await establishmentService.ImportAsync(request, cancellationToken);
+        return Created("/api/v1/establishments", result);
+    }
+
     [HttpPut("{id:guid}")]
     [Authorize(Policy = AuthorizationPolicies.ManageHierarchy)]
     [ProducesResponseType<EstablishmentResponse>(StatusCodes.Status200OK)]

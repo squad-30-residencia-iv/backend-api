@@ -421,13 +421,16 @@ public class CampaignService(
         UpdateVoucherValidityRequest request,
         CancellationToken cancellationToken)
     {
+        // Só dias a partir da emissão (spec GH-066, D-1): data fixa e horas deixam de ser aceitas na gravação; as campanhas
+        // já gravadas com elas continuam valendo como estão.
         var type = ParseEnum<VoucherValidityType>(request.Type, nameof(request.Type), CampaignContract.ValidityTypeInvalid);
-        var unit = type == VoucherValidityType.Relative ? ParseRelativeValidity(request) : (VoucherValidityUnit?)null;
 
-        if (type == VoucherValidityType.FixedDate)
+        if (type != VoucherValidityType.Relative)
         {
-            EnsureFixedValidityContract(request);
+            throw new RequestValidationException(nameof(request.Type), CampaignContract.ValidityOnlyDays);
         }
+
+        var unit = ParseRelativeValidity(request);
 
         var campaign = await RequireForUpdateAsync(id, cancellationToken);
         var timeZone = NetworkTime.Resolve(campaign.Network!.TimeZone);
@@ -435,15 +438,8 @@ public class CampaignService(
 
         var before = MapValidity(campaign, timeZone);
 
-        if (type == VoucherValidityType.Relative)
-        {
-            var cap = request.Cap is { } localCap ? NetworkTime.ToUtc(localCap, timeZone, nameof(request.Cap)) : (DateTime?)null;
-            campaign.SetRelativeValidity(request.Amount!.Value, unit!.Value, cap, utcNow);
-        }
-        else
-        {
-            campaign.SetFixedValidity(NetworkTime.ToUtc(request.ValidUntil!.Value, timeZone, nameof(request.ValidUntil)), utcNow);
-        }
+        var cap = request.Cap is { } localCap ? NetworkTime.ToUtc(localCap, timeZone, nameof(request.Cap)) : (DateTime?)null;
+        campaign.SetRelativeValidity(request.Amount!.Value, unit, cap, utcNow);
 
         AuditSection(campaign, "voucherValidity", before, MapValidity(campaign, timeZone), utcNow);
         await SaveGuardedAsync(campaign, cancellationToken);
@@ -524,32 +520,18 @@ public class CampaignService(
         }
 
         var unit = ParseEnum<VoucherValidityUnit>(request.Unit, nameof(request.Unit), CampaignContract.ValidityUnitInvalid);
-        var max = unit == VoucherValidityUnit.Days ? CampaignContract.MaxValidityDays : CampaignContract.MaxValidityHours;
 
-        if (request.Amount < 1 || request.Amount > max)
+        if (unit != VoucherValidityUnit.Days)
+        {
+            throw new RequestValidationException(nameof(request.Unit), CampaignContract.ValidityOnlyDays);
+        }
+
+        if (request.Amount < 1 || request.Amount > CampaignContract.MaxValidityDays)
         {
             throw new RequestValidationException(nameof(request.Amount), CampaignContract.ValidityAmountRange);
         }
 
         return unit;
-    }
-
-    private static void EnsureFixedValidityContract(UpdateVoucherValidityRequest request)
-    {
-        var unexpected = request.Amount is not null ? nameof(request.Amount)
-            : request.Unit is not null ? nameof(request.Unit)
-            : request.Cap is not null ? nameof(request.Cap)
-            : null;
-
-        if (unexpected is not null)
-        {
-            throw new RequestValidationException(unexpected, CampaignContract.ValidityFixedWithRelative);
-        }
-
-        if (request.ValidUntil is null)
-        {
-            throw new RequestValidationException(nameof(request.ValidUntil), CampaignContract.ValidUntilRequired);
-        }
     }
 
     /// <summary>Valor de compra opcional; quando informado, cabe em <c>decimal(10,2)</c> e é positivo.</summary>
