@@ -1,6 +1,6 @@
 # 📋 Especificação Técnica: GH-066 - Ajustes do cliente na criação de campanha e correções urgentes da auditoria
 
-> **Status:** In-Progress
+> **Status:** Completed
 > **História de Usuário Relacionada:** issue #66 (pontos do cliente de 2026-11-18; US-01.12, US-02.1, US-02.4, US-04.5, US-07.2; auditoria estática do backend)
 > **Branch:** `feat/GH-66-ajustes-cliente-e-auditoria` → `staging`
 

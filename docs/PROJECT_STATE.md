@@ -71,7 +71,7 @@
 
 ## ✅ Últimas Entregas Concluídas
 
-- **Issue #66: pontos do cliente e correções urgentes da auditoria.** Spec `GH-066-ajustes-cliente-e-auditoria.md`.
+- **Issue #66: pontos do cliente e correções urgentes da auditoria.** Spec `completed/GH-066-ajustes-cliente-e-auditoria.md`. Na staging pelo PR #67 (2026-11-18).
   - **Validade:** só em dias a partir da emissão; as campanhas já gravadas com horas ou data fixa seguem valendo.
   - **Lojas e produtos em lote:** `POST /establishments/import` e `POST /products/import`, até 1.000 linhas, tudo ou nada.
   - **Limite por CPF:** atômico, recontado sob a trava da campanha. Com limite 1, 20 concessões simultâneas do mesmo CPF emitem um voucher.
