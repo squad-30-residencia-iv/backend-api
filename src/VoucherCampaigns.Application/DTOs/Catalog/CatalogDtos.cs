@@ -4,6 +4,9 @@ namespace VoucherCampaigns.Application.DTOs.Catalog;
 
 public static class CatalogContract
 {
+    public const int MaxImportLines = 1_000;
+    public const string ImportProductsRequired = "Informe de 1 a 1.000 produtos.";
+    public const string ImportCodeRepeated = "O código se repete na lista.";
     public const int NameMaxLength = 150;
     public const int ProductCodeMaxLength = 30;
 
@@ -43,6 +46,17 @@ public record CreateProductRequest(
     [Required(ErrorMessage = CatalogContract.ProductNameRequired)]
     [StringLength(CatalogContract.NameMaxLength, MinimumLength = 1, ErrorMessage = CatalogContract.NameMaxLengthMessage)]
     string Name);
+
+/// <summary>Produtos em lote (spec GH-066, D-3): uma categoria para todos; de 1 a 1.000 linhas.</summary>
+public record ImportProductsRequest(
+    [Required(ErrorMessage = CatalogContract.ProductCategoryRequired)]
+    Guid? CategoryId,
+    [Required(ErrorMessage = CatalogContract.ImportProductsRequired)]
+    IReadOnlyList<ImportProductLine>? Products);
+
+public record ImportProductLine(string? Code, string? Name);
+
+public record ImportProductsResponse(int Created, IReadOnlyList<ProductResponse> Products);
 
 public record UpdateProductRequest(
     [Required(ErrorMessage = CatalogContract.ProductCodeRequired)]

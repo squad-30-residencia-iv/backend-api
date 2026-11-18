@@ -39,6 +39,19 @@ public class ProductsController(IProductService productService) : ControllerBase
         return Created($"/api/v1/products/{result.Id}", result);
     }
 
+    /// <summary>Produtos em lote, código e nome (spec GH-066, D-3): tudo ou nada.</summary>
+    [HttpPost("import")]
+    [Authorize(Policy = AuthorizationPolicies.ManageCatalog)]
+    [ProducesResponseType<ImportProductsResponse>(StatusCodes.Status201Created)]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<ActionResult<ImportProductsResponse>> Import([FromBody] ImportProductsRequest request, CancellationToken cancellationToken)
+    {
+        var result = await productService.ImportAsync(request, cancellationToken);
+        return Created("/api/v1/products", result);
+    }
+
     [HttpPut("{id:guid}")]
     [Authorize(Policy = AuthorizationPolicies.ManageCatalog)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]

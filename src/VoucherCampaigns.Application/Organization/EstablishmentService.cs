@@ -15,12 +15,18 @@ public interface IEstablishmentService
 
     Task<EstablishmentResponse> CreateAsync(CreateEstablishmentRequest request, CancellationToken cancellationToken = default);
 
+    Task<ImportEstablishmentsResponse> ImportAsync(ImportEstablishmentsRequest request, CancellationToken cancellationToken = default);
+
     Task<EstablishmentResponse> UpdateAsync(Guid id, UpdateEstablishmentRequest request, CancellationToken cancellationToken = default);
 
     Task InactivateAsync(Guid id, CancellationToken cancellationToken = default);
 }
 
-public class EstablishmentService(IOrganizationRepository repository, ICurrentUser currentUser, TimeProvider timeProvider) : IEstablishmentService
+public class EstablishmentService(
+    IOrganizationRepository repository,
+    IEstablishmentImportStore importStore,
+    ICurrentUser currentUser,
+    TimeProvider timeProvider) : IEstablishmentService
 {
     public async Task<IReadOnlyList<EstablishmentResponse>> GetAllAsync(Guid? regionId, bool? activeOnly, CancellationToken cancellationToken = default)
     {
@@ -72,6 +78,79 @@ public class EstablishmentService(IOrganizationRepository repository, ICurrentUs
         establishment.EnableChannels(channels, now);
 
         return Map(await repository.CreateEstablishmentAsync(establishment, cancellationToken));
+    }
+
+    /// <summary>
+    /// Lojas em lote (spec GH-066, D-2; ponto 10 do cliente): as mesmas regras do cadastro um a um, linha a linha, e tudo
+    /// ou nada. O erro aponta a linha (<c>Establishments[i].Code</c>); código já existente na região recusa o lote com 422.
+    /// </summary>
+    public async Task<ImportEstablishmentsResponse> ImportAsync(ImportEstablishmentsRequest request, CancellationToken cancellationToken = default)
+    {
+        var regionId = InputValues.RequiredId(request.RegionId, nameof(request.RegionId), OrganizationContract.RegionRequired);
+        var channels = InputValues.ChannelTypes(request.Channels);
+        var lines = request.Establishments;
+
+        if (lines is null || lines.Count is 0 or > OrganizationContract.MaxImportLines)
+        {
+            throw new RequestValidationException(nameof(request.Establishments), OrganizationContract.ImportEstablishmentsRequired);
+        }
+
+        var parsed = new List<(string Code, string Name)>(lines.Count);
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+
+        for (var index = 0; index < lines.Count; index++)
+        {
+            var field = $"{nameof(request.Establishments)}[{index}]";
+            var code = InputValues.RequiredText(
+                lines[index]?.Code ?? string.Empty, $"{field}.Code", OrganizationContract.EstablishmentCodeRequired,
+                OrganizationContract.EstablishmentCodeMaxLength, OrganizationContract.EstablishmentCodeMaxLengthMessage);
+            var name = InputValues.RequiredText(
+                lines[index]?.Name ?? string.Empty, $"{field}.Name", OrganizationContract.EstablishmentNameRequired,
+                OrganizationContract.NameMaxLength, OrganizationContract.NameMaxLengthMessage);
+
+            if (!seen.Add(code))
+            {
+                throw new RequestValidationException($"{field}.Code", OrganizationContract.ImportCodeRepeated);
+            }
+
+            parsed.Add((code, name));
+        }
+
+        var region = await repository.GetRegionByIdAsync(regionId, cancellationToken)
+            ?? throw new BusinessRuleException(
+                OrganizationErrors.EstablishmentRegionNotFoundCode, OrganizationErrors.EstablishmentRegionNotFoundMessage);
+        NetworkScope.Ensure(currentUser, region.NetworkId);
+        RequireActive(region);
+
+        var taken = await importStore.GetExistingCodesAsync(regionId, seen, cancellationToken);
+
+        if (taken.Count > 0)
+        {
+            throw new BusinessRuleException(
+                OrganizationErrors.EstablishmentCodeTakenCode,
+                OrganizationErrors.EstablishmentCodeTakenMessage,
+                new Dictionary<string, object?> { ["codes"] = taken.Order(StringComparer.Ordinal).ToList() });
+        }
+
+        var now = timeProvider.GetUtcNow().UtcDateTime;
+        var establishments = parsed.Select(line =>
+        {
+            var establishment = new Establishment
+            {
+                Id = Guid.CreateVersion7(),
+                RegionId = regionId,
+                Code = line.Code,
+                Name = line.Name,
+                IsActive = true,
+                CreatedAt = now
+            };
+            establishment.EnableChannels(channels, now);
+            return establishment;
+        }).ToList();
+
+        await importStore.AddAllAsync(establishments, cancellationToken);
+
+        return new ImportEstablishmentsResponse(establishments.Count, establishments.Select(Map).ToList());
     }
 
     public async Task<EstablishmentResponse> UpdateAsync(Guid id, UpdateEstablishmentRequest request, CancellationToken cancellationToken = default)

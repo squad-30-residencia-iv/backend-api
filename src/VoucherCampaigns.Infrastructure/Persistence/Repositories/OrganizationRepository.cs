@@ -4,8 +4,23 @@ using VoucherCampaigns.Domain.Organization;
 
 namespace VoucherCampaigns.Infrastructure.Persistence.Repositories;
 
-public class OrganizationRepository(AppDbContext context) : IOrganizationRepository
+public class OrganizationRepository(AppDbContext context) : IOrganizationRepository, IEstablishmentImportStore
 {
+    async Task<IReadOnlyList<string>> IEstablishmentImportStore.GetExistingCodesAsync(
+        Guid regionId, IReadOnlyCollection<string> codes, CancellationToken cancellationToken) =>
+        await context.Establishments.AsNoTracking()
+            .Where(establishment => establishment.RegionId == regionId && codes.Contains(establishment.Code))
+            .Select(establishment => establishment.Code)
+            .ToListAsync(cancellationToken);
+
+    async Task IEstablishmentImportStore.AddAllAsync(IReadOnlyList<Establishment> establishments, CancellationToken cancellationToken)
+    {
+        // Uma gravação só: o índice único de (região, código) recusa o lote inteiro se outra importação gravou antes.
+        context.Establishments.AddRange(establishments);
+        await ConstraintSave.SaveAsync(
+            context, OrganizationErrors.EstablishmentCodeTakenCode, OrganizationErrors.EstablishmentCodeTakenMessage, cancellationToken);
+    }
+
     public async Task<IReadOnlyList<Network>> GetNetworksAsync(bool? activeOnly, CancellationToken cancellationToken)
     {
         var query = Active(context.Networks.AsNoTracking(), activeOnly);
