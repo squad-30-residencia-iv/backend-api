@@ -38,17 +38,4 @@ public class PortalVoucherReadRepository(AppDbContext context) : IPortalVoucherR
     public Task<Establishment?> FindEstablishmentAsync(Guid establishmentId, CancellationToken cancellationToken) =>
         context.Establishments.AsNoTracking()
             .FirstOrDefaultAsync(establishment => establishment.Id == establishmentId, cancellationToken);
-
-    public async Task<IReadOnlyList<Voucher>> ListForCampaignsAsync(
-        Guid networkId, IReadOnlyCollection<Guid> campaignIds, CancellationToken cancellationToken)
-    {
-        if (campaignIds.Count == 0)
-        {
-            return [];
-        }
-
-        return await context.Vouchers.AsNoTracking()
-            .Where(voucher => voucher.NetworkId == networkId && campaignIds.Contains(voucher.CampaignId))
-            .ToListAsync(cancellationToken);
-    }
 }

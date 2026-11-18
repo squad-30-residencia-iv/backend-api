@@ -300,15 +300,21 @@ public class RedemptionReverser(IRedemptionRepository redemptions, IAuditTrail a
 {
     public async Task<bool> ReverseAsync(Guid redemptionId, string cause, Guid? actorApplicationId, DateTime utcNow, CancellationToken cancellationToken)
     {
+        var redemption = await redemptions.FindAsync(redemptionId, cancellationToken)
+            ?? throw new InvalidOperationException("O resgate a estornar não foi encontrado.");
+
+        // Campanha antes do resgate e do voucher, na ordem do cancelamento (GH-061, 7.1): o status lido depois da trava
+        // é o gravado, e um cancelamento em andamento termina antes.
+        var campaignStatus = await redemptions.LockCampaignAsync(redemption.CampaignId, cancellationToken);
+
         // Comando condicional por id: só quem marcar este resgate como estornado devolve a utilização dele.
         if (!await redemptions.TryReverseAsync(redemptionId, utcNow, cancellationToken))
         {
             return false;
         }
 
-        var redemption = await redemptions.FindAsync(redemptionId, cancellationToken)
-            ?? throw new InvalidOperationException("O resgate estornado não foi encontrado.");
-        await redemptions.TryReturnUseAsync(redemption.VoucherId, cancellationToken);
+        var returned = await redemptions.TryReturnUseAsync(
+            redemption.VoucherId, campaignStatus == CampaignStatus.Cancelled, utcNow, cancellationToken);
 
         var payload = new ReversedPayload(redemption.Id, redemption.TransactionId, redemption.DiscountAmount, cause);
         redemptions.Add(new VoucherEvent
@@ -321,6 +327,21 @@ public class RedemptionReverser(IRedemptionRepository redemptions, IAuditTrail a
             ActorId = actorApplicationId,
             Payload = AuditJson.Serialize(payload)
         });
+
+        // O estorno levou o voucher a Cancelled (D-13): o último evento conta isso (US-05.4).
+        if (returned == ReturnUseOutcome.ReturnedAndCancelled)
+        {
+            redemptions.Add(new VoucherEvent
+            {
+                Id = Guid.CreateVersion7(new DateTimeOffset(utcNow)),
+                VoucherId = redemption.VoucherId,
+                EventType = VoucherEventTypes.Cancelled,
+                OccurredAt = utcNow,
+                ActorType = actorApplicationId is null ? null : AuditActorType.Application,
+                ActorId = actorApplicationId,
+                Payload = AuditJson.Serialize(new { Cause = CampaignVoucherCanceller.Cause })
+            });
+        }
 
         if (actorApplicationId is { } actorId)
         {

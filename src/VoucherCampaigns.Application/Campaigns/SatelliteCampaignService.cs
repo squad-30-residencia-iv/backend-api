@@ -7,7 +7,9 @@ using VoucherCampaigns.Domain.Organization;
 namespace VoucherCampaigns.Application.Campaigns;
 
 /// <summary>Campanha vigente como a aplicação satélite a vê (US-07.1, spec GH-049 D-14). Datas no fuso da rede; sem saldo.</summary>
-/// <param name="Audience"><c>All</c> até o público restrito (#47).</param>
+/// <param name="Audience"><c>All</c> ou <c>Restricted</c> (spec GH-047, D-15).</param>
+/// <param name="RequiredAttributes">Atributos do cliente que o satélite deve mandar na concessão desta campanha; vazio no público "todos".</param>
+/// <param name="HistoryWindows">Janelas, em dias, do histórico pedido pelos critérios. Sem limites nem CPFs: só o que mandar.</param>
 public record SatelliteCampaignResponse(
     Guid Id,
     string Name,
@@ -20,7 +22,9 @@ public record SatelliteCampaignResponse(
     bool AllowUseInSamePurchase,
     decimal? MinPurchaseAmount,
     decimal? MaxPurchaseAmount,
-    int? MaxUsesPerVoucher);
+    int? MaxUsesPerVoucher,
+    IReadOnlyList<string> RequiredAttributes,
+    IReadOnlyList<int> HistoryWindows);
 
 public record SatelliteConditionResponse(string Type, decimal? MinAmount, int? MinQuantity, Guid? CategoryId, Guid? ProductId);
 
@@ -96,10 +100,38 @@ public class SatelliteCampaignService(IConcessionRepository concessions, ICurren
                 .Select(condition => new SatelliteConditionResponse(condition.Type.ToString(), condition.MinAmount, condition.MinQuantity, condition.CategoryId, condition.ProductId))
                 .ToList(),
             new SatelliteScopeResponse(entries.Any(entry => entry.RegionId is null && entry.EstablishmentId is null), entries),
-            "All",
+            campaign.AudienceType == CampaignAudienceType.Restricted ? "Restricted" : "All",
             campaign.AllowUseInSamePurchase,
             campaign.MinPurchaseAmount,
             campaign.MaxPurchaseAmount,
-            campaign.MaxUsesPerVoucher);
+            campaign.MaxUsesPerVoucher,
+            RequiredAttributes(campaign),
+            campaign.EligibilityCriteria.Where(criterion => criterion.WindowDays is not null)
+                .Select(criterion => criterion.WindowDays!.Value).Distinct().Order().ToList());
+    }
+
+    /// <summary>Nomes dos campos de <c>customer</c> na concessão (D-15), na ordem do contrato.</summary>
+    private static List<string> RequiredAttributes(Campaign campaign)
+    {
+        var types = campaign.EligibilityCriteria.ToList();
+        var attributes = new List<string>();
+
+        void AddIf(bool condition, string name)
+        {
+            if (condition && !attributes.Contains(name))
+            {
+                attributes.Add(name);
+            }
+        }
+
+        AddIf(types.Any(criterion => criterion.Type == EligibilityCriterionType.AgeRange), "birthDate");
+        AddIf(types.Any(criterion => criterion.Type == EligibilityCriterionType.Location && criterion.States.Count > 0), "state");
+        AddIf(types.Any(criterion => criterion.Type == EligibilityCriterionType.Location && criterion.CityCodes.Count > 0), "cityCode");
+        AddIf(types.Any(criterion => criterion.Type == EligibilityCriterionType.LoyaltyMember), "loyaltyMember");
+        AddIf(types.Any(criterion => criterion.Type == EligibilityCriterionType.TotalSpent), "history.totalSpent");
+        AddIf(types.Any(criterion => criterion.Type == EligibilityCriterionType.PurchaseFrequency), "history.purchaseCount");
+        AddIf(types.Any(criterion => criterion.Type == EligibilityCriterionType.PurchasedCategory), "history.productCodes");
+
+        return attributes;
     }
 }

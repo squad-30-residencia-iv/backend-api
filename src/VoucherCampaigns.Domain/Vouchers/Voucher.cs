@@ -54,6 +54,9 @@ public class Voucher
 
     public DateTime? DiscardedAt { get; set; }
 
+    /// <summary>Instante UTC em que o cancelamento da campanha invalidou o voucher (RN10, spec GH-061 D-7).</summary>
+    public DateTime? CancelledAt { get; set; }
+
     public ICollection<VoucherEvent> Events { get; set; } = [];
 
     public int RemainingUses => Math.Max(MaxUses - UsesCount, 0);

@@ -7,6 +7,7 @@ using VoucherCampaigns.Api.Vouchers;
 using VoucherCampaigns.Application.Audit;
 using VoucherCampaigns.Application.Campaigns;
 using VoucherCampaigns.Application.Catalog;
+using VoucherCampaigns.Application.Dashboard;
 using VoucherCampaigns.Application.Organization;
 using VoucherCampaigns.Application.Reports;
 using VoucherCampaigns.Application.SystemStatus;
@@ -39,6 +40,7 @@ builder.Services.AddScoped<ISatelliteCampaignService, SatelliteCampaignService>(
 builder.Services.AddScoped<IPortalVoucherQueryService, PortalVoucherQueryService>();
 builder.Services.AddScoped<IReportService, ReportService>();
 builder.Services.AddScoped<IAuditQueryService, AuditQueryService>();
+builder.Services.AddScoped<IDashboardService, DashboardService>();
 builder.Services.AddHostedService<ReservationSweepService>();
 builder.Services.AddInfrastructure();
 builder.Services.AddApiAuthentication();

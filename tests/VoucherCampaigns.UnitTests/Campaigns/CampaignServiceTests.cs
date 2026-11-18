@@ -2,6 +2,7 @@ using VoucherCampaigns.Application.Audit;
 using VoucherCampaigns.Application.Authentication;
 using VoucherCampaigns.Application.Campaigns;
 using VoucherCampaigns.Application.Common;
+using VoucherCampaigns.Application.Dashboard;
 using VoucherCampaigns.Application.Ports;
 using VoucherCampaigns.Application.Vouchers;
 using VoucherCampaigns.Domain.Audit;
@@ -278,10 +279,17 @@ public class CampaignServiceTests
             _campaigns,
             _catalog,
             new FakeOrganizationRepository(),
-            new FakePortalVoucherReadRepository(),
+            new NoVoucherCounts(),
             _user,
             _audit,
+            new NoVoucherCanceller(),
             new FixedTimeProvider(now ?? Now));
+
+    private sealed class NoVoucherCanceller : ICampaignVoucherCanceller
+    {
+        public Task<CampaignVoucherCancellation> CancelVouchersAsync(Guid campaignId, Guid actorUserId, DateTime utcNow, CancellationToken cancellationToken) =>
+            Task.FromResult(new CampaignVoucherCancellation(0, 0, 0));
+    }
 
     private static CreateCampaignRequest Request(DateTime startsAt, DateTime endsAt) =>
         new(Network.Id, "Volta às Aulas", null, startsAt, endsAt);
@@ -308,6 +316,30 @@ public class CampaignServiceTests
             Task.FromResult(Added.FirstOrDefault(campaign => campaign.Id == id));
 
         public Task<Campaign?> FindForUpdateAsync(Guid id, CancellationToken cancellationToken) => FindByIdAsync(id, cancellationToken);
+
+        public Task LoadEligibleCustomersAsync(Campaign campaign, CancellationToken cancellationToken) => Task.CompletedTask;
+
+        public async Task<bool> SaveIfUnchangedAsync(
+            Campaign campaign, CancellationToken cancellationToken, Func<CancellationToken, Task>? withinTransaction = null)
+        {
+            if (withinTransaction is not null)
+            {
+                await withinTransaction(cancellationToken);
+            }
+
+            return true;
+        }
+
+        public Task<IReadOnlyList<string>> GetEligibleDocumentsAsync(Guid campaignId, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<string>>(
+                Added.Single(campaign => campaign.Id == campaignId).EligibleCustomers.Select(customer => customer.Document).Order().ToList());
+
+        public Task<(int Total, IReadOnlyList<string> Documents)> GetEligibleDocumentsPageAsync(
+            Guid campaignId, int skip, int take, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
+        public Task<bool> IsCustomerListedAsync(Guid campaignId, string document, CancellationToken cancellationToken) =>
+            Task.FromResult(Added.Single(campaign => campaign.Id == campaignId).EligibleCustomers.Any(customer => customer.Document == document));
 
         public void AddStatusEvent(CampaignStatusEvent statusEvent)
         {
@@ -385,20 +417,17 @@ public class CampaignServiceTests
         public void Append(AuditEntry entry) => Entries.Add(entry);
     }
 
-    private sealed class FakePortalVoucherReadRepository : IPortalVoucherReadRepository
+    private sealed class NoVoucherCounts : IDashboardRepository
     {
-        public Task<IReadOnlyList<Voucher>> ListByNetworkAsync(Guid networkId, Guid? campaignId, CancellationToken cancellationToken) =>
-            Task.FromResult<IReadOnlyList<Voucher>>([]);
+        public Task<IReadOnlyList<CampaignCounts>> CountVouchersAsync(
+            Guid networkId, Guid? campaignId, VoucherFilter filter, DateTime utcNow, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<CampaignCounts>>([]);
 
-        public Task<Voucher?> FindByIdAsync(Guid id, CancellationToken cancellationToken) =>
-            Task.FromResult<Voucher?>(null);
+        public Task<IReadOnlyList<AuditEntry>> GetCampaignAuditAsync(Guid campaignId, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<AuditEntry>>([]);
 
-        public Task<Establishment?> FindEstablishmentAsync(Guid establishmentId, CancellationToken cancellationToken) =>
-            Task.FromResult<Establishment?>(null);
-
-        public Task<IReadOnlyList<Voucher>> ListForCampaignsAsync(
-            Guid networkId, IReadOnlyCollection<Guid> campaignIds, CancellationToken cancellationToken) =>
-            Task.FromResult<IReadOnlyList<Voucher>>([]);
+        public Task<IReadOnlyDictionary<Guid, AuditActor>> GetUsersAsync(IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyDictionary<Guid, AuditActor>>(new Dictionary<Guid, AuditActor>());
     }
 
     private sealed class FakeCurrentUser(Guid networkId) : ICurrentUser

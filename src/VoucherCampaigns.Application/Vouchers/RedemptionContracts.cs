@@ -1,4 +1,5 @@
 using System.ComponentModel.DataAnnotations;
+using VoucherCampaigns.Domain.Campaigns;
 using VoucherCampaigns.Domain.Vouchers;
 
 namespace VoucherCampaigns.Application.Vouchers;
@@ -122,7 +123,14 @@ public interface IRedemptionRepository
     Task<bool> TryConsumeUseAsync(Guid voucherId, DateTime utcNow, CancellationToken cancellationToken);
 
     /// <summary><c>uses_count - 1</c>; resgatado volta a disponível. Falso quando não havia uso a devolver.</summary>
-    Task<bool> TryReturnUseAsync(Guid voucherId, CancellationToken cancellationToken);
+    /// <param name="campaignCancelled">
+    /// Campanha cancelada (GH-061, D-13): o <c>Redeemed</c> devolve a utilização e vai para <c>Cancelled</c>, com
+    /// <c>cancelled_at</c>, em vez de voltar a <c>Available</c>.
+    /// </param>
+    Task<ReturnUseOutcome> TryReturnUseAsync(Guid voucherId, bool campaignCancelled, DateTime utcNow, CancellationToken cancellationToken);
+
+    /// <summary>Trava a linha da campanha na transação e devolve o status gravado (GH-061, 7.1).</summary>
+    Task<CampaignStatus?> LockCampaignAsync(Guid campaignId, CancellationToken cancellationToken);
 
     /// <summary>Este resgate, se efetivo, passa a estornado. Falso quando já não estava efetivo.</summary>
     Task<bool> TryReverseAsync(Guid redemptionId, DateTime reversedAt, CancellationToken cancellationToken);
@@ -138,4 +146,14 @@ public interface IRedemptionRepository
 
     /// <summary>Falso quando a transação já tem resgate na rede (índice único): outro pedido chegou antes.</summary>
     Task<bool> TrySaveChangesAsync(CancellationToken cancellationToken);
+}
+
+/// <summary>Resultado da devolução de uma utilização no estorno (GH-049 D-19, GH-061 D-13).</summary>
+public enum ReturnUseOutcome
+{
+    NotReturned,
+    Returned,
+
+    /// <summary>Devolvida num voucher de campanha cancelada: o voucher passou a <c>Cancelled</c>.</summary>
+    ReturnedAndCancelled
 }

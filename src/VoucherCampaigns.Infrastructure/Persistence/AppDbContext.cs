@@ -6,7 +6,6 @@ using VoucherCampaigns.Domain.Common;
 using VoucherCampaigns.Domain.Identity;
 using VoucherCampaigns.Domain.Organization;
 using VoucherCampaigns.Domain.Vouchers;
-using VoucherCampaigns.Domain.Entities;
 
 namespace VoucherCampaigns.Infrastructure.Persistence;
 
@@ -29,7 +28,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<Redemption> Redemptions => Set<Redemption>();
     public DbSet<AuditEntry> AuditEntries => Set<AuditEntry>();
     public DbSet<CampaignCondition> CampaignConditions => Set<CampaignCondition>();
-    public DbSet<EligibilityCriterion> EligibilityCriteria => Set<EligibilityCriterion>();
+    public DbSet<CampaignEligibilityCriterion> CampaignEligibilityCriteria => Set<CampaignEligibilityCriterion>();
+    public DbSet<CampaignEligibleCustomer> CampaignEligibleCustomers => Set<CampaignEligibleCustomer>();
     public DbSet<User> Users => Set<User>();
     public DbSet<SatelliteApp> SatelliteApps => Set<SatelliteApp>();
 
@@ -66,9 +66,6 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
         base.OnModelCreating(modelBuilder);
 
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(AppDbContext).Assembly);
-
-        // EligibilityCriterion do #36 fica até a issue #47 (público restrito) definir o modelo.
-        modelBuilder.Entity<EligibilityCriterion>(entity => entity.HasKey(e => e.Id));
 
         modelBuilder.ApplySnakeCaseNames();
     }

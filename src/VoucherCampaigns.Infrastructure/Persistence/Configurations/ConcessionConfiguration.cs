@@ -19,6 +19,9 @@ public class ConcessionConfiguration : IEntityTypeConfiguration<Concession>
         builder.Property(concession => concession.Status).HasConversion<string>().HasMaxLength(20);
         builder.Property(concession => concession.Refusal).HasConversion<string>().HasMaxLength(30);
 
+        // Snapshot da elegibilidade (spec GH-047, D-12), em texto livre: só os atributos que algum critério usou.
+        builder.Property(concession => concession.Eligibility);
+
         // Chave de idempotência (PR-07): uma decisão por transação em cada rede.
         builder.HasIndex(concession => new { concession.NetworkId, concession.TransactionId }).IsUnique();
         builder.HasIndex(concession => new { concession.NetworkId, concession.CustomerDocument, concession.RequestedAt });
