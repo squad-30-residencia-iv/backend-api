@@ -23,6 +23,7 @@ public class ReportReadRepository(AppDbContext context) : IReportReadRepository
                 region.Name,
                 voucher.IssuedAt,
                 voucher.Status,
+                voucher.UsesCount,
                 voucher.ValidUntil,
                 voucher.ReservedUntil)
             ).ToListAsync(cancellationToken);

@@ -18,16 +18,6 @@ public class ApiExceptionHandler(IProblemDetailsService problemDetailsService, P
 {
     public async ValueTask<bool> TryHandleAsync(HttpContext httpContext, Exception exception, CancellationToken cancellationToken)
     {
-        if (exception is not BusinessRuleException
-            and not RequestValidationException
-            and not ResourceNotFoundException
-            and not ScopeForbiddenException)
-        {
-            File.AppendAllText(
-                Path.Combine(Path.GetTempPath(), "vc-unhandled.txt"),
-                exception + Environment.NewLine + "----" + Environment.NewLine);
-        }
-
         ProblemDetails? problem = exception switch
         {
             BusinessRuleException rule => WithExtensions(

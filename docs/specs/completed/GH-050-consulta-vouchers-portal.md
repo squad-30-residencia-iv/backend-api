@@ -24,7 +24,7 @@
 | D-1 | `GET /api/v1/vouchers?networkId=` com filtros opcionais `campaignId`, `status`, `search`, `issuedFrom`, `issuedTo` (datas locais da rede, interpretadas como dia inteiro no fuso). |
 | D-2 | `GET /api/v1/vouchers/{id}` devolve resumo + benefício do alvo + escopo (loja/canal) + eventos (mais recentes primeiro). |
 | D-3 | Filtro `status`: enum efetivo (`Available`, `Redeemed`, `Expired`, `Cancelled`, `Provisional`). Desconhecido → `400`. Sem filtro: todos exceto `Discarded`. |
-| D-4 | Busca `search`: código (parcial, case-insensitive) ou trechos do CPF (só dígitos). |
+| D-4 | Busca `search`: código (parcial, case-insensitive) ou o CPF inteiro (11 dígitos, com ou sem pontuação). **Revisado no PR #65 (2026-11-18):** trechos do CPF deixaram de valer; junto com os 6 dígitos que a máscara mostra, permitiriam descobrir o CPF por tentativa (D4; retenção e base legal no PA-4 da spec GH-047). O portal hoje filtra no navegador e não manda `search`. |
 | D-5 | Voucher de outra rede → `403 SCOPE_FORBIDDEN`; inexistente → `404 NOT_FOUND`. |
 
 ---
@@ -91,3 +91,11 @@ Porta: `IPortalVoucherQueryService` + `IPortalVoucherReadRepository` (somente le
 - [ ] Filtro por campanha e por status efetivo
 - [ ] Detalhe traz eventos e CPF mascarado
 - [ ] Outra rede → 403; id inexistente → 404; sem token → 401
+
+---
+
+## 6. Revisão (PR #65, 2026-11-18)
+
+- O evento `Cancelled` gravado pelo cancelamento da campanha (spec `GH-061`, payload com a causa `CampaignCancelled`) aparece no histórico como "Campanha cancelada"; o desfazimento pelo PDV continua "Concessão desfeita".
+- Pontos em aberto: a listagem continua sem paginação (o portal filtra no navegador) e carrega os vouchers da rede inteira; o gatilho para paginar é a rede passar de alguns milhares de vouchers. As rotas `/reports` e `/audit-entries` cobrem parte do que o PR #59 entregou em `/dashboard` e `/campaigns/{id}/audit`; conciliar as duas superfícies quando o portal passar a usar uma só.
+

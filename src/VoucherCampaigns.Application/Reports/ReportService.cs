@@ -1,9 +1,9 @@
 using VoucherCampaigns.Application.Authentication;
 using VoucherCampaigns.Application.Campaigns;
 using VoucherCampaigns.Application.Common;
+using VoucherCampaigns.Application.Dashboard;
 using VoucherCampaigns.Application.DTOs.Organization;
 using VoucherCampaigns.Domain.Common;
-using VoucherCampaigns.Domain.Vouchers;
 
 namespace VoucherCampaigns.Application.Reports;
 
@@ -33,24 +33,27 @@ public class ReportService(
         var periodStartLocal = timeProvider.GetUtcNow().ToOffset(timeZone.GetUtcOffset(utcNow)).DateTime.Date.AddDays(-(days - 1));
         var periodStartUtc = NetworkTime.ToUtc(periodStartLocal, timeZone, "period");
 
+        // Mesma regra do dashboard (spec GH-050, D-3): emitidos sem o provisório; resgatados com ao menos uma utilização;
+        // vencidos e cancelados só sem utilização. A soma das fatias dá os emitidos.
         var rows = await reports.ListVouchersAsync(scopedNetworkId, cancellationToken);
-        var filtered = rows
-            .Select(row => (Row: row, Status: EffectiveStatus(row, utcNow)))
-            .Where(entry => entry.Status != VoucherStatus.Discarded)
-            .Where(entry => entry.Row.IssuedAt >= periodStartUtc)
+        var inScope = rows
+            .Select(row => (Row: row, Status: VoucherBuckets.Of(row.Status, row.UsesCount, row.ValidUntil, row.ReservedUntil, utcNow)))
+            .Where(entry => entry.Status.IsIssued())
             .Where(entry => campaignId is null || entry.Row.CampaignId == campaignId)
             .Where(entry => regionId is null || entry.Row.RegionId == regionId)
             .Where(entry => establishmentId is null || entry.Row.EstablishmentId == establishmentId)
             .ToList();
+        var filtered = inScope.Where(entry => entry.Row.IssuedAt >= periodStartUtc).ToList();
 
         var issued = filtered.Count;
-        var redeemed = filtered.Count(entry => entry.Status == VoucherStatus.Redeemed);
-        var expired = filtered.Count(entry => entry.Status == VoucherStatus.Expired);
-        var available = filtered.Count(entry => entry.Status == VoucherStatus.Available);
-        var cancelled = filtered.Count(entry => entry.Status == VoucherStatus.Cancelled);
+        var redeemed = filtered.Count(entry => entry.Status == VoucherBucket.Redeemed);
+        var expired = filtered.Count(entry => entry.Status == VoucherBucket.ExpiredUnused);
+        var available = filtered.Count(entry => entry.Status == VoucherBucket.Available);
+        var cancelled = filtered.Count(entry => entry.Status == VoucherBucket.CancelledUnused);
         decimal? rate = issued == 0 ? null : Math.Round(100m * redeemed / issued, 1, MidpointRounding.AwayFromZero);
 
-        var monthly = BuildMonthly(filtered, utcNow, timeZone);
+        // O gráfico mensal cobre os últimos 6 meses, fora do recorte do período (que vale para os indicadores).
+        var monthly = BuildMonthly(inScope, utcNow, timeZone);
         var distribution = new[]
             {
                 new ReportStatusSliceResponse("redeemed", redeemed),
@@ -66,7 +69,7 @@ public class ReportService(
             .Select(group =>
             {
                 var groupIssued = group.Count();
-                var groupRedeemed = group.Count(entry => entry.Status == VoucherStatus.Redeemed);
+                var groupRedeemed = group.Count(entry => entry.Status == VoucherBucket.Redeemed);
                 return new ReportCampaignRowResponse(
                     group.Key.CampaignId,
                     group.Key.CampaignName,
@@ -84,7 +87,7 @@ public class ReportService(
             .Select(group =>
             {
                 var groupIssued = group.Count();
-                var groupRedeemed = group.Count(entry => entry.Status == VoucherStatus.Redeemed);
+                var groupRedeemed = group.Count(entry => entry.Status == VoucherBucket.Redeemed);
                 return new ReportRegionRowResponse(
                     group.Key.RegionId,
                     group.Key.RegionName,
@@ -126,26 +129,8 @@ public class ReportService(
             _ => throw new RequestValidationException("period", ReportContract.PeriodInvalid)
         };
 
-    private static VoucherStatus EffectiveStatus(ReportVoucherRow row, DateTime utcNow)
-    {
-        if (row.Status == VoucherStatus.Provisional
-            && row.ReservedUntil is { } reservedUntil
-            && utcNow >= reservedUntil)
-        {
-            return VoucherStatus.Discarded;
-        }
-
-        if (row.Status == VoucherStatus.Available
-            && BusinessTime.TruncateToSecond(utcNow) > row.ValidUntil)
-        {
-            return VoucherStatus.Expired;
-        }
-
-        return row.Status;
-    }
-
     private static IReadOnlyList<ReportMonthlyPointResponse> BuildMonthly(
-        IReadOnlyList<(ReportVoucherRow Row, VoucherStatus Status)> filtered,
+        IReadOnlyList<(ReportVoucherRow Row, VoucherBucket Status)> filtered,
         DateTime utcNow,
         TimeZoneInfo timeZone)
     {
@@ -165,8 +150,8 @@ public class ReportService(
             points.Add(new ReportMonthlyPointResponse(
                 label,
                 monthRows.Count,
-                monthRows.Count(entry => entry.Status == VoucherStatus.Redeemed),
-                monthRows.Count(entry => entry.Status == VoucherStatus.Expired)));
+                monthRows.Count(entry => entry.Status == VoucherBucket.Redeemed),
+                monthRows.Count(entry => entry.Status == VoucherBucket.ExpiredUnused)));
         }
 
         return points;

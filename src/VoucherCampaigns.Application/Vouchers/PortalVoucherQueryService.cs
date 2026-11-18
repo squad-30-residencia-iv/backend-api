@@ -17,6 +17,7 @@ public class PortalVoucherQueryService(
     TimeProvider timeProvider) : IPortalVoucherQueryService
 {
     private static readonly CultureInfo PtBr = CultureInfo.GetCultureInfo("pt-BR");
+    private const int CpfLength = 11;
 
     public async Task<IReadOnlyList<PortalVoucherListItemResponse>> ListAsync(
         Guid? networkId,
@@ -97,7 +98,9 @@ public class PortalVoucherQueryService(
             return true;
         }
 
-        if (!string.IsNullOrEmpty(searchDigits) && voucher.CustomerDocument.Contains(searchDigits, StringComparison.Ordinal))
+        // CPF só pelo número inteiro: um pedaço, junto com os 6 dígitos que a máscara mostra, permitiria descobrir o CPF
+        // por tentativa (D4; retenção e base legal em PA-4 da spec GH-047).
+        if (searchDigits is { Length: CpfLength } && voucher.CustomerDocument == searchDigits)
         {
             return true;
         }
@@ -177,7 +180,7 @@ public class PortalVoucherQueryService(
             NetworkTime.ToLocal(entry.OccurredAt, timeZone),
             OriginLabel(entry.ActorType),
             place,
-            ResultLabel(entry.EventType));
+            ResultLabel(entry));
     }
 
     private static string ChannelLabel(ChannelType channel) =>
@@ -191,16 +194,19 @@ public class PortalVoucherQueryService(
             _ => "Sistema"
         };
 
-    private static string ResultLabel(string eventType) =>
-        eventType switch
+    private static string ResultLabel(VoucherEvent entry) =>
+        entry.EventType switch
         {
             VoucherEventTypes.Issued => "Voucher emitido",
             VoucherEventTypes.Confirmed => "Venda confirmada",
+            // O cancelamento da campanha (spec GH-061) grava o mesmo tipo com a causa no payload.
+            VoucherEventTypes.Cancelled when entry.Payload?.Contains(CampaignVoucherCanceller.Cause, StringComparison.Ordinal) == true
+                => "Campanha cancelada",
             VoucherEventTypes.Cancelled => "Concessão desfeita",
             VoucherEventTypes.ReservationExpired => "Reserva expirada",
             VoucherEventTypes.Redeemed => "Resgate confirmado",
             VoucherEventTypes.RedemptionReversed => "Resgate estornado",
             VoucherEventTypes.Expired => "Validade encerrada",
-            _ => eventType
+            _ => entry.EventType
         };
 }

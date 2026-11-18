@@ -11,6 +11,7 @@ public sealed record ReportVoucherRow(
     string RegionName,
     DateTime IssuedAt,
     VoucherStatus Status,
+    int UsesCount,
     DateTime ValidUntil,
     DateTime? ReservedUntil);
 

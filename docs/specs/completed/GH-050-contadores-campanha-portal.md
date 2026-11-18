@@ -19,8 +19,8 @@
 | # | Decisão |
 |---|---|
 | D-1 | Acrescentar `RedeemedVouchers` e `ExpiredVouchers` ao `CampaignResponse` (sempre presentes; 0 se nenhum). |
-| D-2 | Contagem: Redeemed = status efetivo `Redeemed`; Expired = efetivo `Expired` (inclui Available vencido pela validade). |
-| D-3 | Sem migração: agregação em leitura no serviço/repositório. |
+| D-2 | ~~Contagem: Redeemed = status efetivo `Redeemed`; Expired = efetivo `Expired`.~~ **Revisada no PR #65 (2026-11-18):** a mesma regra do dashboard (spec `GH-050-acompanhamento-da-campanha.md`, D-3): Redeemed = emitido com ao menos uma utilização (o usado em parte conta); Expired = vencido sem nenhuma utilização. Assim o detalhe e o dashboard mostram o mesmo número. |
+| D-3 | Sem migração: agregação no SQL por `IDashboardRepository.CountVouchersAsync` (uma consulta para a lista, uma por campanha nas demais respostas), sem carregar os vouchers em memória. Toda resposta de campanha já gravada (inclusive pausar, encerrar e cancelar) traz os contadores; a criação do rascunho devolve 0. |
 
 ---
 
@@ -42,10 +42,10 @@ Sem rota nova. `GET /api/v1/campaigns` e `GET /api/v1/campaigns/{id}` passam a d
 
 ## 4. Checklist
 
-- [ ] 1. Estender `CampaignResponse` e `Map`
-- [ ] 2. Contagem por campanha(s) no repositório/serviço
-- [ ] 3. Testes de integração com vouchers emitidos/resgatados/expirados
-- [ ] 4. `dotnet test`
+- [x] 1. Estender `CampaignResponse` e `Map`
+- [x] 2. Contagem por campanha(s) no repositório/serviço
+- [x] 3. Testes de integração com vouchers emitidos/resgatados/expirados
+- [x] 4. `dotnet test`
 
 ---
 
