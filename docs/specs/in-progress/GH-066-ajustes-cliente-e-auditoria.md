@@ -93,7 +93,7 @@ Códigos novos:
 - [x] 4. D-2 e D-3 importações
 - [x] 5. D-6, D-7 e D-8
 - [x] 6. D-9 e D-10
-- [ ] 7. `dotnet build -warnaserror`, `dotnet test` em SQLite e PostgreSQL, smoke com a API no ar, agente `testador-de-branch` (Opus)
+- [x] 7. `dotnet build -warnaserror`, `dotnet test` em SQLite e PostgreSQL, smoke com a API no ar, agente `testador-de-branch` (Opus)
 
 ---
 
@@ -151,3 +151,14 @@ Códigos novos:
   - PostgreSQL: 3 de 3 com a correção.
 - **Chave JWT (D-7):** a API em `Production` com a chave de desenvolvimento não sobe e mostra a mensagem da D-7.
 - **Smoke:** `smoke.py` (agora com `/system/status` 401/403/200), `motor.py`, `publico.py` e `cancelamento.py` OK; `POST /establishments/import` e `POST /products/import` 201 com a API no ar.
+- **Agente `testador-de-branch` (Opus) no commit `e1f5638`: aprovado.**
+  - **SQLite:** 310 unitários e 557 de integração.
+  - **PostgreSQL:** 553 de 557. As falhas são o timeout conhecido ao apagar o banco de teste, em classes que a branch não tocou. `ConcessionConcurrencyTests` passou 4 rodadas de 3 de 3.
+  - **Rotas e startup:** todas as rotas e todos os cenários de inicialização deram OK, inclusive o login acima do limite (429 com `Retry-After: 60`) e a API em Production recusando a chave de desenvolvimento.
+  - **Leitura de código:** confirmou a recontagem do D-4 sob a trava da campanha, o limitador restrito ao login e as importações sem gravação parcial.
+  - **Corrigido depois:** o comentário XML que estava no record errado.
+  - **Fica registrado, sem correção nesta fatia:**
+    - na busca por `POST`, o campo do erro vem como `document` (CPF inválido) ou `Document` (ausente), conforme a origem da validação;
+    - o cabeçalho `Deprecation: true` segue o formato dos rascunhos, e não a data da RFC 9745;
+    - o `POST /satellite/token` continua no PA-10.
+
