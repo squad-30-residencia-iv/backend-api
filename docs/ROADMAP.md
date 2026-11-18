@@ -75,6 +75,8 @@ O cálculo na emissão e a recusa no resgate continuam no EP-04 e no EP-05. A sp
 
 Nenhuma das D1–D9 permanece em aberto. O aceite está na seção 2.5.
 
+Pontos do cliente de 2026-11-18 que esperam resposta (issue #66, spec `GH-066`, seção 6): o que significa "valor do desconto só 1" (PA-1); se o alvo da campanha passa a ser uma lista de códigos de produto (PA-2); se basta uma aprovação mesmo para quem editou (PA-4); quais restrições valem no resgate (PA-5); se o dia da emissão conta como o primeiro dia da validade (PA-6).
+
 ### 2.5 Decisões aceitas
 
 | # | Decisão | Registrado em | Observação |
@@ -193,6 +195,8 @@ Ciclo SDD já usado nas US-02.5 e US-01.1 (`docs/prompts/` e `agents.md`):
 - [ ] US-02.6 herança de fuso e moeda
 - [x] Issue #47 (última fatia da #27): público restrito, US-04.2 com critérios, US-06.1 a 06.5 e a simulação da 06.6 (spec `GH-047`)
 - [x] US-01.8 cancelar campanha (RN10) com invalidação em lote dos vouchers não utilizados (US-05.5 cenários 2 e 3; PA-1 da spec `GH-049`): issue #61, spec `GH-061`, na `staging` pelo PR #63 (2026-11-14); pontos em aberto na issue #62
+- [x] Issue #66: pontos do cliente de 2026-11-18 (validade só em dias, lojas e produtos em lote, limite por CPF atômico, contrato do público para o PDV) e correções urgentes da auditoria (SEC-01, SEC-02, SEC-04, SEC-06, SEC-07, SEC-08, SEC-21); spec `GH-066`
+- [ ] Respostas do cliente aos PA-1, PA-2 e PA-4 a PA-6 da spec `GH-066`; issue de endurecimento com os demais achados da auditoria (PA-10)
 - [ ] US-01.7 edição da campanha após entrar em vigor (RN03b, RN02a)
 - [ ] Issue #57: pontos em aberto da spec `GH-045` (PA-4 a PA-14)
 - [ ] Avisar o frontend e o PDV das rotas novas (resgate, campanhas vigentes, dashboard) e conferir o formato do CSV

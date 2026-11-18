@@ -87,12 +87,12 @@ Códigos novos:
 
 ## 4. Checklist de Implementação
 
-- [ ] 1. D-1 validade só em dias e testes ajustados
-- [ ] 2. D-5 alias
-- [ ] 3. D-4 limite por CPF com teste de concorrência
-- [ ] 4. D-2 e D-3 importações
-- [ ] 5. D-6, D-7 e D-8
-- [ ] 6. D-9 e D-10
+- [x] 1. D-1 validade só em dias e testes ajustados
+- [x] 2. D-5 alias
+- [x] 3. D-4 limite por CPF com teste de concorrência
+- [x] 4. D-2 e D-3 importações
+- [x] 5. D-6, D-7 e D-8
+- [x] 6. D-9 e D-10
 - [ ] 7. `dotnet build -warnaserror`, `dotnet test` em SQLite e PostgreSQL, smoke com a API no ar, agente `testador-de-branch` (Opus)
 
 ---
@@ -130,4 +130,24 @@ Códigos novos:
 
 ## 7. Notas da implementação
 
-(preenchido ao final)
+### 7.1 Diferenças em relação ao texto acima
+
+| Ponto | O que ficou | Por quê |
+|---|---|---|
+| Papéis das importações (D-2, D-3) | Só o administrador (`ManageHierarchy` e `ManageCatalog`), como no cadastro um a um; código já existente responde 422 com a lista `codes` | O texto inicial falava em analista e gestor, mas o cadastro um a um já é só do administrador |
+| Comparação do código do produto (D-3) | A mesma do cadastro um a um (igualdade exata) | Manter as duas rotas coerentes; maiúsculas ficam no PERF-04 |
+| `.env` (D-7) | Em Development continua procurando o `.env` nas pastas acima | A API roda de `src/VoucherCampaigns.Api` e o `.env` fica na raiz do repositório; fora de Development não é lido |
+| Limite do login nos testes e no smoke | `ApiFactory` usa `Auth:LoginRateLimit:PermitLimit = 100000` e o `start-api.sh` usa 1000 | Os testes e os roteiros fazem muitos logins da mesma origem; o limite tem teste próprio (`LoginRateLimitTests`) |
+| Validade (D-1) | Saíram as validações da data fixa no serviço; o domínio (`SetFixedValidity`, horas) continua | Campanhas já gravadas seguem valendo; o teste do fim depois da data fixa grava pelo banco |
+
+### 7.2 Verificação
+
+- **Build:** `dotnet build -warnaserror` sem avisos.
+- **SQLite:** 310 unitários e 557 de integração, todos aprovados.
+- **PostgreSQL, suíte inteira:** 551 de 557. As 6 falhas são o timeout conhecido ao criar e apagar o banco de teste, sem falha de asserção.
+- **PostgreSQL, classes tocadas por esta branch:** concessão, importação, consulta, status, validade, satélite, rotas protegidas e as leituras do #65. A 1ª rodada passou 139 de 139; na 2ª, 3 testes das classes do #65 que criam um banco por teste caíram no mesmo timeout.
+- **Limite por CPF (D-4):** 20 concessões simultâneas do mesmo CPF com limite 1.
+  - SQLite: 3 de 3 com a correção; 2 de 2 falham sem ela.
+  - PostgreSQL: 3 de 3 com a correção.
+- **Chave JWT (D-7):** a API em `Production` com a chave de desenvolvimento não sobe e mostra a mensagem da D-7.
+- **Smoke:** `smoke.py` (agora com `/system/status` 401/403/200), `motor.py`, `publico.py` e `cancelamento.py` OK; `POST /establishments/import` e `POST /products/import` 201 com a API no ar.
