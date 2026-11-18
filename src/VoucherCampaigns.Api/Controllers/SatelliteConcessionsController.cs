@@ -53,13 +53,34 @@ public class SatelliteConcessionsController(IConcessionService concessionService
     public async Task<ActionResult<ConcessionResponse>> Get(Guid id, CancellationToken cancellationToken) =>
         Ok(await concessionService.GetAsync(id, cancellationToken));
 
-    /// <summary>Vouchers do cliente na rede da aplicação, com o status efetivo (US-04.8, US-07.4).</summary>
+    /// <summary>
+    /// Vouchers do cliente na rede da aplicação, com o CPF no corpo (spec GH-066, D-9; SEC-06 da auditoria): a mesma
+    /// resposta da rota <c>GET</c>, sem o CPF em logs de acesso, proxies e histórico.
+    /// </summary>
+    [HttpPost("customers/vouchers/search")]
+    [ProducesResponseType<IReadOnlyList<VoucherResponse>>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
+    public async Task<ActionResult<IReadOnlyList<VoucherResponse>>> SearchCustomerVouchers(
+        CustomerVouchersSearchRequest request, CancellationToken cancellationToken) =>
+        Ok(await concessionService.GetCustomerVouchersAsync(request.Document!, request.Status, cancellationToken));
+
+    /// <summary>
+    /// Vouchers do cliente na rede da aplicação, com o status efetivo (US-04.8, US-07.4). Obsoleta (spec GH-066, D-9):
+    /// fica até o PDV migrar para <c>POST customers/vouchers/search</c>, e responde com <c>Deprecation</c> e <c>Link</c>.
+    /// </summary>
     [HttpGet("customers/{document}/vouchers")]
     [ProducesResponseType<IReadOnlyList<VoucherResponse>>(StatusCodes.Status200OK)]
     [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
     public async Task<ActionResult<IReadOnlyList<VoucherResponse>>> CustomerVouchers(
-        string document, [FromQuery] string? status, CancellationToken cancellationToken) =>
-        Ok(await concessionService.GetCustomerVouchersAsync(document, status, cancellationToken));
+        string document, [FromQuery] string? status, CancellationToken cancellationToken)
+    {
+        Response.Headers["Deprecation"] = "true";
+        Response.Headers.Link = "</api/v1/satellite/customers/vouchers/search>; rel=\"successor-version\"";
+
+        return Ok(await concessionService.GetCustomerVouchersAsync(document, status, cancellationToken));
+    }
 }

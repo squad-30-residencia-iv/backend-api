@@ -65,6 +65,11 @@ public class SatelliteRedemptionsEndpointTests : IClassFixture<ApiFactory>
         Assert.Contains("TRX-CHECK-1", audit.Payload);
 
         var listed = await satellite.GetFromJsonAsync<List<VoucherResponseDto>>($"/api/v1/satellite/customers/{_document}/vouchers?status=Redeemed");
+
+        // A mesma consulta com o CPF no corpo (spec GH-066, D-9) devolve o mesmo resultado.
+        var searched = await satellite.PostAsJsonAsync("/api/v1/satellite/customers/vouchers/search", new { document = _document, status = "Redeemed" });
+        searched.EnsureSuccessStatusCode();
+        Assert.Equal(listed!.Select(voucher => voucher.Id), (await searched.Content.ReadFromJsonAsync<List<VoucherResponseDto>>())!.Select(voucher => voucher.Id));
         Assert.Contains(listed!, item => item.Id == voucher.Id);
     }
 
