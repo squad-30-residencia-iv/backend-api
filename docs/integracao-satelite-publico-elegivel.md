@@ -47,7 +47,7 @@ POST /api/v1/satellite/concessions
 
 - Mande os atributos de `requiredAttributes` de todas as campanhas da loja. Mandar a mais não atrapalha.
 - Um atributo que a campanha pede e não veio conta como não atendido.
-- O histórico de cada janela é a soma das compras do cliente nos últimos `windowDays` dias, sem contar a compra atual.
+- O histórico de cada janela é a soma das compras do cliente nos últimos `windowDays` dias.
 
 ## 3. Ler a resposta
 
@@ -65,3 +65,4 @@ Use `POST /api/v1/satellite/customers/vouchers/search` com `{ "document": "...",
 - **Histórico somado:** se o PDV consegue mandar o histórico somado por janela (PA-7 da spec GH-047).
 - **Município:** se o PDV tem o código IBGE do município (PA-8 da spec GH-047).
 - **Rota de consulta:** prazo para migrar para a consulta por `POST` (PA-9 da spec GH-066).
+- **Compra atual:** se ela entra ou não no histórico somado (a spec GH-047 não define).
