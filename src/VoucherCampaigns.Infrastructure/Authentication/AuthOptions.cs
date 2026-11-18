@@ -15,6 +15,9 @@ public record AuthOptions
 
     public string SigningKey { get; init; } = string.Empty;
 
+    /// <summary>Trecho da chave de desenvolvimento versionada em <c>appsettings.Development.json</c> (spec GH-066, D-7).</summary>
+    public const string DevelopmentKeyMarker = "nao-usar-em-producao";
+
     public string Issuer { get; init; } = string.Empty;
 
     public string Audience { get; init; } = string.Empty;

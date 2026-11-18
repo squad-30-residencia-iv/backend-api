@@ -97,7 +97,8 @@ dotnet run --project src/VoucherCampaigns.Api    # sobe a API em http://localhos
 Sem nenhuma configuração extra, a API usa **SQLite** (`src/VoucherCampaigns.Api/vouchercampaigns.db`) e aplica as migrações pendentes na inicialização. Rotas de verificação:
 
 - `GET /health`: estado da aplicação e do banco.
-- `GET /api/v1/system/status`: provider ativo, teste de conexão e migrações aplicadas.
+- `GET /api/v1/system/status`: provider ativo, teste de conexão e migrações aplicadas; só o administrador (spec `GH-066`, D-8). O `/health` segue anônimo.
+- `POST /api/v1/auth/login` aceita até `Auth:LoginRateLimit:PermitLimit` tentativas (padrão 10) por IP a cada `WindowSeconds` (padrão 60); acima disso, `429 AUTH_LOGIN_RATE_LIMITED` com `Retry-After`. Fora de Development, a API não sobe com a chave JWT de desenvolvimento do `appsettings.Development.json`.
 
 ### Autenticação (provisória)
 
@@ -203,7 +204,7 @@ Rotas de leitura para analista e gestor da rede (policy `ManageCampaigns`). Spec
 
 ### Trocando de banco (SQLite ⇄ PostgreSQL)
 
-A troca é apenas configuracional. Copie `.env.example` para `.env` na raiz do repositório e ajuste:
+A troca é apenas configuracional. Copie `.env.example` para `.env` na raiz do repositório e ajuste (o `.env` só é lido com `ASPNETCORE_ENVIRONMENT=Development`; fora disso, use variáveis de ambiente):
 
 ```dotenv
 Database__Provider=Postgres

@@ -1,5 +1,7 @@
 using System.Net.Http.Json;
+using VoucherCampaigns.Application.Authentication;
 using VoucherCampaigns.Application.SystemStatus;
+using VoucherCampaigns.IntegrationTests.Authentication;
 
 namespace VoucherCampaigns.IntegrationTests;
 
@@ -88,7 +90,9 @@ public class StartupTests
     {
         using var factory = ApiFactory.For("Sqlite", connectionString);
 
-        var status = await factory.CreateClient().GetFromJsonAsync<SystemStatusResponse>("/api/v1/system/status");
+        var status = await factory.CreateClient()
+            .WithBearer(TestAuth.CreateToken(factory, Roles.Administrador))
+            .GetFromJsonAsync<SystemStatusResponse>("/api/v1/system/status");
 
         return status!;
     }
