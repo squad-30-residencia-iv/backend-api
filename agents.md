@@ -72,6 +72,7 @@ Qualquer assistente que iniciar uma sessão de desenvolvimento deve seguir estri
   python scripts/smoke/smoke.py http://localhost:5026
   python scripts/smoke/motor.py http://localhost:5026
   ```
+- Roteiros por entrega: `cancelamento.py` (GH-061), `publico.py` (GH-047) e `desconto_unico.py` (GH-068). O `desconto_unico.py` aprova campanhas de 91% e 92% na loja online, que ganham das outras pelo desconto (D1). Rode-o por último ou numa API nova.
 - No Windows: instale `tzdata` (`py -3 -m pip install tzdata`) e **não** use `python -I` (o `-I` isola o site-packages do usuário e o fuso `America/Sao_Paulo` some).
 - Credenciais demo: `pdv-demo` / segredo em `appsettings.Development.json` (`Auth:Satellite:Apps`). Para repetir no Postman, mude o `transactionId` a cada nova concessão ou compra de resgate.
 
@@ -132,6 +133,17 @@ Qualquer assistente que iniciar uma sessão de desenvolvimento deve seguir estri
 - Datas de negócio digitadas pelo usuário chegam **sem fuso** (`[LocalDateTime]`) e são convertidas com `NetworkTime` usando `Network.TimeZone`; no banco ficam em UTC e voltam com o offset da rede.
 - "Agora" sempre via `TimeProvider` injetado, nunca `DateTime.UtcNow` em regra de negócio. Nos testes de integração, fixe `factory.Clock.UtcNow`; como o JWT é validado com a hora real, use `TestAuth.CreateToken` (e não o login) nesses testes.
 - Status da campanha para leitura ou decisão: `Campaign.EffectiveStatus(utcNow)` (PR-04), nunca `campaign.Status` direto. Agendada, ativa e pausada seguem a vigência pelo relógio, e o minuto do fim conta inteiro (D9: às 23:59:59 ainda vale); o banco guarda o status da decisão. Transição nova (como `Pause` e `End`, US-01.8) parte do status efetivo, devolve um `CampaignStatusEvent` e passa pelo `RecordStatusChange` do serviço, que grava o histórico e a auditoria. A concessão usa `CanIssueVouchers`, que já olha o efetivo.
+
+### [Skill] Alvos da Campanha (US-01.2)
+
+- `PUT /campaigns/{id}/items` (`CampaignService.ReplaceItemsAsync`, spec `GH-068-desconto-unico-e-alvo-por-codigo.md`):
+  - O fluxo é: contrato de cada alvo (`ParseItem`, 400) → códigos de produto viram ids numa consulta (`ResolveProductCodesAsync`, 422 com `codes`) → catálogo validado em lote (`EnsureTargetsInCatalogAsync`: uma consulta para as categorias, uma para os produtos) → `Campaign.ReplaceItems`.
+  - O limite é de até 1.000 alvos (`CampaignContract.MaxItems`).
+  - Não volte a consultar o catálogo alvo por alvo.
+- **Desconto único:** `Campaign.EnsureUniformBenefit` exige o mesmo `BenefitType` e `BenefitValue` em todos os alvos, na gravação e em `Submit` (`422 CAMPAIGN_BENEFIT_NOT_UNIFORM`).
+  - O benefício continua gravado em cada alvo; não há migração.
+  - Campanhas antigas com descontos diferentes seguem valendo.
+- A resposta traz o `productCode` de cada alvo: `WithItems` no `CampaignRepository` inclui o produto, e a gravação relê a campanha (`MapStoredAsync`).
 
 ### [Skill] Motor de Concessão (EP-04)
 
