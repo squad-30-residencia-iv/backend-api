@@ -106,13 +106,14 @@ public class SingleDiscountAndProductCodeEndpointTests : IClassFixture<ApiFactor
     }
 
     [Fact]
-    public async Task PutItems_WithAnInactiveCode_Returns422WithTheCode()
+    public async Task PutItems_WithAnInactiveCode_Returns422WithTheCatalogCode()
     {
         var campaign = await DraftAsync();
         var code = await AddProductAsync(active: false);
 
+        // Informado em maiúsculas; `codes` devolve o código como está no catálogo.
         var response = await Analista().PutAsJsonAsync(ItemsRoute(campaign), Items(
-            new { targetType = "Product", productCode = code, benefitType = "Percentage", benefitValue = 10 }));
+            new { targetType = "Product", productCode = code.ToUpperInvariant(), benefitType = "Percentage", benefitValue = 10 }));
 
         var problem = await AssertBusinessRuleAsync(response, CampaignErrors.ItemProductInactiveCode);
         Assert.Equal(code, Assert.Single(problem.GetProperty("codes").EnumerateArray()).GetString());

@@ -23,7 +23,7 @@
 - [x] [SQUAD-2] Motor (issue #45): concede só em loja e canal do escopo; pausada não emite. Encerrada não resgata fica para a #49.
 - [x] [SQUAD-2] Avisar o frontend: `CampaignResponse` ganhou `reservedVouchers`, `issuedVouchers` passou a ser real (confirmados) e `status` pode vir `SoldOut` (esgotada derivada); o fim da vigência agora vale até 23:59:59 (D9); `PUT /conditions` aceita `CustomerPurchaseCount` com `minQuantity`. O portal (US-024) mostra a parcela do limite e os dois contadores. Utilizados e a lista de vouchers passam a ter leitura no portal pelo PR #65 (`redeemedVouchers`, `expiredVouchers`, `GET /vouchers`).
 - [x] [SQUAD-2] Issue #49 (resgate): spec `GH-049-resgate-de-vouchers.md` e implementação na `staging` (PR #58). Encerrada, pausada e esgotada **resgatam** (RN07a); só cancelada não. O provisório resgata na própria compra quando a campanha permite (D-10), e a confirmação o consolida.
-- [ ] [SQUAD-2] Issue #68 (respostas do cliente aos PAs da GH-066): spec `GH-068-desconto-unico-e-alvo-por-codigo.md`, branch `feat/GH-68-desconto-unico-e-alvo-por-codigo`. Abrir o PR para a `staging`.
+- [x] [SQUAD-2] Issue #68 (respostas do cliente aos PAs da GH-066): spec `completed/GH-068-desconto-unico-e-alvo-por-codigo.md`, na `staging` pelo PR #69 (2026-11-19).
 - [ ] [SQUAD-2] Avisar o frontend (issue #68):
   - todos os alvos da campanha precisam ter o mesmo desconto, senão `422 CAMPAIGN_BENEFIT_NOT_UNIFORM`, na gravação dos alvos e na submissão;
   - o alvo de produto aceita `productCode` no lugar de `productId`; os códigos recusados vêm em `codes`, com `422 CAMPAIGN_ITEM_PRODUCT_CODE_NOT_FOUND` ou `CAMPAIGN_ITEM_PRODUCT_INACTIVE`;
@@ -76,6 +76,12 @@
 ---
 
 ## ✅ Últimas Entregas Concluídas
+
+- **Issue #68: respostas do cliente aos PAs da GH-066.** Spec `completed/GH-068-desconto-unico-e-alvo-por-codigo.md`. Na staging pelo PR #69 (2026-11-19).
+  - **Desconto único:** todos os alvos com o mesmo tipo e valor (`422 CAMPAIGN_BENEFIT_NOT_UNIFORM`), na gravação e na submissão.
+  - **Alvo por código:** `productCode` no lugar de `productId`; códigos recusados em `codes`; até 1.000 alvos, com o catálogo validado em lote.
+  - **Trilha:** a seção `items` grava um resumo quando a lista não cabe nos 2.000 caracteres do `payload` (no PostgreSQL respondia 500).
+  - **Para depois:** restrições no resgate (o cliente ainda não sabe) e a mesma falta de espaço na trilha das outras seções (PA-1 e PA-5 da spec).
 
 - **Issue #66: pontos do cliente e correções urgentes da auditoria.** Spec `completed/GH-066-ajustes-cliente-e-auditoria.md`. Na staging pelo PR #67 (2026-11-18).
   - **Validade:** só em dias a partir da emissão; as campanhas já gravadas com horas ou data fixa seguem valendo.

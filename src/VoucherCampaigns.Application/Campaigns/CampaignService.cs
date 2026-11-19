@@ -1094,7 +1094,8 @@ public class CampaignService(
                 new Dictionary<string, object?> { ["codes"] = missing.Order(StringComparer.Ordinal).ToList() });
         }
 
-        var inactive = codes.Where(code => !products[code].IsActive).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        // O inativo existe no catálogo: devolve o código como está cadastrado, para o portal achar o produto.
+        var inactive = codes.Select(code => products[code]).Where(product => !product.IsActive).Select(product => product.Code).Distinct().ToList();
 
         if (inactive.Count > 0)
         {
