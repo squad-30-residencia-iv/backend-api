@@ -1,6 +1,6 @@
 # 📋 Especificação Técnica: GH-070 - Restrições no resgate
 
-> Status: In Progress
+> Status: Completed
 > História de Usuário Relacionada: issue #70 (ponto 8 do cliente; PA-5 da GH-066 e PA-1 da GH-068)
 > Responsável: @iagovrocha
 > Data: 2026-11-19
@@ -41,7 +41,7 @@ A janela vem antes da faixa de valor porque o operador do PDV não consegue reso
 |---|---|
 | D-1 | **CPF titular e mínimo de resgate já existem.** Nenhum código muda. Dois testes de integração prendem as regras: (a) o voucher do CPF A, resgatado com o CPF B, responde 404 e não consome a utilização; (b) campanha com condição `PurchaseTotal` 100 e `minPurchaseAmount` 300: a compra de 150 ganha o voucher, e o resgate com 150 é recusado com `REDEMPTION_AMOUNT_BELOW_MINIMUM`. |
 | D-2 | **Alvos de resgate.** A campanha ganha uma lista opcional de alvos de resgate, em `PUT /api/v1/campaigns/{id}/redemption-targets`. Cada alvo é `Category` (por `categoryId`) ou `Product` (por `productId` **ou** `productCode`, como nos alvos da concessão, GH-068 D-2). São até 1.000 alvos, validados em lote no catálogo (mesmo caminho do `ReplaceItemsAsync`: códigos resolvidos numa consulta, categorias e produtos numa consulta cada). Código inexistente ou inativo responde 422 com `codes`; alvo repetido responde 422. **Lista vazia = sem alvo de resgate**, e o resgate segue o alvo da concessão como hoje. Com a lista preenchida: (a) o voucher só serve se a compra tiver ao menos um item de algum alvo de resgate (`REDEMPTION_TARGET_NOT_IN_PURCHASE`, o motivo que já existe); (b) o desconto é calculado sobre a soma dos itens que casam com algum alvo de resgate, cada item contado uma vez. O benefício (tipo e valor) continua o do alvo da concessão, que é único na campanha (GH-068 D-1). O valor fixo continua limitado a essa base (GH-049 D-7). Não há alvo `All` de resgate: para valer em qualquer item, deixe a lista vazia e use um alvo `All` na concessão. Só em rascunho, como as outras seções. |
-| D-3 | **Janelas de resgate.** A campanha ganha uma lista opcional de janelas, em `PUT /api/v1/campaigns/{id}/redemption-windows`. Cada janela tem `daysOfWeek` (um ou mais de `Monday` a `Sunday`), `start` e `end` (`HH:mm`, no fuso da rede, `Network.TimeZone`). São até 14 janelas. **Lista vazia = qualquer dia e hora**, como hoje. A janela vale de `start` até o fim do minuto de `end`, inclusive (o mesmo critério do fim da vigência, D9): `08:00`–`11:59` aceita 11:59:59. `start` precisa ser menor ou igual a `end`; janela que vira a noite é cadastrada em duas (`22:00`–`23:59` e `00:00`–`01:59` do dia seguinte). O instante avaliado é o "agora" do servidor (`TimeProvider`) convertido para o fuso da rede, e não um horário informado pelo PDV, que a compra não traz. Fora de todas as janelas: novo motivo `OutsideRedemptionWindow` → 422 `REDEMPTION_OUTSIDE_REDEMPTION_WINDOW`, mensagem `O voucher não pode ser usado neste dia e horário.`. A verificação de aplicáveis (`POST /satellite/vouchers/check`) lista o voucher como inaplicável com esse motivo. A janela só restringe o resgate; a concessão não muda. Só em rascunho. |
+| D-3 | **Janelas de resgate.** A campanha ganha uma lista opcional de janelas, em `PUT /api/v1/campaigns/{id}/redemption-windows`. Cada janela tem `daysOfWeek` (um ou mais de `Monday` a `Sunday`), `start` e `end` (`HH:mm`, no fuso da rede, `Network.TimeZone`). São até 14 janelas. **Lista vazia = qualquer dia e hora**, como hoje. A janela vale de `start` até o fim do minuto de `end`, inclusive (o mesmo critério do fim da vigência, D9): `08:00`–`11:59` aceita 11:59:59. **Janela que vira a noite** (`end` menor que `start`, ex.: `22:00`–`01:59`) é aceita numa linha só: os dias informados são os dias em que a janela **começa**, e o trecho depois da meia-noite pertence ao dia seguinte (sexta `22:00`–`01:59` aceita sábado 01:30 e recusa sexta 01:30). `start` igual a `end` vale aquele minuto. O instante avaliado é o "agora" do servidor (`TimeProvider`) convertido para o fuso da rede, e não um horário informado pelo PDV, que a compra não traz. Fora de todas as janelas: novo motivo `OutsideRedemptionWindow` → 422 `REDEMPTION_OUTSIDE_REDEMPTION_WINDOW`, mensagem `O voucher não pode ser usado neste dia e horário.`. A verificação de aplicáveis (`POST /satellite/vouchers/check`) lista o voucher como inaplicável com esse motivo. A janela só restringe o resgate; a concessão não muda. Só em rascunho. |
 | D-4 | **Leitura.** `CampaignResponse` (portal) e `SatelliteCampaignResponse` (`GET /satellite/campaigns`) ganham `redemptionTargets` (com `productCode`) e `redemptionWindows`. O `VoucherResponse` não muda: com até 1.000 alvos, repetir a lista em cada voucher pesa demais, e o PDV a lê na campanha (US-07.1). |
 | D-5 | **Trilha.** Cada `PUT` grava `CampaignUpdated` com as seções `redemptionTargets` e `redemptionWindows`, só quando mudaram (`AuditSection`). Os alvos de resgate usam o mesmo resumo dos alvos da concessão quando a lista não cabe nos 2.000 caracteres (GH-068 D-6): `count`, `targets` por tipo e, no depois, `changes`. As janelas sempre cabem (14 janelas). |
 | D-6 | **Duplicar** (`POST /campaigns/{id}/duplicate`) copia os alvos de resgate e as janelas, como copia as outras seções. |
@@ -70,7 +70,7 @@ public record ReplaceRedemptionWindowsRequest(
 public record RedemptionWindowRequest(
     IReadOnlyList<string?>? DaysOfWeek, // "Monday" a "Sunday", sem repetição, ao menos um
     string? Start,                      // "HH:mm"
-    string? End);                       // "HH:mm", >= Start
+    string? End);                       // "HH:mm"; menor que Start = vira a noite
 
 // Respostas (CampaignResponse e SatelliteCampaignResponse ganham os dois campos, no fim)
 public record RedemptionTargetResponse(Guid Id, string TargetType, Guid? CategoryId, Guid? ProductId, string? ProductCode);
@@ -88,7 +88,7 @@ Erros novos:
 
 Os alvos de resgate reaproveitam os códigos do catálogo que já existem para os alvos da concessão: `CAMPAIGN_ITEM_CATEGORY_NOT_FOUND`, `CAMPAIGN_ITEM_CATEGORY_INACTIVE`, `CAMPAIGN_ITEM_PRODUCT_NOT_FOUND`, `CAMPAIGN_ITEM_PRODUCT_INACTIVE` e `CAMPAIGN_ITEM_PRODUCT_CODE_NOT_FOUND` (com `codes`).
 
-Contrato (400 `VALIDATION_ERROR`): tipo fora de `Category` e `Product`; `categoryId` ausente ou junto de produto; `productId` e `productCode` juntos ou os dois ausentes; mais de 1.000 alvos; dia inválido ou repetido; nenhum dia; hora fora de `HH:mm`; `end` menor que `start`; mais de 14 janelas.
+Contrato (400 `VALIDATION_ERROR`): tipo fora de `Category` e `Product`; `categoryId` ausente ou junto de produto; `productId` e `productCode` juntos ou os dois ausentes; mais de 1.000 alvos; dia inválido ou repetido; nenhum dia; hora fora de `HH:mm`; mais de 14 janelas.
 
 ---
 
@@ -113,38 +113,43 @@ Autorização das rotas novas igual às outras seções do rascunho (`PUT /campa
 
 ## 4. Checklist de Implementação
 
-- [ ] 1. Domínio: `CampaignRedemptionTarget` e `CampaignRedemptionWindow`; `Campaign.ReplaceRedemptionTargets` e `Campaign.ReplaceRedemptionWindows` (rascunho, repetição); `RedemptionWindow.Contains(localTime)`.
-- [ ] 2. `RedemptionRefusal.OutsideRedemptionWindow`, mensagem em `RedemptionErrors`; `RedemptionEvaluator.Refusal` e `Discount` com os alvos de resgate e a janela (hora local recebida pelo chamador, para o domínio seguir sem fuso).
-- [ ] 3. Persistência: configurações EF, `WithItems`/leitura da campanha incluindo as duas coleções (com o produto, para o `productCode`), migrações SQLite e PostgreSQL.
-- [ ] 4. Contratos, `CampaignService.ReplaceRedemptionTargetsAsync` (reaproveitando a resolução de códigos e a validação em lote do catálogo) e `ReplaceRedemptionWindowsAsync`, trilha (D-5), duplicação (D-6).
-- [ ] 5. Rotas no `CampaignsController`; respostas do portal e do satélite (D-4); `RedemptionService` passa a hora local da rede ao avaliador.
-- [ ] 6. Testes de unidade e integração (seção 5); `dotnet test` no SQLite e no PostgreSQL.
-- [ ] 7. Smoke `scripts/smoke/restricoes_resgate.py`; `agents.md` (skill do resgate), `docs/PROJECT_STATE.md`, `docs/ROADMAP.md`; aviso ao frontend (etapa nova do portal) e ao PDV (campos novos em `GET /satellite/campaigns` e o motivo novo).
+- [x] 1. Domínio: `CampaignRedemptionTarget` e `CampaignRedemptionWindow`; `Campaign.ReplaceRedemptionTargets` e `Campaign.ReplaceRedemptionWindows` (rascunho, repetição); `RedemptionWindow.Contains(localTime)`.
+- [x] 2. `RedemptionRefusal.OutsideRedemptionWindow`, mensagem em `RedemptionErrors`; `RedemptionEvaluator.Refusal` e `Discount` com os alvos de resgate e a janela (hora local recebida pelo chamador, para o domínio seguir sem fuso).
+- [x] 3. Persistência: configurações EF, `WithItems`/leitura da campanha incluindo as duas coleções (com o produto, para o `productCode`), migrações SQLite e PostgreSQL.
+- [x] 4. Contratos, `CampaignService.ReplaceRedemptionTargetsAsync` (reaproveitando a resolução de códigos e a validação em lote do catálogo) e `ReplaceRedemptionWindowsAsync`, trilha (D-5), duplicação (D-6).
+- [x] 5. Rotas no `CampaignsController`; respostas do portal e do satélite (D-4); `RedemptionService` passa a hora local da rede ao avaliador.
+- [x] 6. Testes de unidade e integração (seção 5); `dotnet test` no SQLite e no PostgreSQL.
+- [x] 7. Smoke `scripts/smoke/restricoes_resgate.py`; `agents.md` (skill do resgate), `docs/PROJECT_STATE.md`, `docs/ROADMAP.md`; aviso ao frontend (etapa nova do portal) e ao PDV (campos novos em `GET /satellite/campaigns` e o motivo novo).
 
 ---
 
 ## 5. Casos de Teste Essenciais
 
-- [ ] D-1: voucher do CPF A resgatado com o CPF B → 404, utilização intacta.
-- [ ] D-1: condição `PurchaseTotal` 100 e `minPurchaseAmount` 300 → concede com 150, recusa o resgate com 150 (`REDEMPTION_AMOUNT_BELOW_MINIMUM`) e resgata com 300.
-- [ ] D-2: concessão no produto A, resgate na categoria B; compra só com A → `REDEMPTION_TARGET_NOT_IN_PURCHASE`; compra com A e B → desconto sobre os itens de B.
-- [ ] D-2: percentual e valor fixo sobre a base dos alvos de resgate; valor fixo maior que a base fica limitado a ela.
-- [ ] D-2: item que casa com dois alvos de resgate (o produto e a categoria dele) entra uma vez na base.
-- [ ] D-2: lista vazia mantém o comportamento atual (testes do resgate existentes seguem verdes).
-- [ ] D-2: 1.000 códigos, código inexistente e inativo com `codes`, repetido por id e por código → 422; contrato → 400; fora de rascunho → 422.
-- [ ] D-3: janela seg a sex 08:00–11:59 no fuso da rede: 11:59:59 de sexta aceita; 12:00:00 recusa; sábado recusa; o check lista o motivo novo.
-- [ ] D-3: rede com fuso diferente de UTC: o dia da semana é o local, não o UTC (ex.: domingo 22:00 em São Paulo é segunda em UTC).
-- [ ] D-3: `end` menor que `start`, dia repetido, hora inválida, 15 janelas → 400.
-- [ ] D-3: ordem dos motivos: fora do escopo vem antes da janela; janela vem antes do valor mínimo.
-- [ ] D-4, D-5, D-6: as listas aparecem no portal e no satélite, entram na trilha só quando mudam (com resumo para 1.000 alvos) e são copiadas na duplicação.
+- [x] D-1: voucher do CPF A resgatado com o CPF B → 404, utilização intacta.
+- [x] D-1: condição `PurchaseTotal` 100 e `minPurchaseAmount` 300 → concede com 150, recusa o resgate com 150 (`REDEMPTION_AMOUNT_BELOW_MINIMUM`) e resgata com 300.
+- [x] D-2: concessão no produto A, resgate na categoria B; compra só com A → `REDEMPTION_TARGET_NOT_IN_PURCHASE`; compra com A e B → desconto sobre os itens de B.
+- [x] D-2: percentual e valor fixo sobre a base dos alvos de resgate; valor fixo maior que a base fica limitado a ela.
+- [x] D-2: item que casa com dois alvos de resgate (o produto e a categoria dele) entra uma vez na base.
+- [x] D-2: lista vazia mantém o comportamento atual (testes do resgate existentes seguem verdes).
+- [x] D-2: 1.000 códigos, código inexistente e inativo com `codes`, repetido por id e por código → 422; contrato → 400; fora de rascunho → 422.
+- [x] D-3: janela seg a sex 08:00–11:59 no fuso da rede: 11:59:59 de sexta aceita; 12:00:00 recusa; sábado recusa; o check lista o motivo novo.
+- [x] D-3: rede com fuso diferente de UTC: o dia da semana é o local, não o UTC (ex.: domingo 22:00 em São Paulo é segunda em UTC).
+- [x] D-3: janela que vira a noite (sexta 22:00–01:59): sábado 01:30 aceita, sexta 01:30 recusa, sexta 23:00 aceita.
+- [x] D-3: dia repetido, nenhum dia, hora inválida, 15 janelas → 400.
+- [x] D-3: ordem dos motivos: fora do escopo vem antes da janela; janela vem antes do valor mínimo.
+- [x] D-4, D-5, D-6: as listas aparecem no portal e no satélite, entram na trilha só quando mudam (com resumo para 1.000 alvos) e são copiadas na duplicação.
 
 ---
 
 ## 6. Pontos em aberto
 
-| # | Ponto | Motivo | Gatilho |
-|---|---|---|---|
-| PA-1 | Janela que vira a noite numa linha só (`22:00`–`02:00`) | Duas janelas resolvem; uma linha só exige decidir a qual dia o trecho depois da meia-noite pertence | O portal ou o cliente pedir |
-| PA-2 | Horário da compra informado pelo PDV, em vez do relógio do servidor | A compra não traz horário; um PDV offline que manda o resgate depois seria julgado pela hora do envio | O PDV operar offline ou pedir |
-| PA-3 | Alvos de resgate no `VoucherResponse` | Lista de até 1.000 itens repetida em cada voucher; o PDV lê na campanha | O PDV pedir para mostrar onde o voucher vale sem consultar a campanha |
-| PA-4 | Benefício próprio do resgate (outro tipo ou valor que o da concessão) | O cliente pediu desconto único (GH-068 D-1) | O cliente pedir |
+Os quatro pontos da primeira versão da spec foram resolvidos em 2026-11-19, quando ela foi aprovada:
+
+| # | Ponto | Resolução |
+|---|---|---|
+| PA-1 | Janela que vira a noite numa linha só | **Implementado** (D-3): os dias são os do início da janela; o trecho depois da meia-noite pertence ao dia seguinte. |
+| PA-2 | Horário da compra informado pelo PDV | **Decidido: vale o relógio do servidor.** Um horário mandado pelo PDV permitiria resgatar fora da janela só mudando o campo, e a validade e o status do voucher já usam o relógio do servidor. Se um PDV passar a operar offline, o assunto volta como pedido novo. |
+| PA-3 | Alvos de resgate no `VoucherResponse` | **Decidido: ficam só na campanha** (D-4). O PDV lê em `GET /satellite/campaigns`, e o `POST /satellite/vouchers/check` já diz se o voucher serve na compra. |
+| PA-4 | Benefício próprio do resgate | **Decidido: não.** O cliente pediu um desconto único por campanha (GH-068 D-1); o resgate usa o benefício da concessão. |
+
+Nenhum ponto continua em aberto.

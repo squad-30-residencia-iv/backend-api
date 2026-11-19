@@ -82,7 +82,7 @@ O cliente respondeu em 2026-11-18 aos pontos da issue #66 (spec `GH-066`, seçã
 - uma aprovação basta;
 - a validade continua contada a partir do horário da emissão.
 
-Segue em aberto só quais restrições valem no resgate (PA-1 da GH-068).
+Em 2026-11-19 o cliente escolheu as restrições do resgate (issue #70, spec `GH-070`): alvos de resgate e janelas de dias e horários são novos; o CPF titular e o mínimo de resgate separado já existiam; lojas e canais de resgate diferentes não entram.
 
 ### 2.5 Decisões aceitas
 
@@ -204,8 +204,8 @@ Ciclo SDD já usado nas US-02.5 e US-01.1 (`docs/prompts/` e `agents.md`):
 - [x] US-01.8 cancelar campanha (RN10) com invalidação em lote dos vouchers não utilizados (US-05.5 cenários 2 e 3; PA-1 da spec `GH-049`): issue #61, spec `GH-061`, na `staging` pelo PR #63 (2026-11-14); pontos em aberto na issue #62
 - [x] Issue #66: pontos do cliente de 2026-11-18 (validade só em dias, lojas e produtos em lote, limite por CPF atômico, contrato do público para o PDV) e correções urgentes da auditoria (SEC-01, SEC-02, SEC-04, SEC-06, SEC-07, SEC-08, SEC-21); spec `GH-066`, na `staging` pelo PR #67 (2026-11-18)
 - [x] Issue #68: respostas do cliente aos PAs da `GH-066`. Desconto único por campanha, alvo pelo código do produto e até 1.000 alvos. Spec `GH-068`, na `staging` pelo PR #69 (2026-11-19).
-- [ ] Restrições na etapa de resgate (PA-1 da `GH-068`), quando o cliente definir.
-- [ ] Issue de endurecimento com os demais achados da auditoria (PA-10 da `GH-066`).
+- [x] Restrições na etapa de resgate (PA-1 da `GH-068`): issue #70, spec `GH-070`. Alvos de resgate e janelas de dias e horários.
+- [ ] Issue #71: endurecimento com os demais achados da auditoria (PA-10 da `GH-066`); fatia 1 na spec `GH-071`.
 - [ ] US-01.7 edição da campanha após entrar em vigor (RN03b, RN02a)
 - [ ] Issue #57: pontos em aberto da spec `GH-045` (PA-4 a PA-14)
 - [ ] Avisar o frontend e o PDV das rotas novas (resgate, campanhas vigentes, dashboard) e conferir o formato do CSV
