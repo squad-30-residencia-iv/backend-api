@@ -18,6 +18,12 @@ public interface ICatalogRepository
 
     Task<Product?> GetProductByIdAsync(Guid id, CancellationToken cancellationToken);
 
+    /// <summary>Produtos pelos ids, ativos ou não, numa consulta só (spec GH-068, D-3); ids desconhecidos ficam de fora.</summary>
+    Task<IReadOnlyList<Product>> GetProductsByIdsAsync(IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken);
+
+    /// <summary>Categorias pelos ids, ativas ou não, numa consulta só (spec GH-068, D-3); ids desconhecidos ficam de fora.</summary>
+    Task<IReadOnlyList<Category>> GetCategoriesByIdsAsync(IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken);
+
     /// <summary>Produtos pelos códigos (sem diferenciar maiúsculas), ativos ou não; códigos desconhecidos ficam de fora.</summary>
     Task<IReadOnlyList<Product>> GetProductsByCodesAsync(IReadOnlyCollection<string> codes, CancellationToken cancellationToken);
 

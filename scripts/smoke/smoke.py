@@ -205,7 +205,7 @@ def run_base(base_url: str) -> int:
     check("POST /campaigns/{id}/submit (rascunho incompleto)", status, 422, body)
 
     steps = [
-        ("items", {"items": [{"targetType": "Category", "categoryId": Demo.CATEGORY_FASHION, "benefitType": "Percentage", "benefitValue": 10, "voucherLimit": 40}, {"targetType": "All", "benefitType": "FixedAmount", "benefitValue": 15}]}),
+        ("items", {"items": [{"targetType": "Category", "categoryId": Demo.CATEGORY_FASHION, "benefitType": "Percentage", "benefitValue": 10, "voucherLimit": 40}, {"targetType": "All", "benefitType": "Percentage", "benefitValue": 10}]}),
         ("quantities", {"totalVoucherLimit": 100, "perCustomerVoucherLimit": 2}),
         ("audience", {"audienceType": "AllCustomers"}),
         ("voucher-validity", {"type": "Relative", "amount": 30, "unit": "Days"}),

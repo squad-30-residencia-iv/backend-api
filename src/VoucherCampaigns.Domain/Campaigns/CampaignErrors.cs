@@ -31,6 +31,10 @@ public static class CampaignErrors
     public const string BenefitPercentageAbove100Code = "CAMPAIGN_BENEFIT_PERCENTAGE_ABOVE_100";
     public const string BenefitPercentageAbove100Message = "O benefício percentual não pode ultrapassar 100%.";
 
+    /// <summary>Um único desconto por campanha (spec GH-068, D-1).</summary>
+    public const string BenefitNotUniformCode = "CAMPAIGN_BENEFIT_NOT_UNIFORM";
+    public const string BenefitNotUniformMessage = "Todos os alvos da campanha devem ter o mesmo desconto (tipo e valor).";
+
     public const string DuplicatedTargetCode = "CAMPAIGN_ITEM_DUPLICATED_TARGET";
     public const string DuplicatedTargetMessage = "O mesmo alvo foi informado mais de uma vez.";
 
@@ -40,6 +44,11 @@ public static class CampaignErrors
     public const string ItemProductNotFoundMessage = "Produto informado não encontrado";
     public const string ItemProductInactiveCode = "CAMPAIGN_ITEM_PRODUCT_INACTIVE";
     public const string ItemProductInactiveMessage = "Produto informado está inativo";
+
+    /// <summary>Alvo pelo código do produto (spec GH-068, D-2); a resposta traz os códigos em <c>codes</c>.</summary>
+    public const string ItemProductCodeNotFoundCode = "CAMPAIGN_ITEM_PRODUCT_CODE_NOT_FOUND";
+    public const string ItemProductCodeNotFoundMessage = "Há códigos de produto que não estão cadastrados no catálogo.";
+    public const string ItemProductCodeInactiveMessage = "Há códigos de produto inativos no catálogo.";
 
     public const string QuotaSingleTargetCode = "CAMPAIGN_ITEM_QUOTA_SINGLE_TARGET";
     public const string QuotaSingleTargetMessage = "A quantidade por alvo só se aplica quando a campanha tem mais de um alvo.";

@@ -81,6 +81,18 @@ public class CatalogRepository(AppDbContext context) : ICatalogRepository, IProd
     public Task<Product?> GetProductByIdAsync(Guid id, CancellationToken cancellationToken) =>
         context.Products.AsNoTracking().FirstOrDefaultAsync(product => product.Id == id, cancellationToken);
 
+    public async Task<IReadOnlyList<Product>> GetProductsByIdsAsync(IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken)
+    {
+        var wanted = ids.ToList();
+        return await context.Products.AsNoTracking().Where(product => wanted.Contains(product.Id)).ToListAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<Category>> GetCategoriesByIdsAsync(IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken)
+    {
+        var wanted = ids.ToList();
+        return await context.Categories.AsNoTracking().Where(category => wanted.Contains(category.Id)).ToListAsync(cancellationToken);
+    }
+
     public async Task<IReadOnlyList<Product>> GetProductsByCodesAsync(IReadOnlyCollection<string> codes, CancellationToken cancellationToken)
     {
         // O código é gravado como informado; a comparação sem diferenciar maiúsculas fica em memória,

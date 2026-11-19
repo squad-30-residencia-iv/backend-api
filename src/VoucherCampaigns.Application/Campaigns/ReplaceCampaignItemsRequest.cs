@@ -9,7 +9,10 @@ public record ReplaceCampaignItemsRequest(
     [MaxLength(CampaignContract.MaxItems, ErrorMessage = CampaignContract.ItemsTooMany)]
     IReadOnlyList<CampaignItemRequest?>? Items);
 
-/// <summary>Alvo e benefício; <c>VoucherLimit</c> é a cota por alvo (US-01.3).</summary>
+/// <summary>
+/// Alvo e benefício; <c>VoucherLimit</c> é a cota por alvo (US-01.3). O produto vem por <c>ProductId</c> ou por
+/// <c>ProductCode</c> do catálogo (spec GH-068, D-2). Todos os alvos têm o mesmo benefício (D-1).
+/// </summary>
 public record CampaignItemRequest(
     [Required(ErrorMessage = CampaignContract.TargetTypeRequired)]
     string? TargetType,
@@ -20,4 +23,6 @@ public record CampaignItemRequest(
     [Required(ErrorMessage = CampaignContract.BenefitValueRequired)]
     decimal? BenefitValue,
     [Range(1, int.MaxValue, ErrorMessage = CampaignContract.ItemVoucherLimitPositive)]
-    int? VoucherLimit);
+    int? VoucherLimit,
+    [StringLength(CampaignContract.MaxProductCodeLength, ErrorMessage = CampaignContract.TargetProductCodeTooLong)]
+    string? ProductCode = null);

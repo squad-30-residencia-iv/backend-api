@@ -312,6 +312,8 @@ public class Campaign
             EnsureValidBenefit(item);
         }
 
+        EnsureUniformBenefit(items);
+
         // Sobreposição (All + categoria, categoria + produto dela) é permitida; o mesmo alvo duas vezes, não.
         if (items.DistinctBy(item => (item.TargetType, item.CategoryId, item.ProductId)).Count() != items.Count)
         {
@@ -408,6 +410,9 @@ public class Campaign
         {
             throw new BusinessRuleException(CampaignErrors.SubmitItemsRequiredCode, CampaignErrors.SubmitItemsRequiredMessage);
         }
+
+        // Rascunho gravado antes da GH-068 (ou cópia de uma campanha antiga) pode ter descontos diferentes.
+        EnsureUniformBenefit(Items.ToList());
 
         if (TotalVoucherLimit is null)
         {
@@ -772,6 +777,15 @@ public class Campaign
         {
             throw new BusinessRuleException(
                 CampaignErrors.VoucherValidityCapBeforeStartCode, CampaignErrors.VoucherValidityCapBeforeStartMessage);
+        }
+    }
+
+    /// <summary>Spec GH-068, D-1: um único desconto por campanha, o mesmo tipo e o mesmo valor em todos os alvos.</summary>
+    private static void EnsureUniformBenefit(IReadOnlyList<CampaignItem> items)
+    {
+        if (items.Select(item => (item.BenefitType, item.BenefitValue)).Distinct().Count() > 1)
+        {
+            throw new BusinessRuleException(CampaignErrors.BenefitNotUniformCode, CampaignErrors.BenefitNotUniformMessage);
         }
     }
 

@@ -66,7 +66,8 @@ public record CampaignItemResponse(
     Guid? ProductId,
     string BenefitType,
     decimal BenefitValue,
-    int? VoucherLimit);
+    int? VoucherLimit,
+    string? ProductCode);
 
 /// <summary>Validade do voucher; <c>Amount</c>, <c>Unit</c> e <c>Cap</c> só no <c>Relative</c>, <c>ValidUntil</c> só no <c>FixedDate</c>.</summary>
 public record VoucherValidityResponse(
