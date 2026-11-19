@@ -91,6 +91,12 @@ public class Campaign
 
     public ICollection<CampaignStatusEvent> StatusEvents { get; set; } = [];
 
+    /// <summary>Onde o voucher pode ser usado (spec GH-070, D-2); vazio = o alvo da concessão.</summary>
+    public ICollection<CampaignRedemptionTarget> RedemptionTargets { get; set; } = [];
+
+    /// <summary>Dias e horários do resgate (spec GH-070, D-3); vazio = qualquer dia e hora.</summary>
+    public ICollection<CampaignRedemptionWindow> RedemptionWindows { get; set; } = [];
+
     /// <summary>Critérios do público restrito (spec GH-047); vazio no público "todos".</summary>
     public ICollection<CampaignEligibilityCriterion> EligibilityCriteria { get; set; } = [];
 
@@ -500,6 +506,70 @@ public class Campaign
         UpdatedAt = utcNow;
     }
 
+    /// <summary>
+    /// Substitui os alvos de resgate (spec GH-070, D-2). A existência no catálogo é conferida pelo serviço.
+    /// Se alguma regra falhar, os alvos atuais ficam intactos.
+    /// </summary>
+    /// <exception cref="BusinessRuleException">Campanha fora de rascunho ou alvo repetido.</exception>
+    public void ReplaceRedemptionTargets(IReadOnlyList<CampaignRedemptionTarget> targets, DateTime utcNow)
+    {
+        EnsureDraft();
+
+        if (targets.Any(target => target.TargetType is not (TargetType.Category or TargetType.Product)))
+        {
+            throw new ArgumentException("Alvo de resgate é uma categoria ou um produto.", nameof(targets));
+        }
+
+        if (targets.DistinctBy(target => (target.TargetType, target.CategoryId, target.ProductId)).Count() != targets.Count)
+        {
+            throw new BusinessRuleException(CampaignErrors.RedemptionTargetDuplicatedCode, CampaignErrors.RedemptionTargetDuplicatedMessage);
+        }
+
+        RedemptionTargets.Clear();
+
+        foreach (var target in targets)
+        {
+            target.CampaignId = Id;
+            RedemptionTargets.Add(target);
+        }
+
+        UpdatedAt = utcNow;
+    }
+
+    /// <summary>Substitui as janelas de resgate (spec GH-070, D-3).</summary>
+    /// <exception cref="BusinessRuleException">Campanha fora de rascunho.</exception>
+    public void ReplaceRedemptionWindows(IReadOnlyList<CampaignRedemptionWindow> windows, DateTime utcNow)
+    {
+        EnsureDraft();
+
+        if (windows.Any(window => window.DaysOfWeek == 0
+            || window.StartMinute is < 0 or >= CampaignRedemptionWindow.MinutesPerDay
+            || window.EndMinute is < 0 or >= CampaignRedemptionWindow.MinutesPerDay))
+        {
+            throw new ArgumentException("Janela precisa de ao menos um dia e de minutos dentro do dia.", nameof(windows));
+        }
+
+        RedemptionWindows.Clear();
+
+        foreach (var window in windows)
+        {
+            window.CampaignId = Id;
+            RedemptionWindows.Add(window);
+        }
+
+        UpdatedAt = utcNow;
+    }
+
+    /// <summary>O instante local (no fuso da rede) está em alguma janela de resgate; sem janela, sempre (D-3).</summary>
+    public bool IsRedeemableAt(DateTime networkLocalTime) =>
+        RedemptionWindows.Count == 0 || RedemptionWindows.Any(window => window.Contains(networkLocalTime));
+
+    /// <summary>A compra tem item onde o voucher pode ser usado: os alvos de resgate, se houver; senão, o alvo da concessão (D-2).</summary>
+    public bool HasRedemptionTargetIn(Vouchers.Purchase purchase, CampaignItem concessionTarget) =>
+        RedemptionTargets.Count > 0
+            ? purchase.Items.Any(item => RedemptionTargets.Any(target => target.Matches(item)))
+            : concessionTarget.TargetType == TargetType.All || purchase.Items.Any(concessionTarget.Matches);
+
     /// <summary>Pausa a campanha efetivamente ativa (US-01.8). Não há retomada: a pausada só pode ser encerrada.</summary>
     /// <exception cref="BusinessRuleException">Campanha que não está ativa.</exception>
     public CampaignStatusEvent Pause(Guid actorUserId, DateTime utcNow)
@@ -651,6 +721,31 @@ public class Campaign
                 RegionId = scope.RegionId,
                 EstablishmentId = scope.EstablishmentId,
                 ChannelType = scope.ChannelType
+            });
+        }
+
+        // Restrições do resgate (spec GH-070, D-6).
+        foreach (var target in RedemptionTargets.OrderBy(target => target.Id))
+        {
+            copy.RedemptionTargets.Add(new CampaignRedemptionTarget
+            {
+                Id = NextId(),
+                CampaignId = copy.Id,
+                TargetType = target.TargetType,
+                CategoryId = target.CategoryId,
+                ProductId = target.ProductId
+            });
+        }
+
+        foreach (var window in RedemptionWindows.OrderBy(window => window.Id))
+        {
+            copy.RedemptionWindows.Add(new CampaignRedemptionWindow
+            {
+                Id = NextId(),
+                CampaignId = copy.Id,
+                DaysOfWeek = window.DaysOfWeek,
+                StartMinute = window.StartMinute,
+                EndMinute = window.EndMinute
             });
         }
 

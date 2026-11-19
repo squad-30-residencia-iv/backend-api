@@ -452,6 +452,84 @@ namespace VoucherCampaigns.Infrastructure.Migrations.Sqlite.Migrations
                         });
                 });
 
+            modelBuilder.Entity("VoucherCampaigns.Domain.Campaigns.CampaignRedemptionTarget", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("CampaignId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("campaign_id");
+
+                    b.Property<Guid?>("CategoryId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("category_id");
+
+                    b.Property<Guid?>("ProductId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("product_id");
+
+                    b.Property<string>("TargetType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("target_type");
+
+                    b.HasKey("Id")
+                        .HasName("pk_campaign_redemption_targets");
+
+                    b.HasIndex("CampaignId")
+                        .HasDatabaseName("ix_campaign_redemption_targets_campaign_id");
+
+                    b.HasIndex("CategoryId")
+                        .HasDatabaseName("ix_campaign_redemption_targets_category_id");
+
+                    b.HasIndex("ProductId")
+                        .HasDatabaseName("ix_campaign_redemption_targets_product_id");
+
+                    b.ToTable("campaign_redemption_targets", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_campaign_redemption_targets_target", "(target_type = 'Category' AND category_id IS NOT NULL AND product_id IS NULL) OR (target_type = 'Product' AND product_id IS NOT NULL AND category_id IS NULL)");
+                        });
+                });
+
+            modelBuilder.Entity("VoucherCampaigns.Domain.Campaigns.CampaignRedemptionWindow", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("CampaignId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("campaign_id");
+
+                    b.Property<int>("DaysOfWeek")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("days_of_week");
+
+                    b.Property<int>("EndMinute")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("end_minute");
+
+                    b.Property<int>("StartMinute")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("start_minute");
+
+                    b.HasKey("Id")
+                        .HasName("pk_campaign_redemption_windows");
+
+                    b.HasIndex("CampaignId")
+                        .HasDatabaseName("ix_campaign_redemption_windows_campaign_id");
+
+                    b.ToTable("campaign_redemption_windows", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_campaign_redemption_windows_days", "days_of_week > 0 AND days_of_week < 128");
+
+                            t.HasCheckConstraint("ck_campaign_redemption_windows_minutes", "start_minute >= 0 AND start_minute < 1440 AND end_minute >= 0 AND end_minute < 1440");
+                        });
+                });
+
             modelBuilder.Entity("VoucherCampaigns.Domain.Campaigns.CampaignScope", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1311,6 +1389,46 @@ namespace VoucherCampaigns.Infrastructure.Migrations.Sqlite.Migrations
                     b.Navigation("Product");
                 });
 
+            modelBuilder.Entity("VoucherCampaigns.Domain.Campaigns.CampaignRedemptionTarget", b =>
+                {
+                    b.HasOne("VoucherCampaigns.Domain.Campaigns.Campaign", "Campaign")
+                        .WithMany("RedemptionTargets")
+                        .HasForeignKey("CampaignId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_campaign_redemption_targets_campaigns_campaign_id");
+
+                    b.HasOne("VoucherCampaigns.Domain.Catalog.Category", "Category")
+                        .WithMany()
+                        .HasForeignKey("CategoryId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_campaign_redemption_targets_categories_category_id");
+
+                    b.HasOne("VoucherCampaigns.Domain.Catalog.Product", "Product")
+                        .WithMany()
+                        .HasForeignKey("ProductId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_campaign_redemption_targets_products_product_id");
+
+                    b.Navigation("Campaign");
+
+                    b.Navigation("Category");
+
+                    b.Navigation("Product");
+                });
+
+            modelBuilder.Entity("VoucherCampaigns.Domain.Campaigns.CampaignRedemptionWindow", b =>
+                {
+                    b.HasOne("VoucherCampaigns.Domain.Campaigns.Campaign", "Campaign")
+                        .WithMany("RedemptionWindows")
+                        .HasForeignKey("CampaignId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_campaign_redemption_windows_campaigns_campaign_id");
+
+                    b.Navigation("Campaign");
+                });
+
             modelBuilder.Entity("VoucherCampaigns.Domain.Campaigns.CampaignScope", b =>
                 {
                     b.HasOne("VoucherCampaigns.Domain.Campaigns.Campaign", "Campaign")
@@ -1486,6 +1604,10 @@ namespace VoucherCampaigns.Infrastructure.Migrations.Sqlite.Migrations
                     b.Navigation("EligibleCustomers");
 
                     b.Navigation("Items");
+
+                    b.Navigation("RedemptionTargets");
+
+                    b.Navigation("RedemptionWindows");
 
                     b.Navigation("Scopes");
 

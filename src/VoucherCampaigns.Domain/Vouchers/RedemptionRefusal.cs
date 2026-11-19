@@ -24,6 +24,9 @@ public enum RedemptionRefusal
     /// <summary>Loja ou canal fora do escopo da campanha (RN08, US-05.2 cenário 4).</summary>
     OutOfScope,
 
+    /// <summary>Fora dos dias e horários de resgate da campanha (spec GH-070, D-3).</summary>
+    OutsideRedemptionWindow,
+
     /// <summary>Valor bruto abaixo do mínimo da campanha (US-05.2 cenário 2).</summary>
     AmountBelowMinimum,
 
