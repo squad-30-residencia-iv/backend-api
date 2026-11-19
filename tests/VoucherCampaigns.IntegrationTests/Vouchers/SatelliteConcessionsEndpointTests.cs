@@ -304,7 +304,7 @@ public class SatelliteConcessionsEndpointTests : IClassFixture<ApiFactory>
                 items = new object[]
                 {
                     new { targetType = "Category", categoryId = DemoDataSeeder.FashionCategoryId, benefitType = "Percentage", benefitValue = 10, voucherLimit = 1 },
-                    new { targetType = "All", benefitType = "FixedAmount", benefitValue = 5, voucherLimit = 50 }
+                    new { targetType = "All", benefitType = "Percentage", benefitValue = 10, voucherLimit = 50 }
                 }
             }));
         var satellite = Satellite(_factory);

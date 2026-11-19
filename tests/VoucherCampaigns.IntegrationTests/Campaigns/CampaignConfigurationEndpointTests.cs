@@ -53,14 +53,15 @@ public class CampaignConfigurationEndpointTests : IClassFixture<ApiFactory>
     }
 
     [Fact]
-    public async Task PutItems_Scenario2_CategoryAndProductWithDifferentBenefits()
+    public async Task PutItems_Scenario2_CategoryAndProductWithTheSameBenefit()
     {
+        // O cenário 2 da US-01.2 tinha descontos diferentes; o cliente pediu um único desconto (spec GH-068, D-1).
         var campaign = await CreateCampaignAsync();
         var (papelaria, mochila) = await AddCatalogAsync();
 
         var body = await PutItemsAsync(
             campaign,
-            new { targetType = "Category", categoryId = papelaria, benefitType = "Percentage", benefitValue = 15 },
+            new { targetType = "Category", categoryId = papelaria, benefitType = "FixedAmount", benefitValue = 20.00m },
             new { targetType = "Product", productId = mochila, benefitType = "FixedAmount", benefitValue = 20.00m });
 
         Assert.Collection(
@@ -69,12 +70,14 @@ public class CampaignConfigurationEndpointTests : IClassFixture<ApiFactory>
             {
                 Assert.Equal("Category", item.TargetType);
                 Assert.Equal(papelaria, item.CategoryId);
-                Assert.Equal(15m, item.BenefitValue);
+                Assert.Null(item.ProductCode);
+                Assert.Equal(20m, item.BenefitValue);
             },
             item =>
             {
                 Assert.Equal("Product", item.TargetType);
                 Assert.Equal(mochila, item.ProductId);
+                Assert.NotNull(item.ProductCode);
                 Assert.Equal("FixedAmount", item.BenefitType);
                 Assert.Equal(20m, item.BenefitValue);
             });
@@ -131,9 +134,9 @@ public class CampaignConfigurationEndpointTests : IClassFixture<ApiFactory>
 
         var body = await PutItemsAsync(
             campaign,
-            new { targetType = "All", benefitType = "Percentage", benefitValue = 5 },
+            new { targetType = "All", benefitType = "Percentage", benefitValue = 15 },
             new { targetType = "Category", categoryId = papelaria, benefitType = "Percentage", benefitValue = 15 },
-            new { targetType = "Product", productId = mochila, benefitType = "FixedAmount", benefitValue = 20 });
+            new { targetType = "Product", productId = mochila, benefitType = "Percentage", benefitValue = 15 });
 
         Assert.Equal(["All", "Category", "Product"], body.Items.Select(item => item.TargetType));
     }
@@ -149,7 +152,7 @@ public class CampaignConfigurationEndpointTests : IClassFixture<ApiFactory>
             ItemsRoute(campaign),
             Items(
                 new { targetType = "Category", categoryId = papelaria, benefitType = "Percentage", benefitValue = 15 },
-                new { targetType = "Category", categoryId = papelaria, benefitType = "Percentage", benefitValue = 20 }));
+                new { targetType = "Category", categoryId = papelaria, benefitType = "Percentage", benefitValue = 15 }));
 
         await AssertBusinessRuleAsync(response, "CAMPAIGN_ITEM_DUPLICATED_TARGET");
 
@@ -199,10 +202,10 @@ public class CampaignConfigurationEndpointTests : IClassFixture<ApiFactory>
     }
 
     [Fact]
-    public async Task PutItems_WithMoreThan100Targets_ReturnsValidationProblem()
+    public async Task PutItems_WithMoreThan1000Targets_ReturnsValidationProblem()
     {
         var campaign = await CreateCampaignAsync();
-        var items = Enumerable.Range(0, 101).Select(_ => new { targetType = "All", benefitType = "Percentage", benefitValue = 10 }).ToArray();
+        var items = Enumerable.Range(0, CampaignContract.MaxItems + 1).Select(_ => new { targetType = "All", benefitType = "Percentage", benefitValue = 10 }).ToArray();
 
         var response = await Client().PutAsJsonAsync(ItemsRoute(campaign), new { items });
 
@@ -251,7 +254,7 @@ public class CampaignConfigurationEndpointTests : IClassFixture<ApiFactory>
         var body = await PutItemsAsync(
             campaign,
             new { targetType = "Category", categoryId = papelaria, benefitType = "Percentage", benefitValue = 15, voucherLimit = 3000 },
-            new { targetType = "Product", productId = mochila, benefitType = "FixedAmount", benefitValue = 20, voucherLimit = 1500 });
+            new { targetType = "Product", productId = mochila, benefitType = "Percentage", benefitValue = 15, voucherLimit = 1500 });
 
         Assert.Equal([3000, 1500], body.Items.Select(item => item.VoucherLimit));
         Assert.Equal(500, body.UndistributedVouchers);
@@ -268,7 +271,7 @@ public class CampaignConfigurationEndpointTests : IClassFixture<ApiFactory>
             ItemsRoute(campaign),
             Items(
                 new { targetType = "Category", categoryId = papelaria, benefitType = "Percentage", benefitValue = 15, voucherLimit = 3000 },
-                new { targetType = "Product", productId = mochila, benefitType = "FixedAmount", benefitValue = 20, voucherLimit = 2500 }));
+                new { targetType = "Product", productId = mochila, benefitType = "Percentage", benefitValue = 15, voucherLimit = 2500 }));
 
         await AssertBusinessRuleAsync(
             response,
@@ -287,7 +290,7 @@ public class CampaignConfigurationEndpointTests : IClassFixture<ApiFactory>
         var items = await PutItemsAsync(
             campaign,
             new { targetType = "Category", categoryId = papelaria, benefitType = "Percentage", benefitValue = 15, voucherLimit = 3000 },
-            new { targetType = "Product", productId = mochila, benefitType = "FixedAmount", benefitValue = 20, voucherLimit = 1500 });
+            new { targetType = "Product", productId = mochila, benefitType = "Percentage", benefitValue = 15, voucherLimit = 1500 });
         Assert.Null(items.UndistributedVouchers);
 
         var response = await Client().PutAsJsonAsync(QuantitiesRoute(campaign), new { totalVoucherLimit = 4000 });

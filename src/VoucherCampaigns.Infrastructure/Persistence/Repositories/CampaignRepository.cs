@@ -103,10 +103,10 @@ public class CampaignRepository(AppDbContext context) : ICampaignRepository
     public Task SaveChangesAsync(CancellationToken cancellationToken) => context.SaveChangesAsync(cancellationToken);
 
     // Itens e condições na ordem em que foram informados: os ids (Guid v7) são gerados em sequência.
-    // O escopo vem com região e loja para a resposta trazer os nomes (US-02.3).
+    // O escopo vem com região e loja para a resposta trazer os nomes (US-02.3); o alvo, com o produto para o código (GH-068).
     // Consulta dividida: duas coleções na mesma consulta multiplicariam as linhas.
     private static IQueryable<Campaign> WithItems(IQueryable<Campaign> query) =>
-        query.Include(campaign => campaign.Items.OrderBy(item => item.Id))
+        query.Include(campaign => campaign.Items.OrderBy(item => item.Id)).ThenInclude(item => item.Product)
             .Include(campaign => campaign.Conditions.OrderBy(condition => condition.Id))
             .Include(campaign => campaign.EligibilityCriteria.OrderBy(criterion => criterion.Id))
             .Include(campaign => campaign.Scopes).ThenInclude(scope => scope.Region)

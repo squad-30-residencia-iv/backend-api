@@ -233,8 +233,8 @@ public class CampaignServiceTests
             campaign.Id,
             new ReplaceCampaignItemsRequest(
             [
-                new("Product", null, product.Id, "FixedAmount", 20, null),
-                new("All", null, null, "Percentage", 5, null),
+                new("Product", null, product.Id, "Percentage", 15, null),
+                new("All", null, null, "Percentage", 15, null),
                 new("Category", category.Id, null, "Percentage", 15, null)
             ]),
             CancellationToken.None);
@@ -360,6 +360,12 @@ public class CampaignServiceTests
 
         public Task<Product?> GetProductByIdAsync(Guid id, CancellationToken cancellationToken) =>
             Task.FromResult(Products.FirstOrDefault(product => product.Id == id));
+
+        public Task<IReadOnlyList<Product>> GetProductsByIdsAsync(IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<Product>>(Products.Where(product => ids.Contains(product.Id)).ToList());
+
+        public Task<IReadOnlyList<Category>> GetCategoriesByIdsAsync(IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<Category>>(Categories.Where(category => ids.Contains(category.Id)).ToList());
 
         public Task<IReadOnlyList<Product>> GetProductsByCodesAsync(IReadOnlyCollection<string> codes, CancellationToken cancellationToken) =>
             Task.FromResult<IReadOnlyList<Product>>(

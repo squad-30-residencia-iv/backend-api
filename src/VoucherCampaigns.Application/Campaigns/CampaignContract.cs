@@ -3,7 +3,7 @@ namespace VoucherCampaigns.Application.Campaigns;
 /// <summary>Mensagens de contrato e de recurso ausente das rotas de campanha.</summary>
 public static class CampaignContract
 {
-    public const int MaxItems = 100;
+    public const int MaxItems = 1_000;
 
     /// <summary>Maior valor de <c>decimal(10,2)</c>.</summary>
     public const decimal MaxBenefitValue = 99_999_999.99m;
@@ -24,12 +24,16 @@ public static class CampaignContract
     public const string CancellationReasonTooLong = "O motivo deve ter no máximo 500 caracteres.";
 
     public const string ItemsRequired = "Informe ao menos um alvo da campanha.";
-    public const string ItemsTooMany = "A campanha pode ter no máximo 100 alvos.";
+    public const string ItemsTooMany = "A campanha pode ter no máximo 1.000 alvos.";
     public const string TargetTypeRequired = "Informe o tipo do alvo.";
     public const string TargetTypeInvalid = "Tipo de alvo inválido. Use All, Category ou Product.";
     public const string TargetCategoryRequired = "Informe a categoria do alvo, sem produto.";
     public const string TargetProductRequired = "Informe o produto do alvo, sem categoria.";
     public const string TargetAllWithId = "O alvo All não aceita categoria nem produto.";
+    public const int MaxProductCodeLength = 50;
+    public const string TargetProductIdAndCode = "Informe o produto pelo id ou pelo código, não pelos dois.";
+    public const string TargetProductCodeOnlyForProduct = "O código do produto só vale para o alvo Product.";
+    public const string TargetProductCodeTooLong = "O código do produto deve ter no máximo 50 caracteres.";
     public const string BenefitTypeRequired = "Informe o tipo do benefício.";
     public const string BenefitTypeInvalid = "Tipo de benefício inválido. Use Percentage ou FixedAmount.";
     public const string BenefitValueRequired = "Informe o valor do benefício.";

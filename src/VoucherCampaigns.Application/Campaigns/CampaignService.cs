@@ -98,24 +98,28 @@ public class CampaignService(
     {
         var campaign = await RequireForUpdateAsync(id, cancellationToken);
         var utcNow = timeProvider.GetUtcNow();
-        var items = new List<CampaignItem>();
+        var parsed = new List<(CampaignItem Item, string? ProductCode)>();
 
         for (var index = 0; index < request.Items!.Count; index++)
         {
-            var item = ParseItem(request.Items[index], $"Items[{index}]");
-            await EnsureTargetInCatalogAsync(item, cancellationToken);
+            var (item, productCode) = ParseItem(request.Items[index], $"Items[{index}]");
 
             // Ids em sequência para os itens voltarem na ordem informada.
             item.Id = Guid.CreateVersion7(utcNow.AddMilliseconds(index));
-            items.Add(item);
+            parsed.Add((item, productCode));
         }
+
+        await ResolveProductCodesAsync(parsed, cancellationToken);
+        var items = parsed.Select(entry => entry.Item).ToList();
+        await EnsureTargetsInCatalogAsync(items, cancellationToken);
 
         var before = SnapshotItems(campaign);
         campaign.ReplaceItems(items, utcNow.UtcDateTime);
-        AuditSection(campaign, "items", before, SnapshotItems(campaign), utcNow.UtcDateTime);
+        AuditItems(campaign, before, SnapshotItems(campaign), utcNow.UtcDateTime);
         await SaveGuardedAsync(campaign, cancellationToken);
 
-        return await RespondAsync(campaign, campaign.Network!, utcNow.UtcDateTime, cancellationToken);
+        // Relida para a resposta trazer o código de cada produto (spec GH-068, D-2).
+        return await MapStoredAsync(campaign.Id, utcNow.UtcDateTime, cancellationToken);
     }
 
     public async Task<CampaignResponse> SubmitAsync(Guid id, CancellationToken cancellationToken)
@@ -724,6 +728,28 @@ public class CampaignService(
         AppendAudit(campaign, AuditEventTypes.CampaignUpdated, currentUser.UserId, utcNow, new SectionChangePayload(section, before ?? EmptySection, after ?? EmptySection));
     }
 
+    /// <summary>
+    /// D-6 (GH-068): a lista inteira de alvos quando cabe na coluna da trilha; senão, um resumo de cada lado
+    /// (quantidade, desconto, alvos por tipo, soma das cotas) e, no depois, quantos alvos entraram e saíram.
+    /// </summary>
+    private void AuditItems(Campaign campaign, List<ItemSnapshot> before, List<ItemSnapshot> after, DateTime utcNow)
+    {
+        if (before.SequenceEqual(after))
+        {
+            return;
+        }
+
+        if (AuditJson.Serialize(new SectionChangePayload("items", before, after)).Length <= AuditJson.MaxPayloadLength)
+        {
+            AuditSection(campaign, "items", before, after, utcNow);
+            return;
+        }
+
+        var added = after.Except(before).Count();
+        var removed = before.Except(after).Count();
+        AuditSection(campaign, "items", ItemsSummary.Of(before, null), ItemsSummary.Of(after, new ItemsChange(added, removed)), utcNow);
+    }
+
     private static DetailsSnapshot SnapshotDetails(Campaign campaign, TimeZoneInfo timeZone) =>
         new(campaign.Name, campaign.Description, NetworkTime.ToLocal(campaign.StartsAt, timeZone), NetworkTime.ToLocal(campaign.EndsAt, timeZone));
 
@@ -823,6 +849,27 @@ public class CampaignService(
     private static decimal? Money(decimal? value) => value is { } amount ? Money(amount) : null;
 
     private sealed record ItemSnapshot(string TargetType, Guid? CategoryId, Guid? ProductId, string BenefitType, decimal BenefitValue, int? VoucherLimit);
+
+    private sealed record ItemsChange(int Added, int Removed);
+
+    /// <summary>Resumo da lista de alvos para a trilha quando a lista não cabe (D-6 da GH-068).</summary>
+    private sealed record ItemsSummary(
+        int Count,
+        IReadOnlyList<string> BenefitTypes,
+        IReadOnlyList<decimal> BenefitValues,
+        IReadOnlyDictionary<string, int> Targets,
+        int QuotaTotal,
+        ItemsChange? Changes)
+    {
+        public static ItemsSummary Of(IReadOnlyList<ItemSnapshot> items, ItemsChange? changes) =>
+            new(
+                items.Count,
+                items.Select(item => item.BenefitType).Distinct().Order(StringComparer.Ordinal).ToList(),
+                items.Select(item => item.BenefitValue).Distinct().Order().ToList(),
+                items.GroupBy(item => item.TargetType).OrderBy(group => group.Key, StringComparer.Ordinal).ToDictionary(group => group.Key, group => group.Count()),
+                items.Sum(item => item.VoucherLimit ?? 0),
+                changes);
+    }
 
     private sealed record ConditionSnapshot(string Type, decimal? MinAmount, int? MinQuantity, Guid? CategoryId, Guid? ProductId);
 
@@ -959,7 +1006,7 @@ public class CampaignService(
     }
 
     /// <summary>Tipos e ids coerentes com o alvo; o banco tem o mesmo CHECK, aqui a mensagem é clara.</summary>
-    private static CampaignItem ParseItem(CampaignItemRequest? request, string field)
+    private static (CampaignItem Item, string? ProductCode) ParseItem(CampaignItemRequest? request, string field)
     {
         if (request is null)
         {
@@ -971,6 +1018,18 @@ public class CampaignService(
 
         var categoryId = NonEmpty(request.CategoryId);
         var productId = NonEmpty(request.ProductId);
+        var productCode = string.IsNullOrWhiteSpace(request.ProductCode) ? null : request.ProductCode.Trim();
+
+        // D-2 (GH-068): o produto vem pelo id ou pelo código do catálogo, nunca pelos dois.
+        if (productCode is not null && targetType != TargetType.Product)
+        {
+            throw new RequestValidationException($"{field}.ProductCode", CampaignContract.TargetProductCodeOnlyForProduct);
+        }
+
+        if (productCode is not null && productId is not null)
+        {
+            throw new RequestValidationException($"{field}.ProductCode", CampaignContract.TargetProductIdAndCode);
+        }
 
         switch (targetType)
         {
@@ -978,7 +1037,7 @@ public class CampaignService(
                 throw new RequestValidationException($"{field}.TargetType", CampaignContract.TargetAllWithId);
             case TargetType.Category when categoryId is null || productId is not null:
                 throw new RequestValidationException($"{field}.CategoryId", CampaignContract.TargetCategoryRequired);
-            case TargetType.Product when productId is null || categoryId is not null:
+            case TargetType.Product when (productId is null && productCode is null) || categoryId is not null:
                 throw new RequestValidationException($"{field}.ProductId", CampaignContract.TargetProductRequired);
         }
 
@@ -995,7 +1054,7 @@ public class CampaignService(
             throw new RequestValidationException($"{field}.BenefitValue", CampaignContract.BenefitValueTooLarge);
         }
 
-        return new CampaignItem
+        var item = new CampaignItem
         {
             TargetType = targetType,
             CategoryId = categoryId,
@@ -1004,30 +1063,92 @@ public class CampaignService(
             BenefitValue = benefitValue,
             VoucherLimit = request.VoucherLimit
         };
+
+        return (item, productCode);
+    }
+
+    /// <summary>
+    /// D-2 (GH-068): troca o código pelo id do produto, numa consulta só. Códigos que faltam ou estão inativos
+    /// recusam a lista inteira, com os códigos em <c>codes</c> (como a importação em lote).
+    /// </summary>
+    private async Task ResolveProductCodesAsync(
+        IReadOnlyList<(CampaignItem Item, string? ProductCode)> parsed, CancellationToken cancellationToken)
+    {
+        var codes = parsed.Where(entry => entry.ProductCode is not null).Select(entry => entry.ProductCode!).ToList();
+
+        if (codes.Count == 0)
+        {
+            return;
+        }
+
+        var products = (await catalog.GetProductsByCodesAsync(codes, cancellationToken))
+            .ToDictionary(product => product.Code, StringComparer.OrdinalIgnoreCase);
+
+        var missing = codes.Where(code => !products.ContainsKey(code)).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+
+        if (missing.Count > 0)
+        {
+            throw new BusinessRuleException(
+                CampaignErrors.ItemProductCodeNotFoundCode,
+                CampaignErrors.ItemProductCodeNotFoundMessage,
+                new Dictionary<string, object?> { ["codes"] = missing.Order(StringComparer.Ordinal).ToList() });
+        }
+
+        var inactive = codes.Where(code => !products[code].IsActive).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+
+        if (inactive.Count > 0)
+        {
+            throw new BusinessRuleException(
+                CampaignErrors.ItemProductInactiveCode,
+                CampaignErrors.ItemProductCodeInactiveMessage,
+                new Dictionary<string, object?> { ["codes"] = inactive.Order(StringComparer.Ordinal).ToList() });
+        }
+
+        foreach (var (item, productCode) in parsed)
+        {
+            if (productCode is not null)
+            {
+                item.ProductId = products[productCode].Id;
+            }
+        }
     }
 
     /// <summary>Categoria e produto são globais (sem rede); basta existir e estar ativo.</summary>
-    private async Task EnsureTargetInCatalogAsync(CampaignItem item, CancellationToken cancellationToken)
+    /// <remarks>D-3 (GH-068): uma consulta para as categorias e uma para os produtos; o primeiro alvo com problema responde.</remarks>
+    private async Task EnsureTargetsInCatalogAsync(IReadOnlyList<CampaignItem> items, CancellationToken cancellationToken)
     {
-        if (item.CategoryId is { } categoryId)
-        {
-            var category = await catalog.GetCategoryByIdAsync(categoryId, cancellationToken)
-                ?? throw new BusinessRuleException(CampaignErrors.ItemCategoryNotFoundCode, CatalogErrors.ProductCategoryNotFoundMessage);
+        var categoryIds = items.Where(item => item.CategoryId is not null).Select(item => item.CategoryId!.Value).Distinct().ToList();
+        var productIds = items.Where(item => item.ProductId is not null).Select(item => item.ProductId!.Value).Distinct().ToList();
 
-            if (!category.IsActive)
+        var categories = categoryIds.Count == 0
+            ? new Dictionary<Guid, Category>()
+            : (await catalog.GetCategoriesByIdsAsync(categoryIds, cancellationToken)).ToDictionary(category => category.Id);
+        var products = productIds.Count == 0
+            ? new Dictionary<Guid, Product>()
+            : (await catalog.GetProductsByIdsAsync(productIds, cancellationToken)).ToDictionary(product => product.Id);
+
+        foreach (var item in items)
+        {
+            if (item.CategoryId is { } categoryId)
             {
-                throw new BusinessRuleException(CampaignErrors.ItemCategoryInactiveCode, CatalogErrors.ProductCategoryInactiveMessage);
+                var category = categories.GetValueOrDefault(categoryId)
+                    ?? throw new BusinessRuleException(CampaignErrors.ItemCategoryNotFoundCode, CatalogErrors.ProductCategoryNotFoundMessage);
+
+                if (!category.IsActive)
+                {
+                    throw new BusinessRuleException(CampaignErrors.ItemCategoryInactiveCode, CatalogErrors.ProductCategoryInactiveMessage);
+                }
             }
-        }
 
-        if (item.ProductId is { } productId)
-        {
-            var product = await catalog.GetProductByIdAsync(productId, cancellationToken)
-                ?? throw new BusinessRuleException(CampaignErrors.ItemProductNotFoundCode, CampaignErrors.ItemProductNotFoundMessage);
-
-            if (!product.IsActive)
+            if (item.ProductId is { } productId)
             {
-                throw new BusinessRuleException(CampaignErrors.ItemProductInactiveCode, CampaignErrors.ItemProductInactiveMessage);
+                var product = products.GetValueOrDefault(productId)
+                    ?? throw new BusinessRuleException(CampaignErrors.ItemProductNotFoundCode, CampaignErrors.ItemProductNotFoundMessage);
+
+                if (!product.IsActive)
+                {
+                    throw new BusinessRuleException(CampaignErrors.ItemProductInactiveCode, CampaignErrors.ItemProductInactiveMessage);
+                }
             }
         }
     }
@@ -1174,5 +1295,6 @@ public class CampaignService(
             item.ProductId,
             item.BenefitType.ToString(),
             item.BenefitValue,
-            item.VoucherLimit);
+            item.VoucherLimit,
+            item.Product?.Code);
 }
