@@ -32,7 +32,7 @@
 
 | # | Decisão |
 |---|---|
-| D-1 | **Validade (A).** `PUT /campaigns/{id}/voucher-validity` aceita só `type: "Relative"` com `unit: "Days"`; `Hours` responde 400 `Unit` e `FixedDate` responde 400 `Type`, com mensagens novas. O formato do corpo não muda; o teto `cap` continua opcional. A conta segue a atual: N dias a partir da emissão, com o fim inclusivo até 23:59:59 do último dia (D9). Campanhas já gravadas com horas ou data fixa continuam valendo e aparecendo como estão: o domínio não muda, e nenhuma migração as converte. |
+| D-1 | **Validade (A).** `PUT /campaigns/{id}/voucher-validity` aceita só `type: "Relative"` com `unit: "Days"`; `Hours` responde 400 `Unit` e `FixedDate` responde 400 `Type`, com mensagens novas. O formato do corpo não muda; o teto `cap` continua opcional. A conta segue a atual: N×24h a partir do instante da emissão (`VoucherValidity.Compute`), limitada pelo teto; emitido às 14:32 do dia 18 com 30 dias, vence às 14:32 do dia 18 do mês seguinte. *(Texto corrigido pela spec GH-068, D-5.)* Campanhas já gravadas com horas ou data fixa continuam valendo e aparecendo como estão: o domínio não muda, e nenhuma migração as converte. |
 | D-2 | **Importação de lojas (B).** `POST /api/v1/establishments/import` com `{ regionId, channels, establishments: [{ code, name }] }`, de 1 a 1.000 linhas. É tudo ou nada: valida tudo antes de gravar; código repetido no corpo ou já existente na região recusa o lote, e o erro aponta a linha (`Establishments[i].Code`). Resposta 201 com as lojas criadas. Só o administrador, como no cadastro um a um (`ManageHierarchy`); código já existente responde 422 `ESTABLISHMENT_CODE_TAKEN` com a lista `codes`. |
 | D-3 | **Importação de produtos (B).** `POST /api/v1/products/import` com `{ categoryId, products: [{ code, name }] }`, de 1 a 1.000 linhas, com as mesmas regras de D-2 (código único no catálogo, com a mesma comparação do cadastro um a um). Só o administrador (`ManageCatalog`); código já existente responde 422 `PRODUCT_CODE_TAKEN` com a lista `codes`. |
 | D-4 | **Limite por CPF (C).** Dentro da transação da reserva, depois do `UPDATE` que trava a linha da campanha, o motor conta de novo os vouchers do CPF naquela campanha (confirmados e provisórios em dia, a regra atual) e, se o limite foi atingido, desfaz a reserva e recusa com `CustomerLimitReached`. A linha travada serializa as concessões da mesma campanha, então a recontagem vê o voucher de quem chegou antes. Sem tabela nova. |
@@ -120,11 +120,18 @@ Códigos novos:
 | PA-3 | Cliente 4: carregar CPFs por arquivo | A API já aceita a lista; a leitura do CSV pode ser feita no portal. Retenção e base legal seguem no PA-4 da GH-047 | Pedido do frontend para uma rota de upload |
 | PA-4 | Cliente 7: basta uma aprovação | Já é assim; falta o cliente confirmar se quem editou pode aprovar (SEC-24) | Resposta do cliente |
 | PA-5 | Cliente 8: restrições no resgate | O resgate já confere escopo, valor mínimo e máximo, alvo e usos; a etapa nova é do portal | Lista de restrições do cliente |
-| PA-6 | Cliente 1: o dia da emissão conta como o 1º dia? | Hoje N dias a partir da emissão terminam às 23:59:59 do dia emissão + N | Resposta do cliente |
+| PA-6 | Cliente 1: o dia da emissão conta como o 1º dia? | Hoje a validade é N×24h a partir do instante da emissão, sem arredondar para o fim do dia | Resposta do cliente |
 | PA-7 | Cliente 6 e 9 | Só frontend | — |
 | PA-8 | SEC-01: bloqueio por e-mail e log de falhas (SEC-22) | O limite por IP fecha a força bruta mais simples; o bloqueio por conta pede estado compartilhado | Deploy com mais de uma instância ou pedido do PO |
 | PA-9 | SEC-06: retirar a `GET` com CPF na URL, mascarar o código e paginar | O PDV ainda usa a rota antiga | Confirmação do PDV de que migrou |
 | PA-10 | SEC-03, SEC-05, SEC-09 a SEC-13, SEC-14 a SEC-24, ARQ-02, ARQ-03, PERF-01 a PERF-04, QUA-01 a QUA-08 | Endurecimento, desempenho e qualidade sem urgência de negócio | Issue de endurecimento, antes do deploy público |
+
+**Respostas do cliente (2026-11-18, issue #68, spec GH-068):**
+- PA-1: um único desconto por campanha.
+- PA-2: os códigos precisam estar cadastrados; só um voucher é usado por compra.
+- PA-4: mantém como está.
+- PA-5: o cliente ainda não sabe (segue no PA-1 da GH-068).
+- PA-6: mantém o comportamento atual.
 
 ---
 
