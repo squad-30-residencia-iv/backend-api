@@ -3,12 +3,20 @@ using VoucherCampaigns.Application.Authentication;
 
 namespace VoucherCampaigns.Infrastructure.Authentication;
 
-public class SatelliteTokenRateLimiter(TimeProvider timeProvider) : ISatelliteTokenRateLimiter
+/// <summary>
+/// Bloqueio do <c>POST /satellite/token</c> depois de <see cref="MaxFailedAttempts"/> segredos errados em
+/// <see cref="LockoutWindow"/>, por <c>clientId</c> + origem (spec GH-071, D-2; SEC-05 da auditoria). O dicionário tem
+/// teto: acima dele, as entradas vencidas são descartadas, e a falha nova de uma chave desconhecida deixa de ser contada
+/// aqui (o limite nativo por IP continua valendo). O estado é desta instância (PA-1 da spec).
+/// </summary>
+public class SatelliteTokenRateLimiter(TimeProvider timeProvider, int maxTrackedClients = SatelliteTokenRateLimiter.MaxTrackedClients)
+    : ISatelliteTokenRateLimiter
 {
     public const int MaxFailedAttempts = 5;
+    public const int MaxTrackedClients = 10_000;
     public static readonly TimeSpan LockoutWindow = TimeSpan.FromMinutes(1);
 
-    private readonly ConcurrentDictionary<string, ClientAttemptState> _states = new(StringComparer.OrdinalIgnoreCase);
+    private readonly ConcurrentDictionary<string, ClientAttemptState> _states = new(StringComparer.Ordinal);
 
     private sealed class ClientAttemptState
     {
@@ -17,15 +25,12 @@ public class SatelliteTokenRateLimiter(TimeProvider timeProvider) : ISatelliteTo
         public DateTimeOffset? LockedUntil { get; set; }
     }
 
-    public bool IsLockedOut(string clientId)
-    {
-        if (string.IsNullOrWhiteSpace(clientId))
-        {
-            return false;
-        }
+    /// <summary>Quantas chaves estão sendo acompanhadas (para os testes do teto).</summary>
+    public int TrackedCount => _states.Count;
 
-        var normalized = clientId.Trim().ToLowerInvariant();
-        if (!_states.TryGetValue(normalized, out var state))
+    public bool IsLockedOut(string clientId, string? origin = null)
+    {
+        if (Key(clientId, origin) is not { } key || !_states.TryGetValue(key, out var state))
         {
             return false;
         }
@@ -34,52 +39,56 @@ public class SatelliteTokenRateLimiter(TimeProvider timeProvider) : ISatelliteTo
 
         lock (state)
         {
-            if (state.LockedUntil.HasValue)
+            if (state.LockedUntil is { } lockedUntil)
             {
-                if (now < state.LockedUntil.Value)
+                if (now < lockedUntil)
                 {
                     return true;
                 }
 
-                _states.TryRemove(normalized, out _);
+                _states.TryRemove(key, out _);
                 return false;
             }
 
             if (now - state.FirstAttemptAt > LockoutWindow)
             {
-                _states.TryRemove(normalized, out _);
-                return false;
+                _states.TryRemove(key, out _);
             }
 
             return false;
         }
     }
 
-    public void RecordFailure(string clientId)
+    public void RecordFailure(string clientId, string? origin = null)
     {
-        if (string.IsNullOrWhiteSpace(clientId))
+        if (Key(clientId, origin) is not { } key)
         {
             return;
         }
 
-        var normalized = clientId.Trim().ToLowerInvariant();
         var now = timeProvider.GetUtcNow();
 
-        var state = _states.GetOrAdd(normalized, _ => new ClientAttemptState
+        if (!_states.ContainsKey(key) && _states.Count >= maxTrackedClients)
         {
-            FailedCount = 0,
-            FirstAttemptAt = now
-        });
+            RemoveExpired(now);
+
+            if (_states.Count >= maxTrackedClients)
+            {
+                return;
+            }
+        }
+
+        var state = _states.GetOrAdd(key, _ => new ClientAttemptState { FailedCount = 0, FirstAttemptAt = now });
 
         lock (state)
         {
-            if (state.LockedUntil.HasValue && now >= state.LockedUntil.Value)
+            if (state.LockedUntil is { } lockedUntil && now >= lockedUntil)
             {
                 state.FailedCount = 0;
                 state.LockedUntil = null;
                 state.FirstAttemptAt = now;
             }
-            else if (!state.LockedUntil.HasValue && now - state.FirstAttemptAt > LockoutWindow)
+            else if (state.LockedUntil is null && now - state.FirstAttemptAt > LockoutWindow)
             {
                 state.FailedCount = 0;
                 state.FirstAttemptAt = now;
@@ -94,14 +103,34 @@ public class SatelliteTokenRateLimiter(TimeProvider timeProvider) : ISatelliteTo
         }
     }
 
-    public void Reset(string clientId)
+    public void Reset(string clientId, string? origin = null)
     {
-        if (string.IsNullOrWhiteSpace(clientId))
+        if (Key(clientId, origin) is { } key)
         {
-            return;
+            _states.TryRemove(key, out _);
         }
-
-        var normalized = clientId.Trim().ToLowerInvariant();
-        _states.TryRemove(normalized, out _);
     }
+
+    private void RemoveExpired(DateTimeOffset now)
+    {
+        foreach (var (key, state) in _states)
+        {
+            bool expired;
+
+            lock (state)
+            {
+                expired = state.LockedUntil is { } lockedUntil
+                    ? now >= lockedUntil
+                    : now - state.FirstAttemptAt > LockoutWindow;
+            }
+
+            if (expired)
+            {
+                _states.TryRemove(key, out _);
+            }
+        }
+    }
+
+    private static string? Key(string clientId, string? origin) =>
+        string.IsNullOrWhiteSpace(clientId) ? null : $"{clientId.Trim().ToLowerInvariant()}|{origin ?? "unknown"}";
 }

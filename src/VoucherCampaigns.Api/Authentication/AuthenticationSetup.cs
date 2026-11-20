@@ -92,7 +92,24 @@ public static class AuthenticationSetup
             AuthenticationType = SatelliteAuthentication.Scheme
         };
 
-        options.Events = ProblemEvents(ErrorCodes.ForbiddenScope, ApiProblems.ForbiddenScopeDetail);
+        var events = ProblemEvents(ErrorCodes.ForbiddenScope, ApiProblems.ForbiddenScopeDetail);
+
+        // SEC-03 (spec GH-071, D-1): aplicação inativa, segredo trocado ou escopos mudados derrubam o token na hora.
+        // A falha cai no OnChallenge: 401 AUTH_UNAUTHENTICATED, como um token vencido.
+        events.OnTokenValidated = async context =>
+        {
+            var subject = context.Principal?.FindFirst(AuthClaimTypes.UserId)?.Value;
+            var stamp = context.Principal?.FindFirst(AuthClaimTypes.Stamp)?.Value;
+            var status = context.HttpContext.RequestServices.GetRequiredService<ISatelliteAppStatus>();
+
+            if (!Guid.TryParse(subject, out var applicationId)
+                || !await status.IsCurrentAsync(applicationId, stamp, context.HttpContext.RequestAborted))
+            {
+                context.Fail("A aplicação satélite foi inativada ou alterada depois da emissão do token.");
+            }
+        };
+
+        options.Events = events;
     }
 
     private static JwtBearerEvents ProblemEvents(string forbiddenCode, string forbiddenDetail) => new()

@@ -655,6 +655,12 @@ namespace VoucherCampaigns.Infrastructure.Migrations.Sqlite.Migrations
                         .HasColumnType("TEXT")
                         .HasColumnName("secret_hash");
 
+                    b.Property<string>("SecurityStamp")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("security_stamp");
+
                     b.HasKey("Id")
                         .HasName("pk_satellite_apps");
 

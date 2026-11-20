@@ -16,6 +16,14 @@ public record SatelliteAuthOptions
 
     public int ExpirationMinutes { get; init; } = AuthOptions.DefaultExpirationMinutes;
 
+    public const int DefaultStampCacheSeconds = 30;
+
+    /// <summary>
+    /// Por quanto tempo cada instância guarda o estado da aplicação conferido no token (spec GH-071, D-1). A mudança
+    /// feita na própria instância vale na hora; outra instância percebe em até este tempo. <c>0</c> consulta sempre.
+    /// </summary>
+    public int StampCacheSeconds { get; init; } = DefaultStampCacheSeconds;
+
     /// <summary>Carga inicial de <c>satellite_apps</c> quando a tabela está vazia. A emissão do token não lê esta lista.</summary>
     public IReadOnlyList<SatelliteAppOptions> Apps { get; init; } = [];
 
@@ -29,6 +37,7 @@ public record SatelliteAuthOptions
             Audience = string.IsNullOrWhiteSpace(audience) ? DefaultAudience : audience.Trim(),
             ExpirationMinutes = AuthOptions.ParseExpirationMinutes(
                 section[nameof(ExpirationMinutes)], $"{SectionName}:{nameof(ExpirationMinutes)}"),
+            StampCacheSeconds = ParseStampCacheSeconds(section[nameof(StampCacheSeconds)]),
             Apps = configuration.GetSection(AppsSection).GetChildren()
                 .Select(app => new SatelliteAppOptions
                 {
@@ -44,6 +53,22 @@ public record SatelliteAuthOptions
         options.Validate(userAuth);
 
         return options;
+    }
+
+    private static int ParseStampCacheSeconds(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            return DefaultStampCacheSeconds;
+        }
+
+        if (!int.TryParse(value, System.Globalization.NumberStyles.Integer, System.Globalization.CultureInfo.InvariantCulture, out var seconds) || seconds < 0)
+        {
+            throw new InvalidOperationException(
+                $"Configuração inválida: '{SectionName}:{nameof(StampCacheSeconds)}' deve ser um número inteiro maior ou igual a zero.");
+        }
+
+        return seconds;
     }
 
     public void Validate(AuthOptions userAuth)

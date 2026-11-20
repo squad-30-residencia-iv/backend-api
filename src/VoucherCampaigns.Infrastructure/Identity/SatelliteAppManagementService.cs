@@ -12,7 +12,8 @@ namespace VoucherCampaigns.Infrastructure.Identity;
 
 public class SatelliteAppManagementService(
     AppDbContext db,
-    TimeProvider timeProvider) : ISatelliteAppManagementService
+    TimeProvider timeProvider,
+    ISatelliteAppStatus appStatus) : ISatelliteAppManagementService
 {
     public const string ClientIdTakenCode = "SATELLITE_CLIENT_ID_TAKEN";
     public const string ClientIdTakenMessage = "Já existe uma aplicação cadastrada com este identificador.";
@@ -116,9 +117,17 @@ public class SatelliteAppManagementService(
         }
 
         app.Name = request.Name.Trim();
-        app.Scopes = string.Join(' ', normalizedScopes);
+        var scopes = string.Join(' ', normalizedScopes);
+
+        // Escopos mudaram: o token emitido com os antigos deixa de valer (spec GH-071, D-1).
+        if (!string.Equals(app.Scopes, scopes, StringComparison.Ordinal))
+        {
+            app.Scopes = scopes;
+            app.RotateStamp();
+        }
 
         await db.SaveChangesAsync(cancellationToken);
+        appStatus.Forget(app.Id);
 
         return ToResponse(app);
     }
@@ -132,7 +141,9 @@ public class SatelliteAppManagementService(
         }
 
         app.IsActive = false;
+        app.RotateStamp();
         await db.SaveChangesAsync(cancellationToken);
+        appStatus.Forget(app.Id);
 
         return ToResponse(app);
     }
@@ -147,8 +158,10 @@ public class SatelliteAppManagementService(
 
         var newSecret = GenerateSecret();
         app.SecretHash = PasswordHasher.Hash(newSecret);
+        app.RotateStamp();
 
         await db.SaveChangesAsync(cancellationToken);
+        appStatus.Forget(app.Id);
 
         return new RotateSecretResponse(newSecret);
     }

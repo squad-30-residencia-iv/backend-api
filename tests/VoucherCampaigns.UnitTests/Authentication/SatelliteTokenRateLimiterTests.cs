@@ -79,6 +79,37 @@ public class SatelliteTokenRateLimiterTests
         Assert.False(_limiter.IsLockedOut(clientId));
     }
 
+    [Fact]
+    public void Lockout_IsPerClientAndOrigin_SoAnotherAddressDoesNotLockTheLegitimateClient()
+    {
+        // SEC-05 (spec GH-071, D-2): o clientId não é segredo; o bloqueio de uma origem não alcança as outras.
+        for (var i = 0; i < SatelliteTokenRateLimiter.MaxFailedAttempts; i++)
+        {
+            _limiter.RecordFailure("pdv-loja", "203.0.113.9");
+        }
+
+        Assert.True(_limiter.IsLockedOut("pdv-loja", "203.0.113.9"));
+        Assert.False(_limiter.IsLockedOut("pdv-loja", "10.0.0.5"));
+    }
+
+    [Fact]
+    public void TrackedClients_StayUnderTheCap_AndExpiredEntriesMakeRoom()
+    {
+        var limiter = new SatelliteTokenRateLimiter(_timeProvider, maxTrackedClients: 3);
+
+        for (var i = 0; i < 10; i++)
+        {
+            limiter.RecordFailure($"aleatorio-{i}", "198.51.100.1");
+        }
+
+        Assert.Equal(3, limiter.TrackedCount);
+
+        _timeProvider.UtcNow = _timeProvider.UtcNow.Add(SatelliteTokenRateLimiter.LockoutWindow.Add(TimeSpan.FromSeconds(1)));
+        limiter.RecordFailure("pdv-novo", "198.51.100.1");
+
+        Assert.Equal(1, limiter.TrackedCount);
+    }
+
     private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider
     {
         public DateTimeOffset UtcNow { get; set; } = now;
