@@ -22,9 +22,15 @@ Objetivo: chegar o quanto antes a uma **base útil** (campanha configurada, apro
 | US-01.6 / US-01.11 Submeter, aprovar e reprovar | ✅ Mesclado (#42, #43) | Analista submete, gestor aprova (`Scheduled`/`Active`) ou reprova; histórico em `campaign_status_events` |
 | Issue #26 Auditoria, status efetivo e US-07.5 | ✅ Concluído | `audit_entries` append-only; status efetivo na leitura (PR-04); client credentials das aplicações satélites (`satellite_apps`, esquema `Satellite`) |
 | Issue #45 Motor de concessão (EP-04, 07.2, 07.4) | ✅ Na `staging` e na `main` (PR #53, 2026-11-11) | Concessão em duas fases (`concessions`, `vouchers`, `voucher_events`), saldo atômico, esgotada derivada, idempotência, rotas `/api/v1/satellite/concessions` e `/customers/{cpf}/vouchers` (spec `GH-045-motor-de-concessao.md`) |
-| Issue #49 Resgate (EP-05, 07.1, 07.3) | ✅ Na `staging` (PR #58, 2026-11-12) | Verificação de aplicáveis com desconto previsto e recomendado, resgate com utilização atômica e um voucher por compra, estorno, provisório resgatável na própria compra, campanhas vigentes por API (spec `GH-049-resgate-de-vouchers.md`) |
-| Issue #47 Público restrito (EP-06, 04.2) | ✅ Na `staging` (PR #60, 2026-11-13) | Critérios de perfil, histórico com janela, combinação, clientes específicos, avaliação na emissão com snapshot e simulação (spec `GH-047-publico-restrito.md`) |
-| Issue #50 Acompanhamento (EP-03) | ✅ Na `staging` (PR #59, 2026-11-13) | Indicadores por campanha e por rede com filtros, trilha de auditoria da campanha (criação e edições auditadas), exportação CSV (spec `GH-050-acompanhamento-da-campanha.md`) |
+| Issue #49 Resgate (EP-05, 07.1, 07.3) | ✅ Na `staging` (PR #58, 2026-11-12) e na `main` (PR #64, 2026-11-20) | Verificação de aplicáveis com desconto previsto e recomendado, resgate com utilização atômica e um voucher por compra, estorno, provisório resgatável na própria compra, campanhas vigentes por API (spec `GH-049-resgate-de-vouchers.md`) |
+| Issue #47 Público restrito (EP-06, 04.2) | ✅ Na `staging` (PR #60, 2026-11-13) e na `main` (PR #64, 2026-11-20) | Critérios de perfil, histórico com janela, combinação, clientes específicos, avaliação na emissão com snapshot e simulação (spec `GH-047-publico-restrito.md`) |
+| Issue #50 Acompanhamento (EP-03) | ✅ Na `staging` (PR #59, 2026-11-13) e na `main` (PR #64, 2026-11-20) | Indicadores por campanha e por rede com filtros, trilha de auditoria da campanha (criação e edições auditadas), exportação CSV (spec `GH-050-acompanhamento-da-campanha.md`) |
+| Issue #61 Cancelar campanha (01.8, RN10) | ✅ Na `staging` (PR #63) e na `main` (PR #64, 2026-11-20) | `POST /campaigns/{id}/cancel` com motivo; vouchers não usados invalidados em lote. Pontos em aberto na issue #62 |
+| Leituras do portal (EP-03) | ✅ Na `staging` (PR #65) e na `main` (PR #64, 2026-11-20) | `GET /vouchers`, `GET /reports/overview` e `GET /reports/catalog`, `GET /audit-entries` |
+| Issue #66 Ajustes do cliente e auditoria urgente | ✅ Na `staging` (PR #67) e na `main` (PR #64, 2026-11-20) | Validade só em dias, lojas e produtos em lote, limite por CPF atômico, SEC-01, 02, 04, 06, 07, 08 e 21 |
+| Issue #68 Desconto único e alvo por código | ✅ Na `staging` (PR #69) e na `main` (PR #64, 2026-11-20) | Um desconto por campanha, `productCode` e até 1.000 alvos |
+| Issue #70 Restrições no resgate | ✅ Na `staging` (PR #72) e na `main` (PR #64, 2026-11-20) | Alvos de resgate e janelas de dias e horários |
+| Issue #71 Endurecimento, fatia 1 | ✅ Na `staging` (PR #73) e na `main` (PR #64, 2026-11-20) | SEC-03, SEC-05, PERF-01 a 03, trilha resumida e `Sunset` da rota antiga; a issue segue aberta para as fatias seguintes |
 
 ---
 
