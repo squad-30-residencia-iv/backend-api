@@ -2,12 +2,15 @@ using VoucherCampaigns.Application.Audit;
 using VoucherCampaigns.Application.Authentication;
 using VoucherCampaigns.Application.Campaigns;
 using VoucherCampaigns.Application.Common;
+using VoucherCampaigns.Application.Dashboard;
 using VoucherCampaigns.Application.Ports;
+using VoucherCampaigns.Application.Vouchers;
 using VoucherCampaigns.Domain.Audit;
 using VoucherCampaigns.Domain.Catalog;
 using VoucherCampaigns.Domain.Campaigns;
 using VoucherCampaigns.Domain.Common;
 using VoucherCampaigns.Domain.Organization;
+using VoucherCampaigns.Domain.Vouchers;
 
 namespace VoucherCampaigns.UnitTests.Campaigns;
 
@@ -230,8 +233,8 @@ public class CampaignServiceTests
             campaign.Id,
             new ReplaceCampaignItemsRequest(
             [
-                new("Product", null, product.Id, "FixedAmount", 20, null),
-                new("All", null, null, "Percentage", 5, null),
+                new("Product", null, product.Id, "Percentage", 15, null),
+                new("All", null, null, "Percentage", 15, null),
                 new("Category", category.Id, null, "Percentage", 15, null)
             ]),
             CancellationToken.None);
@@ -271,7 +274,22 @@ public class CampaignServiceTests
     }
 
     private CampaignService CreateService(Network? network, DateTimeOffset? now = null) =>
-        new(new FakeNetworkRepository(network), _campaigns, _catalog, new FakeOrganizationRepository(), _user, _audit, new FixedTimeProvider(now ?? Now));
+        new(
+            new FakeNetworkRepository(network),
+            _campaigns,
+            _catalog,
+            new FakeOrganizationRepository(),
+            new NoVoucherCounts(),
+            _user,
+            _audit,
+            new NoVoucherCanceller(),
+            new FixedTimeProvider(now ?? Now));
+
+    private sealed class NoVoucherCanceller : ICampaignVoucherCanceller
+    {
+        public Task<CampaignVoucherCancellation> CancelVouchersAsync(Guid campaignId, Guid actorUserId, DateTime utcNow, CancellationToken cancellationToken) =>
+            Task.FromResult(new CampaignVoucherCancellation(0, 0, 0));
+    }
 
     private static CreateCampaignRequest Request(DateTime startsAt, DateTime endsAt) =>
         new(Network.Id, "Volta às Aulas", null, startsAt, endsAt);
@@ -294,10 +312,45 @@ public class CampaignServiceTests
         public Task<IReadOnlyList<Campaign>> GetByNetworkAsync(Guid networkId, CancellationToken cancellationToken) =>
             Task.FromResult<IReadOnlyList<Campaign>>(Added.Where(campaign => campaign.NetworkId == networkId).ToList());
 
+        public Task<(int Total, IReadOnlyList<Campaign> Items)> GetPageByNetworkAsync(
+            Guid networkId, CampaignStatus? status, DateTime utcNow, int? skip, int? take, CancellationToken cancellationToken)
+        {
+            var filtered = Added
+                .Where(campaign => campaign.NetworkId == networkId && (status is null || campaign.EffectiveStatus(utcNow) == status))
+                .ToList();
+            IReadOnlyList<Campaign> page = skip is { } offset && take is { } size ? filtered.Skip(offset).Take(size).ToList() : filtered;
+
+            return Task.FromResult((filtered.Count, page));
+        }
+
         public Task<Campaign?> FindByIdAsync(Guid id, CancellationToken cancellationToken) =>
             Task.FromResult(Added.FirstOrDefault(campaign => campaign.Id == id));
 
         public Task<Campaign?> FindForUpdateAsync(Guid id, CancellationToken cancellationToken) => FindByIdAsync(id, cancellationToken);
+
+        public Task LoadEligibleCustomersAsync(Campaign campaign, CancellationToken cancellationToken) => Task.CompletedTask;
+
+        public async Task<bool> SaveIfUnchangedAsync(
+            Campaign campaign, CancellationToken cancellationToken, Func<CancellationToken, Task>? withinTransaction = null)
+        {
+            if (withinTransaction is not null)
+            {
+                await withinTransaction(cancellationToken);
+            }
+
+            return true;
+        }
+
+        public Task<IReadOnlyList<string>> GetEligibleDocumentsAsync(Guid campaignId, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<string>>(
+                Added.Single(campaign => campaign.Id == campaignId).EligibleCustomers.Select(customer => customer.Document).Order().ToList());
+
+        public Task<(int Total, IReadOnlyList<string> Documents)> GetEligibleDocumentsPageAsync(
+            Guid campaignId, int skip, int take, CancellationToken cancellationToken) =>
+            throw new NotSupportedException();
+
+        public Task<bool> IsCustomerListedAsync(Guid campaignId, string document, CancellationToken cancellationToken) =>
+            Task.FromResult(Added.Single(campaign => campaign.Id == campaignId).EligibleCustomers.Any(customer => customer.Document == document));
 
         public void AddStatusEvent(CampaignStatusEvent statusEvent)
         {
@@ -318,6 +371,12 @@ public class CampaignServiceTests
 
         public Task<Product?> GetProductByIdAsync(Guid id, CancellationToken cancellationToken) =>
             Task.FromResult(Products.FirstOrDefault(product => product.Id == id));
+
+        public Task<IReadOnlyList<Product>> GetProductsByIdsAsync(IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<Product>>(Products.Where(product => ids.Contains(product.Id)).ToList());
+
+        public Task<IReadOnlyList<Category>> GetCategoriesByIdsAsync(IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<Category>>(Categories.Where(category => ids.Contains(category.Id)).ToList());
 
         public Task<IReadOnlyList<Product>> GetProductsByCodesAsync(IReadOnlyCollection<string> codes, CancellationToken cancellationToken) =>
             Task.FromResult<IReadOnlyList<Product>>(
@@ -363,6 +422,8 @@ public class CampaignServiceTests
         public Task<bool> ExistsRegionByNameInNetworkAsync(Guid networkId, string name, Guid? excludeId, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<IReadOnlyList<Establishment>> GetEstablishmentsAsync(Guid regionId, bool? activeOnly, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<Establishment?> GetEstablishmentByIdAsync(Guid id, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<IReadOnlyList<Region>> GetRegionsByIdsAsync(IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<IReadOnlyList<Establishment>> GetEstablishmentsByIdsAsync(IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<Establishment> CreateEstablishmentAsync(Establishment establishment, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<Establishment> UpdateEstablishmentAsync(Establishment establishment, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<bool> ExistsEstablishmentByCodeInRegionAsync(Guid regionId, string code, Guid? excludeId, CancellationToken cancellationToken) => throw new NotSupportedException();
@@ -373,6 +434,19 @@ public class CampaignServiceTests
         public List<AuditEntry> Entries { get; } = [];
 
         public void Append(AuditEntry entry) => Entries.Add(entry);
+    }
+
+    private sealed class NoVoucherCounts : IDashboardRepository
+    {
+        public Task<IReadOnlyList<CampaignCounts>> CountVouchersAsync(
+            Guid networkId, Guid? campaignId, VoucherFilter filter, DateTime utcNow, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<CampaignCounts>>([]);
+
+        public Task<IReadOnlyList<AuditEntry>> GetCampaignAuditAsync(Guid campaignId, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyList<AuditEntry>>([]);
+
+        public Task<IReadOnlyDictionary<Guid, AuditActor>> GetUsersAsync(IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyDictionary<Guid, AuditActor>>(new Dictionary<Guid, AuditActor>());
     }
 
     private sealed class FakeCurrentUser(Guid networkId) : ICurrentUser

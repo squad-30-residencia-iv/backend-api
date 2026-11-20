@@ -8,6 +8,9 @@ public static class OrganizationContract
     public const int NameMaxLength = 150;
     public const int TimeZoneMaxLength = 64;
     public const int EstablishmentCodeMaxLength = 20;
+    public const int MaxImportLines = 1_000;
+    public const string ImportEstablishmentsRequired = "Informe de 1 a 1.000 lojas.";
+    public const string ImportCodeRepeated = "O código se repete na lista.";
 
     public const string NetworkNameRequired = "Informe o nome da rede.";
     public const string NameMaxLengthMessage = "O nome deve ter no máximo 150 caracteres.";
@@ -83,6 +86,19 @@ public record CreateEstablishmentRequest(
     // Canais que a loja opera: Physical, Virtual ou ambos (PR-11).
     [Required(ErrorMessage = OrganizationContract.ChannelsRequired)]
     IReadOnlyList<string>? Channels);
+
+/// <summary>Lojas em lote (spec GH-066, D-2): uma região e os mesmos canais para todas; de 1 a 1.000 linhas.</summary>
+public record ImportEstablishmentsRequest(
+    [Required(ErrorMessage = OrganizationContract.RegionRequired)]
+    Guid? RegionId,
+    [Required(ErrorMessage = OrganizationContract.ChannelsRequired)]
+    IReadOnlyList<string>? Channels,
+    [Required(ErrorMessage = OrganizationContract.ImportEstablishmentsRequired)]
+    IReadOnlyList<ImportEstablishmentLine>? Establishments);
+
+public record ImportEstablishmentLine(string? Code, string? Name);
+
+public record ImportEstablishmentsResponse(int Created, IReadOnlyList<EstablishmentResponse> Establishments);
 
 public record UpdateEstablishmentRequest(
     [Required(ErrorMessage = OrganizationContract.EstablishmentCodeRequired)]

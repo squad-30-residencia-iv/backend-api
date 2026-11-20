@@ -12,11 +12,43 @@ public interface ICampaignRepository
     /// </summary>
     Task<IReadOnlyList<Campaign>> GetByNetworkAsync(Guid networkId, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Como <see cref="GetByNetworkAsync"/>, com o filtro do status efetivo no banco e a página opcional (spec GH-071,
+    /// D-5). O total é o da consulta filtrada inteira.
+    /// </summary>
+    Task<(int Total, IReadOnlyList<Campaign> Items)> GetPageByNetworkAsync(
+        Guid networkId, CampaignStatus? status, DateTime utcNow, int? skip, int? take, CancellationToken cancellationToken);
+
     /// <summary>Campanha com a rede (para o fuso) e os itens, ou null. Sem rastreamento.</summary>
     Task<Campaign?> FindByIdAsync(Guid id, CancellationToken cancellationToken);
 
     /// <summary>Como <see cref="FindByIdAsync"/>, mas rastreada para alteração e gravação com <see cref="SaveChangesAsync"/>.</summary>
     Task<Campaign?> FindForUpdateAsync(Guid id, CancellationToken cancellationToken);
+
+    /// <summary>Carrega na campanha rastreada a lista de clientes específicos (spec GH-047, D-8), antes de substituí-la.</summary>
+    Task LoadEligibleCustomersAsync(Campaign campaign, CancellationToken cancellationToken);
+
+    /// <summary>CPFs da lista da campanha, em ordem, sem rastreamento (duplicação, D-18).</summary>
+    Task<IReadOnlyList<string>> GetEligibleDocumentsAsync(Guid campaignId, CancellationToken cancellationToken);
+
+    /// <summary>Página da lista de clientes específicos, em ordem de CPF, e o total (D-10).</summary>
+    Task<(int Total, IReadOnlyList<string> Documents)> GetEligibleDocumentsPageAsync(
+        Guid campaignId, int skip, int take, CancellationToken cancellationToken);
+
+    /// <summary>Verdadeiro quando o CPF está na lista de clientes específicos da campanha.</summary>
+    Task<bool> IsCustomerListedAsync(Guid campaignId, string document, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Grava a campanha rastreada só se ninguém a alterou desde a leitura: o primeiro comando da transação é um
+    /// <c>UPDATE ... WHERE updated_at = @lido</c>, com o valor lido do rastreamento. A marca nova é sempre maior que a
+    /// lida, mesmo com o relógio parado. Falso quando outra requisição gravou antes (nada é gravado).
+    /// </summary>
+    /// <param name="withinTransaction">
+    /// Trabalho extra na mesma transação, depois da trava e antes do <c>SaveChanges</c> (o cancelamento invalida os
+    /// vouchers aqui, spec GH-061).
+    /// </param>
+    Task<bool> SaveIfUnchangedAsync(
+        Campaign campaign, CancellationToken cancellationToken, Func<CancellationToken, Task>? withinTransaction = null);
 
     void AddStatusEvent(CampaignStatusEvent statusEvent);
 

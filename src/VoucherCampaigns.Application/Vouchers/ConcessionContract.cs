@@ -1,5 +1,11 @@
 namespace VoucherCampaigns.Application.Vouchers;
 
+/// <summary>Consulta dos vouchers do cliente com o CPF no corpo (spec GH-066, D-9).</summary>
+public record CustomerVouchersSearchRequest(
+    [System.ComponentModel.DataAnnotations.Required(ErrorMessage = ConcessionContract.CustomerDocumentRequired)]
+    string? Document,
+    string? Status);
+
 /// <summary>Mensagens de contrato e de recurso ausente das rotas de concessão (spec GH-045, 2.3).</summary>
 public static class ConcessionContract
 {
@@ -35,4 +41,7 @@ public static class ConcessionContract
     public const string VoucherStatusInvalid = "Status inválido. Use Provisional, Available, Redeemed, Expired ou Cancelled.";
 
     public const string ConcessionNotFound = "Concessão não encontrada.";
+
+    /// <summary>Filtro <c>establishmentId</c> da consulta de campanhas vigentes (US-07.1): loja inexistente ou de outra rede.</summary>
+    public const string EstablishmentNotFoundForList = "A loja informada não existe nesta rede.";
 }

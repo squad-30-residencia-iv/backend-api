@@ -15,6 +15,8 @@ public static class ErrorCodes
     public const string NotFound = "NOT_FOUND";
     public const string InvalidClient = "AUTH_INVALID_CLIENT";
     public const string ForbiddenScope = "AUTH_FORBIDDEN_SCOPE";
+    public const string LoginRateLimited = "AUTH_LOGIN_RATE_LIMITED";
+    public const string SatelliteTokenRateLimited = "SATELLITE_TOKEN_RATE_LIMITED";
 }
 
 public static class ApiProblems
@@ -28,6 +30,8 @@ public static class ApiProblems
     public const string ScopeForbiddenDetail = "Escopo organizacional fora da sua permissão de acesso";
     public const string InvalidClientDetail = "Credenciais da aplicação inválidas.";
     public const string ForbiddenScopeDetail = "A aplicação não tem permissão para esta operação.";
+    public const string LoginRateLimitedDetail = "Muitas tentativas de login. Aguarde alguns instantes e tente de novo.";
+    public const string SatelliteTokenRateLimitedDetail = "Muitos pedidos de token desta origem. Aguarde alguns instantes e tente de novo.";
 
     public static ProblemDetails Create(HttpContext httpContext, int statusCode, string code, string detail)
     {

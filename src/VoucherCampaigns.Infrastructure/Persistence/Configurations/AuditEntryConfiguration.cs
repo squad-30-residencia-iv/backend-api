@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using VoucherCampaigns.Application.Audit;
 using VoucherCampaigns.Domain.Audit;
 
 namespace VoucherCampaigns.Infrastructure.Persistence.Configurations;
@@ -15,7 +16,7 @@ public class AuditEntryConfiguration : IEntityTypeConfiguration<AuditEntry>
         builder.Property(entry => entry.EventType).HasMaxLength(50).IsRequired();
         builder.Property(entry => entry.ActorType).HasConversion<string>().HasMaxLength(20);
         builder.Property(entry => entry.EntityType).HasMaxLength(50).IsRequired();
-        builder.Property(entry => entry.Payload).HasMaxLength(2000);
+        builder.Property(entry => entry.Payload).HasMaxLength(AuditJson.MaxPayloadLength);
 
         builder.HasIndex(entry => new { entry.CampaignId, entry.OccurredAt });
         builder.HasIndex(entry => new { entry.NetworkId, entry.OccurredAt });

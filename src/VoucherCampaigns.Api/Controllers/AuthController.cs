@@ -1,5 +1,7 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
+using VoucherCampaigns.Api.Authentication;
 using VoucherCampaigns.Api.Errors;
 using VoucherCampaigns.Application.Authentication;
 
@@ -11,10 +13,12 @@ public class AuthController(IAuthService authService) : ControllerBase
 {
     /// <summary>Valida e-mail e senha contra a tabela users.</summary>
     [AllowAnonymous]
+    [EnableRateLimiting(LoginRateLimitOptions.PolicyName)]
     [HttpPost("login")]
     [ProducesResponseType<TokenResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status429TooManyRequests)]
     public async Task<ActionResult<TokenResponse>> Login(LoginRequest request, CancellationToken cancellationToken)
     {
         var response = await authService.AuthenticateAsync(request, cancellationToken);

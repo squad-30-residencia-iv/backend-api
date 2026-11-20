@@ -31,7 +31,7 @@ public class CampaignConfigurationTests
         var campaign = Draft();
         campaign.ReplaceItems([All(10)], Now);
 
-        campaign.ReplaceItems([Category(Papelaria, 15), Product(Mochila, 20, BenefitType.FixedAmount)], Now);
+        campaign.ReplaceItems([Category(Papelaria, 15), Product(Mochila, 15, BenefitType.Percentage)], Now);
 
         Assert.Equal([TargetType.Category, TargetType.Product], campaign.Items.Select(item => item.TargetType));
     }
@@ -66,9 +66,43 @@ public class CampaignConfigurationTests
     {
         var campaign = Draft();
 
-        campaign.ReplaceItems([All(5), Category(Papelaria, 15), Product(Mochila, 20)], Now);
+        campaign.ReplaceItems([All(15), Category(Papelaria, 15), Product(Mochila, 15, BenefitType.Percentage)], Now);
 
         Assert.Equal(3, campaign.Items.Count);
+    }
+
+    // Spec GH-068, D-1: um único desconto por campanha.
+    [Theory]
+    [MemberData(nameof(NonUniformBenefits))]
+    public void ReplaceItems_WithDifferentBenefits_Throws_AndKeepsCurrentItems(CampaignItem first, CampaignItem second)
+    {
+        var campaign = Draft();
+        campaign.ReplaceItems([All(10)], Now);
+
+        var exception = Assert.Throws<BusinessRuleException>(() => campaign.ReplaceItems([first, second], Now));
+
+        Assert.Equal(CampaignErrors.BenefitNotUniformCode, exception.Code);
+        Assert.Equal(TargetType.All, Assert.Single(campaign.Items).TargetType);
+    }
+
+    public static TheoryData<CampaignItem, CampaignItem> NonUniformBenefits() => new()
+    {
+        { Category(Papelaria, 15), Product(Mochila, 20, BenefitType.Percentage) },
+        { Category(Papelaria, 15), Product(Mochila, 15, BenefitType.FixedAmount) }
+    };
+
+    [Fact]
+    public void Submit_WithDifferentBenefitsStoredBeforeTheRule_Throws()
+    {
+        var campaign = Draft();
+        campaign.ReplaceItems([Category(Papelaria, 15), Product(Mochila, 15, BenefitType.Percentage)], Now);
+        campaign.Items.Last().BenefitValue = 20;
+        campaign.AudienceType = CampaignAudienceType.AllCustomers;
+
+        var exception = Assert.Throws<BusinessRuleException>(() => campaign.Submit(Guid.CreateVersion7(), Now));
+
+        Assert.Equal(CampaignErrors.BenefitNotUniformCode, exception.Code);
+        Assert.Equal(CampaignStatus.Draft, campaign.Status);
     }
 
     [Theory]
@@ -82,9 +116,9 @@ public class CampaignConfigurationTests
 
     public static TheoryData<CampaignItem, CampaignItem> DuplicatedTargets() => new()
     {
-        { All(10), All(20) },
-        { Category(Papelaria, 10), Category(Papelaria, 15) },
-        { Product(Mochila, 10), Product(Mochila, 20) }
+        { All(10), All(10) },
+        { Category(Papelaria, 10), Category(Papelaria, 10) },
+        { Product(Mochila, 10), Product(Mochila, 10) }
     };
 
     [Fact]
@@ -130,7 +164,7 @@ public class CampaignConfigurationTests
         var campaign = Draft();
         campaign.SetQuantities(5000, null, Now);
 
-        campaign.ReplaceItems([Category(Papelaria, 15, quota: 3000), Product(Mochila, 20, quota: 1500)], Now);
+        campaign.ReplaceItems([Category(Papelaria, 15, quota: 3000), Product(Mochila, 15, BenefitType.Percentage, quota: 1500)], Now);
 
         Assert.Equal(500, campaign.UndistributedVouchers);
     }
@@ -142,7 +176,7 @@ public class CampaignConfigurationTests
         campaign.SetQuantities(5000, null, Now);
 
         var exception = Assert.Throws<BusinessRuleException>(() =>
-            campaign.ReplaceItems([Category(Papelaria, 15, quota: 3000), Product(Mochila, 20, quota: 2500)], Now));
+            campaign.ReplaceItems([Category(Papelaria, 15, quota: 3000), Product(Mochila, 15, BenefitType.Percentage, quota: 2500)], Now));
 
         Assert.Equal(CampaignErrors.QuotasExceedTotalCode, exception.Code);
         Assert.Equal("A soma das quantidades por alvo (5.500) ultrapassa a quantidade total da campanha (5.000)", exception.Message);
@@ -153,7 +187,7 @@ public class CampaignConfigurationTests
     public void SetQuantities_BelowCurrentQuotas_Throws()
     {
         var campaign = Draft();
-        campaign.ReplaceItems([Category(Papelaria, 15, quota: 3000), Product(Mochila, 20, quota: 1500)], Now);
+        campaign.ReplaceItems([Category(Papelaria, 15, quota: 3000), Product(Mochila, 15, BenefitType.Percentage, quota: 1500)], Now);
 
         var exception = Assert.Throws<BusinessRuleException>(() => campaign.SetQuantities(4000, null, Now));
 
@@ -166,7 +200,7 @@ public class CampaignConfigurationTests
     {
         var campaign = Draft();
 
-        campaign.ReplaceItems([Category(Papelaria, 15, quota: 3000), Product(Mochila, 20, quota: 1500)], Now);
+        campaign.ReplaceItems([Category(Papelaria, 15, quota: 3000), Product(Mochila, 15, BenefitType.Percentage, quota: 1500)], Now);
 
         Assert.Null(campaign.UndistributedVouchers);
     }

@@ -97,7 +97,8 @@ dotnet run --project src/VoucherCampaigns.Api    # sobe a API em http://localhos
 Sem nenhuma configuração extra, a API usa **SQLite** (`src/VoucherCampaigns.Api/vouchercampaigns.db`) e aplica as migrações pendentes na inicialização. Rotas de verificação:
 
 - `GET /health`: estado da aplicação e do banco.
-- `GET /api/v1/system/status`: provider ativo, teste de conexão e migrações aplicadas.
+- `GET /api/v1/system/status`: provider ativo, teste de conexão e migrações aplicadas; só o administrador (spec `GH-066`, D-8). O `/health` segue anônimo.
+- `POST /api/v1/auth/login` aceita até `Auth:LoginRateLimit:PermitLimit` tentativas (padrão 10) por IP a cada `WindowSeconds` (padrão 60); acima disso, `429 AUTH_LOGIN_RATE_LIMITED` com `Retry-After`. Fora de Development, a API não sobe com a chave JWT de desenvolvimento do `appsettings.Development.json`.
 
 ### Autenticação (provisória)
 
@@ -128,7 +129,7 @@ Fora de Development, defina `Auth__Jwt__SigningKey` (mínimo de 32 caracteres); 
   "startsAt": "2026-12-01T08:00:00", "endsAt": "2026-12-25T23:59:00" }
 ```
 
-Resposta `201` com as datas no offset da rede (`"2026-12-01T08:00:00-03:00"`). Regras de negócio violadas respondem `422` com `code` (`CAMPAIGN_INVALID_PERIOD`, `CAMPAIGN_START_IN_PAST`, `NETWORK_UNAVAILABLE`).
+Resposta `201` com as datas no offset da rede (`"2026-12-01T08:00:00-03:00"`). Regras de negócio violadas respondem `422` com `code` (`CAMPAIGN_INVALID_PERIOD`, `CAMPAIGN_START_IN_PAST`, `NETWORK_UNAVAILABLE`). Duas gravações simultâneas da mesma campanha (edição do rascunho ou mudança de status) não se somam: a segunda responde `422 CAMPAIGN_CONCURRENT_UPDATE` e o portal deve recarregar a campanha.
 
 Onde a campanha vale vai em `PUT /api/v1/campaigns/{id}/scopes`, ainda em rascunho. Cada local tem região **ou** loja (sem nenhuma, a rede inteira) e os canais; na loja, só canal que ela opera:
 
@@ -137,7 +138,7 @@ Onde a campanha vale vai em `PUT /api/v1/campaigns/{id}/scopes`, ainda em rascun
               { "regionId": "0199e3a0-0000-7000-8000-000000000101", "channels": ["Physical", "Virtual"] } ] }
 ```
 
-A submissão exige o escopo. Depois da aprovação a mecânica não muda (D6): para mudar, `POST /api/v1/campaigns/{id}/duplicate` cria um rascunho com a mesma configuração (nome e vigência opcionais no corpo). `POST .../pause` pausa a ativa e `POST .../end` encerra a ativa ou a pausada (analista e gestor, sem retomada).
+A submissão exige o escopo. Depois da aprovação a mecânica não muda (D6): para mudar, `POST /api/v1/campaigns/{id}/duplicate` cria um rascunho com a mesma configuração (nome e vigência opcionais no corpo). `POST .../pause` pausa a ativa e `POST .../end` encerra a ativa ou a pausada (analista e gestor, sem retomada). `POST .../cancel` com `{ "reason": "..." }` (obrigatório, até 500 caracteres) cancela a agendada, ativa, pausada ou esgotada e invalida os vouchers não utilizados (RN10, spec `GH-061`): os disponíveis dentro da validade passam a `Cancelled`, os provisórios são descartados com a reserva devolvida (a confirmação depois responde `422 CONCESSION_CAMPAIGN_CANCELLED`) e os utilizados e vencidos ficam como estão. Fora desses status, `422 CAMPAIGN_CANCEL_NOT_ALLOWED`. Smoke: `python -I scripts/smoke/cancelamento.py http://localhost:5091`.
 
 O `status` devolvido é o **efetivo** (PR-04). Uma campanha aprovada como `Scheduled` aparece `Active` a partir do início e `Ended` depois do fim (a pausada também), sem job; o banco guarda o status da decisão. O filtro `?status=` do `GET /api/v1/campaigns` usa o mesmo cálculo. Submeter, aprovar, reprovar, pausar, encerrar e duplicar também gravam um registro em `audit_entries`, que só aceita inclusão.
 
@@ -156,11 +157,39 @@ Credencial errada → `401 AUTH_INVALID_CLIENT`; escopo ausente → `403 AUTH_FO
 
 Com o carrinho fechado e antes do pagamento, o satélite pede a concessão; depois do pagamento, confirma ou desfaz. Todas as rotas exigem o token de aplicação com o escopo `vouchers:issue`; a rede é a da aplicação.
 
-1. `POST /api/v1/satellite/concessions` com a compra: `transactionId` (único por rede, chave de idempotência), `customer.document` (CPF), `establishmentId`, `channel` (`Physical` ou `Virtual`), `totalAmount` (bruto), `items[]` (`productCode`, `quantity`, `unitPrice`) e, opcional, `customerPurchaseCount`. Resposta `200` sempre que a compra foi avaliada: `status` `Provisional` com `voucher` e `reservedUntil`, ou `NotGranted` com `reason` (`NoCampaignMatched`, `CampaignNotActive`, `CampaignSoldOut`, `TargetSoldOut`, `CustomerLimitReached`). Não haver concessão não é erro: a venda segue. Repetir a mesma `transactionId` devolve a concessão original.
+1. `POST /api/v1/satellite/concessions` com a compra: `transactionId` (único por rede, chave de idempotência), `customer.document` (CPF), `establishmentId`, `channel` (`Physical` ou `Virtual`), `totalAmount` (bruto), `items[]` (`productCode`, `quantity`, `unitPrice`) e, opcional, `customerPurchaseCount`. Resposta `200` sempre que a compra foi avaliada: `status` `Provisional` com `voucher` e `reservedUntil`, ou `NotGranted` com `reason` (`NoCampaignMatched`, `CampaignNotActive`, `CampaignSoldOut`, `TargetSoldOut`, `CustomerLimitReached`, `CustomerNotEligible`). Não haver concessão não é erro: a venda segue. Repetir a mesma `transactionId` devolve a concessão original.
 2. `POST /api/v1/satellite/concessions/{id}/confirm` depois do pagamento: o voucher passa a `Available` e o saldo é consumido. `POST .../cancel` se a venda não se concluir: o voucher é descartado e o saldo devolvido. Os dois são idempotentes. Sem confirmação em `Vouchers:ReservationMinutes` (padrão 15), a reserva expira sozinha e a confirmação responde `422 CONCESSION_RESERVATION_EXPIRED`.
 3. `GET /api/v1/satellite/concessions/{id}` mostra o estado atual; `GET /api/v1/satellite/customers/{cpf}/vouchers?status=` lista os vouchers do cliente com o status efetivo (`Provisional`, `Available`, `Redeemed`, `Expired`, `Cancelled`).
 
 Regras aplicadas: só campanha efetivamente ativa, cujo escopo contempla a loja e o canal, com as condições de geração satisfeitas; uma compra gera no máximo um voucher (maior benefício nesta compra, depois a que termina primeiro, depois a aprovada primeiro); saldo da campanha, cota do alvo e limite por cliente; validade calculada na emissão (prazo relativo com teto, ou data fixa, até 23:59:59). Loja inativa, inexistente ou que não opera o canal → `422` com `code` `ISSUANCE_*`. O smoke test `python -I scripts/smoke/motor.py http://localhost:5026` percorre o fluxo com a API no ar.
+
+### Público restrito (EP-06, US-04.2)
+
+A campanha pode ser para todos os clientes ou para um público restrito, com critérios que valem juntos (AND). Spec `docs/specs/completed/GH-047-publico-restrito.md`.
+
+- `PUT /api/v1/campaigns/{id}/audience` com `{ "audienceType": "Restricted", "criteria": [...] }`, só em rascunho. Tipos: `AgeRange` (`minAge`, `maxAge`), `Location` (`states`, `cityCodes` IBGE), `LoyaltyMember`, `TotalSpent` (`minAmount`, `windowDays`), `PurchaseFrequency` (`minPurchases`, `windowDays`), `PurchasedCategory` (`categoryId`, `windowDays`) e `SpecificCustomers` (`documents`, até 10.000 CPFs com dígito verificador). `AllCustomers` não aceita critérios e apaga os anteriores. O `CampaignResponse` traz `eligibility.criteria`; a lista de CPFs aparece só como `customerCount` e sai paginada em `GET /api/v1/campaigns/{id}/audience/customers?page=&pageSize=`.
+- `POST /api/v1/campaigns/{id}/eligibility/simulate` com `{ "customer": {...} }`: resultado critério a critério (`Met`, `NotMet`, `Missing`), sem emitir voucher nem gravar nada.
+- Na concessão, o satélite manda em `customer` os atributos que a campanha pede (`birthDate`, `state`, `cityCode`, `loyaltyMember` e `history[]` com `windowDays`, `totalSpent`, `purchaseCount`, `productCodes`). `GET /api/v1/satellite/campaigns` informa `requiredAttributes` e `historyWindows` de cada campanha. Atributo ausente conta como não atendido. O inelegível não reserva saldo; se outra campanha servir, ela concede, senão a resposta é `NotGranted` com `CustomerNotEligible`. A concessão guarda os atributos usados e o resultado de cada critério; o resgate não reavalia o público. Na auditoria da edição, a lista aparece só como quantidade e quantos CPFs entraram e saíram (`customerChanges`). Quem nasceu em 29/02 completa a idade em 28/02 nos anos não bissextos. Smoke: `python -I scripts/smoke/publico.py http://localhost:5091`. Contrato completo para o PDV, com exemplo: `docs/integracao-satelite-publico-elegivel.md`. A consulta de vouchers do cliente passou para `POST /api/v1/satellite/customers/vouchers/search` com o CPF no corpo; a `GET .../customers/{cpf}/vouchers` responde com `Deprecation` até o PDV migrar (spec `GH-066`, D-9).
+
+### Verificação de aplicáveis e resgate (EP-05, US-07.1 e US-07.3)
+
+Com o cliente identificado e o carrinho fechado, o satélite pergunta quais vouchers servem nesta compra, mostra ao cliente e resgata o escolhido. Rotas com o escopo `vouchers:redeem` (`GET /campaigns` com `campaigns:read`); a rede é a da aplicação do token. Spec `docs/specs/completed/GH-049-resgate-de-vouchers.md`.
+
+1. `POST /api/v1/satellite/vouchers/check` com a mesma compra da concessão (`transactionId`, `customer.document`, `establishmentId`, `channel`, `totalAmount`, `items[]`). Resposta `200`: `applicable[]` (voucher, `discountAmount` previsto, `recommended` no de maior desconto) e `notApplicable[]` com `reason` (`NotConfirmed`, `SamePurchaseNotAllowed`, `Expired`, `NoUsesLeft`, `Cancelled`, `CampaignCancelled`, `OutOfScope`, `AmountBelowMinimum`, `AmountAboveMaximum`, `TargetNotInPurchase`, `TransactionAlreadyRedeemed`, `AlreadyRedeemedInThisPurchase`) e `detail`. Não grava nada. Um voucher provisório da própria compra entra como aplicável se a campanha permite uso na mesma compra.
+2. `POST /api/v1/satellite/redemptions` com `voucherId` mais a compra: consome uma utilização (`Available` com `remainingUses` menor, ou `Redeemed` ao chegar ao limite), grava `redemptions`, o evento `Redeemed` e a auditoria. Um voucher por compra: a mesma `transactionId` com o mesmo voucher devolve o resgate original; com outro voucher, `422 REDEMPTION_TRANSACTION_ALREADY_REDEEMED`. Recusas: `422 REDEMPTION_<motivo>` (ex.: `REDEMPTION_EXPIRED`, `REDEMPTION_NO_USES_LEFT`, `REDEMPTION_OUT_OF_SCOPE`); loja e canal, `REDEMPTION_ESTABLISHMENT_NOT_FOUND`, `REDEMPTION_ESTABLISHMENT_INACTIVE` e `REDEMPTION_CHANNEL_NOT_ENABLED`; voucher de outro CPF ou de outra rede, `404`. Um provisório resgatado na própria compra fica `Provisional` até a confirmação da concessão (que o leva a `Available` ou `Redeemed`); desfazer a concessão ou a reserva expirar estorna o resgate.
+3. `POST /api/v1/satellite/redemptions/{id}/reverse` estorna (a utilização volta ao voucher; `Redeemed` vira `Available`), idempotente; `GET /api/v1/satellite/redemptions/{id}` consulta.
+4. `GET /api/v1/satellite/campaigns?establishmentId=&channel=` lista as campanhas efetivamente ativas da rede (sem saldo), filtradas pela loja (`404` se não existir na rede) e pelo canal.
+
+Pausa, encerramento e esgotamento da campanha não impedem o resgate; a validade própria do voucher (inclusiva até 23:59:59) e as restrições de valor da campanha valem sempre. Voucher vencido na tentativa de resgate passa a `Expired` no banco.
+
+### Acompanhamento da campanha (EP-03)
+
+Rotas de leitura para analista e gestor da rede (policy `ManageCampaigns`). Spec `docs/specs/completed/GH-050-acompanhamento-da-campanha.md`.
+
+- `GET /api/v1/campaigns/{id}/dashboard?from&to&establishmentId&regionId&categoryId`: indicadores da campanha calculados na leitura pelo status efetivo de cada voucher: `issued`, `reserved`, `redeemed` (usados ao menos uma vez), `expiredUnused`, `cancelledUnused`, `available`, `utilizationRate` (`redeemed / issued`, nulo sem emissão), `redemptions` e `discountTotal`. Vale `issued = redeemed + expiredUnused + cancelledUnused + available`. O período filtra pela data de emissão, no fuso da rede; a categoria, pelo alvo do voucher.
+- `GET /api/v1/dashboard?networkId&status&from&to&establishmentId&regionId&categoryId&audience`: todas as campanhas da rede, em qualquer status, com os indicadores e os totais.
+- `GET /api/v1/campaigns/{id}/audit`: trilha de criação, edições (`CampaignUpdated` com `section`, `before` e `after`), submissão, aprovação, reprovação, pausa, encerramento e duplicação, com o responsável. Campanha anterior à auditoria da criação mostra um `CampaignCreated` sintético.
+- `GET /api/v1/dashboard/export` e `GET /api/v1/campaigns/{id}/audit/export`: o mesmo conteúdo em CSV (UTF-8 com BOM, `;`, datas no fuso da rede); lista vazia responde `422 EXPORT_EMPTY`.
 
 ### Estrutura da Solution (`VoucherCampaigns.slnx`)
 
@@ -175,7 +204,7 @@ Regras aplicadas: só campanha efetivamente ativa, cujo escopo contempla a loja 
 
 ### Trocando de banco (SQLite ⇄ PostgreSQL)
 
-A troca é apenas configuracional. Copie `.env.example` para `.env` na raiz do repositório e ajuste:
+A troca é apenas configuracional. Copie `.env.example` para `.env` na raiz do repositório e ajuste (o `.env` só é lido com `ASPNETCORE_ENVIRONMENT=Development`; fora disso, use variáveis de ambiente):
 
 ```dotenv
 Database__Provider=Postgres

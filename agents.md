@@ -65,6 +65,17 @@ Qualquer assistente que iniciar uma sessão de desenvolvimento deve seguir estri
 - Sem `.env`, a API usa SQLite e aplica as migrações na inicialização. Verifique com `GET /health` e `GET /api/v1/system/status`.
 - O banco é escolhido por `Database__Provider` (`Sqlite` | `Postgres`) e `Database__ConnectionString` (variáveis de ambiente, `.env` ou `appsettings.json`). Nunca referencie o provider fora de `VoucherCampaigns.Infrastructure/DependencyInjection.cs`.
 
+### [Skill] Smoke / demo do satélite (PDV)
+
+- Com a API no ar (Development + seed), na raiz do repositório:
+  ```bash
+  python scripts/smoke/smoke.py http://localhost:5026
+  python scripts/smoke/motor.py http://localhost:5026
+  ```
+- Roteiros por entrega: `cancelamento.py` (GH-061), `publico.py` (GH-047), `endurecimento.py` (GH-071), `desconto_unico.py` (GH-068) e `restricoes_resgate.py` (GH-070). Os dois últimos aprovam campanhas de 91% a 98% na loja online, que ganham das outras pelo desconto (D1). Rode-os por último ou numa API nova.
+- No Windows: instale `tzdata` (`py -3 -m pip install tzdata`) e **não** use `python -I` (o `-I` isola o site-packages do usuário e o fuso `America/Sao_Paulo` some).
+- Credenciais demo: `pdv-demo` / segredo em `appsettings.Development.json` (`Auth:Satellite:Apps`). Para repetir no Postman, mude o `transactionId` a cada nova concessão ou compra de resgate.
+
 ### [Skill] Criação de Migrações (EF Core)
 
 - Toda migração deve existir nos dois conjuntos (SQLite e PostgreSQL). Não use `dotnet ef migrations add` diretamente; use:
@@ -123,6 +134,17 @@ Qualquer assistente que iniciar uma sessão de desenvolvimento deve seguir estri
 - "Agora" sempre via `TimeProvider` injetado, nunca `DateTime.UtcNow` em regra de negócio. Nos testes de integração, fixe `factory.Clock.UtcNow`; como o JWT é validado com a hora real, use `TestAuth.CreateToken` (e não o login) nesses testes.
 - Status da campanha para leitura ou decisão: `Campaign.EffectiveStatus(utcNow)` (PR-04), nunca `campaign.Status` direto. Agendada, ativa e pausada seguem a vigência pelo relógio, e o minuto do fim conta inteiro (D9: às 23:59:59 ainda vale); o banco guarda o status da decisão. Transição nova (como `Pause` e `End`, US-01.8) parte do status efetivo, devolve um `CampaignStatusEvent` e passa pelo `RecordStatusChange` do serviço, que grava o histórico e a auditoria. A concessão usa `CanIssueVouchers`, que já olha o efetivo.
 
+### [Skill] Alvos da Campanha (US-01.2)
+
+- `PUT /campaigns/{id}/items` (`CampaignService.ReplaceItemsAsync`, spec `GH-068-desconto-unico-e-alvo-por-codigo.md`):
+  - O fluxo é: contrato de cada alvo (`ParseItem`, 400) → códigos de produto viram ids numa consulta (`ResolveProductCodesAsync`, 422 com `codes`) → catálogo validado em lote (`EnsureTargetsInCatalogAsync`: uma consulta para as categorias, uma para os produtos) → `Campaign.ReplaceItems`.
+  - O limite é de até 1.000 alvos (`CampaignContract.MaxItems`).
+  - Não volte a consultar o catálogo alvo por alvo.
+- **Desconto único:** `Campaign.EnsureUniformBenefit` exige o mesmo `BenefitType` e `BenefitValue` em todos os alvos, na gravação e em `Submit` (`422 CAMPAIGN_BENEFIT_NOT_UNIFORM`).
+  - O benefício continua gravado em cada alvo; não há migração.
+  - Campanhas antigas com descontos diferentes seguem valendo.
+- A resposta traz o `productCode` de cada alvo: `WithItems` no `CampaignRepository` inclui o produto, e a gravação relê a campanha (`MapStoredAsync`).
+
 ### [Skill] Motor de Concessão (EP-04)
 
 - Fluxo em `Application/Vouchers/ConcessionService.cs` (spec `GH-045-motor-de-concessao.md`, seção 1.2): loja e canal → idempotência por rede + `transactionId` → liberação das reservas vencidas → candidatas aprovadas no escopo → `ConcessionEvaluator` (domínio, sem I/O: condições, status efetivo, limite por cliente, alvo e desempate D1) → reserva atômica → voucher provisório, `VoucherEvent` e auditoria no mesmo `SaveChanges`.
@@ -131,11 +153,28 @@ Qualquer assistente que iniciar uma sessão de desenvolvimento deve seguir estri
 - Status do voucher e da concessão na leitura são os efetivos (`Voucher.EffectiveStatus`, `Concession.EffectiveStatus`): provisório vencido = `Discarded`/`Expired`, disponível vencido = `Expired`. A validade é inclusiva até o último segundo (`BusinessTime`, D9); o mesmo vale para o fim da vigência da campanha.
 - Rotas em `Api/Controllers/SatelliteConcessionsController.cs` (policy `SatelliteIssueVouchers`); mensagens em `ConcessionContract`, regras em `Domain/Vouchers/ConcessionErrors.cs`. Nos testes de integração, `Vouchers/MotorScenario.cs` cria uma loja por cenário para as campanhas dos outros testes não alcançarem a compra.
 
+- Resgate (spec `GH-049-resgate-de-vouchers.md`, seção 1.2): `Application/Vouchers/RedemptionService.cs` recebe a mesma compra da concessão (`IPurchaseRequest`, parsing em `PurchaseParsing`), lista os vouchers do CPF e passa cada um por `RedemptionEvaluator.Refusal` (domínio, sem I/O: já resgatado nesta compra → status efetivo → campanha cancelada → escopo → faixa de valor → alvo → compra já com outro resgate); o desconto é do alvo do voucher (`RedemptionEvaluator.Discount`, D-7). O resgate consome a utilização por `IRedemptionRepository.TryConsumeUseAsync` (primeiro comando da transação) e grava `redemptions` (único por rede + `transactionId`), evento `Redeemed` e auditoria. O provisório da própria compra resgata antes da confirmação (D-10); `ConcessionService.CancelAsync` e `ReservationReleaser` chamam `IRedemptionReverser` para estornar. Rotas em `SatelliteRedemptionsController` (policy `SatelliteRedeemVouchers`) e `SatelliteCampaignsController` (US-07.1, `SatelliteReadCampaigns`).
+- Restrições no resgate (spec `GH-070-restricoes-no-resgate.md`): `campaign.RedemptionTargets` (categoria ou produto; vazio = alvo da concessão) e `campaign.RedemptionWindows` (máscara de dias + minutos do dia, no fuso da rede; fim antes do início = vira a noite e pertence ao dia do início). O `RedemptionService` converte o "agora" para o fuso da rede e passa ao `RedemptionEvaluator.Refusal` (`networkLocalNow`); o domínio não conhece fuso. A janela vem logo depois do escopo; o alvo de resgate troca o alvo da concessão na checagem e na base do desconto (`Discount(..., redemptionTargets)`), mas o benefício continua o do alvo da concessão. Toda leitura de voucher que avalia o resgate precisa incluir as duas coleções (`RedemptionRepository.WithNavigations`); as leituras da campanha também (`CampaignRepository.WithItems`, `ConcessionRepository.GetApprovedCampaignsAsync`, usada por `GET /satellite/campaigns`).
+- Cancelamento da campanha (spec `GH-061-cancelar-campanha.md`): `CampaignService.CancelAsync` → `Campaign.Cancel` (status efetivo) → `SaveIfUnchangedAsync` com `withinTransaction`, onde `ICampaignVoucherCanceller` descarta os provisórios em dia (mesmo caminho do desfazimento da concessão), leva os disponíveis a `Cancelled` num `UPDATE` só e grava um `VoucherEvent` por voucher. A reserva (`TryReserveAsync`) exige o status gravado `Scheduled` ou `Active`; o estorno não devolve a `Available` o voucher de campanha `Cancelled`. **Ordem das travas:** toda transação que mexe no voucher e na campanha trava a campanha primeiro (`LockCampaignAsync` / `CampaignRowLock`), como a reserva, o cancelamento e as transições; inverter a ordem dá deadlock no PostgreSQL.
+
+### [Skill] Acompanhamento (EP-03)
+
+- `Application/Dashboard/DashboardService.cs` (spec `GH-050-acompanhamento-da-campanha.md`): indicadores agregados por consulta em `DashboardRepository.CountVouchersAsync` (um `GROUP BY` sobre `vouchers` com o status efetivo repetido no SQL, outro sobre `redemptions`), sem contadores novos em `campaigns`. Cada voucher emitido cai num único balde; ao mudar um balde, mantenha a soma `issued = redeemed + expiredUnused + cancelledUnused + available` e o teste que a confere.
+- A trilha lê `audit_entries` com `entity_type = Campaign`; a criação e cada `PUT` de rascunho gravam `CampaignCreated`/`CampaignUpdated` pelo `CampaignService` (`AuditSection`, só quando a seção mudou; snapshots sem ids e com decimais em 2 casas). Ids da auditoria vêm de `AuditIds.Next(occurredAt)` para a ordem valer dentro do mesmo instante.
+- CSV por `Csv.Build` (UTF-8 com BOM, `;`, `CRLF`); nada de PDF ou planilha (D8).
+
 ### [Skill] Trilha de Auditoria
 
 - Escopo da campanha (US-02.3): `campaign_scopes` tem uma linha por local e canal; região e loja nulas = rede inteira, e a campanha vale na união dos locais. Uma coleção da campanha substituída por inteiro (itens, condições, escopo) usa `ValueGeneratedNever` na chave e ids v7 em sequência para manter a ordem informada.
-- Ação relevante (submeter, aprovar, reprovar, pausar, encerrar, duplicar, emitir, confirmar e desfazer a concessão; depois resgatar): monte um `AuditEntry` (`Domain/Audit`) e chame `IAuditTrail.Append` antes do `SaveChanges` da operação, que grava os dois juntos. Tipo do evento em `AuditEventTypes`; autor `AuditActorType.User` (`sub` do token) ou `Application` (id da aplicação satélite); payload JSON curto.
+- Ação relevante (submeter, aprovar, reprovar, pausar, encerrar, duplicar, emitir, confirmar e desfazer a concessão, resgatar, recusar o resgate e estornar): monte um `AuditEntry` (`Domain/Audit`) e chame `IAuditTrail.Append` antes do `SaveChanges` da operação, que grava os dois juntos. Tipo do evento em `AuditEventTypes`; autor `AuditActorType.User` (`sub` do token) ou `Application` (id da aplicação satélite); payload JSON curto.
 - `AuditEntry`, `CampaignStatusEvent` e `VoucherEvent` implementam `IAppendOnly`: o `AppDbContext` recusa alterar ou apagar esses registros. Não crie rota de alteração para eles.
+
+### [Skill] Endurecimento (spec GH-071)
+
+- **Token do satélite:** leva a claim `stamp` (`SatelliteApp.SecurityStamp`), conferida no `OnTokenValidated` por `ISatelliteAppStatus` (cache de `Auth:Satellite:StampCacheSeconds`). Toda mudança que deve derrubar tokens chama `app.RotateStamp()` e, depois do `SaveChanges`, `appStatus.Forget(app.Id)`. Nos testes, `TestAuth.CreateSatelliteToken` usa o id e o carimbo reais do `pdv-demo`.
+- **Listagens:** `PageRequest.Parse(page, pageSize)` (sem os dois, traz tudo) e o total em `X-Total-Count` (`PagingHeaders`). O status efetivo no SQL está em `EffectiveStatusFilters`; ao mudar `Campaign.EffectiveStatus` ou `Voucher.EffectiveStatus`, mude os predicados junto (o teste `CampaignStatusFilterInTheDatabase_...` confere a paridade).
+- **Concessão:** `GetApprovedCampaignsAsync(networkId, utcNow)` só traz agendada, ativa ou pausada dentro da vigência; o resto não chega ao avaliador (`NoCampaignMatched`).
+- **Trilha:** seção que pode crescer com a lista precisa de resumo próprio (alvos, alvos de resgate, escopo, público), com o que entrou e saiu no depois, senão dois resumos iguais escondem a troca. `AppendAudit` grava `truncated` se ainda passar de `AuditJson.MaxPayloadLength`.
 
 ### [Skill] Dependências entre Camadas
 

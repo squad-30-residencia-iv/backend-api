@@ -109,7 +109,7 @@ public class CampaignAuditEndpointTests : IClassFixture<ApiFactory>
         await using (var scope = _factory.Services.CreateAsyncScope())
         {
             var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-            var entry = await context.AuditEntries.SingleAsync(item => item.CampaignId == campaignId);
+            var entry = await context.AuditEntries.SingleAsync(item => item.CampaignId == campaignId && item.EventType == AuditEventTypes.CampaignSubmitted);
             entry.Payload = "{}";
 
             await Assert.ThrowsAsync<InvalidOperationException>(() => context.SaveChangesAsync());
@@ -118,7 +118,7 @@ public class CampaignAuditEndpointTests : IClassFixture<ApiFactory>
         await using (var scope = _factory.Services.CreateAsyncScope())
         {
             var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
-            context.AuditEntries.Remove(await context.AuditEntries.SingleAsync(item => item.CampaignId == campaignId));
+            context.AuditEntries.Remove(await context.AuditEntries.SingleAsync(item => item.CampaignId == campaignId && item.EventType == AuditEventTypes.CampaignSubmitted));
 
             Assert.Throws<InvalidOperationException>(() => context.SaveChanges());
         }
@@ -146,8 +146,11 @@ public class CampaignAuditEndpointTests : IClassFixture<ApiFactory>
         await using var scope = _factory.Services.CreateAsyncScope();
         var context = scope.ServiceProvider.GetRequiredService<AppDbContext>();
 
+        // Só o ciclo de vida: a criação e as edições do rascunho (GH-050, D-8) têm testes próprios em Dashboard/CampaignTrailEndpointTests.
         return await context.AuditEntries.AsNoTracking()
-            .Where(entry => entry.CampaignId == campaignId)
+            .Where(entry => entry.CampaignId == campaignId
+                && entry.EventType != AuditEventTypes.CampaignCreated
+                && entry.EventType != AuditEventTypes.CampaignUpdated)
             .OrderBy(entry => entry.Id)
             .ToListAsync();
     }

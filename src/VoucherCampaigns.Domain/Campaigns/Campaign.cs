@@ -91,6 +91,21 @@ public class Campaign
 
     public ICollection<CampaignStatusEvent> StatusEvents { get; set; } = [];
 
+    /// <summary>Onde o voucher pode ser usado (spec GH-070, D-2); vazio = o alvo da concessão.</summary>
+    public ICollection<CampaignRedemptionTarget> RedemptionTargets { get; set; } = [];
+
+    /// <summary>Dias e horários do resgate (spec GH-070, D-3); vazio = qualquer dia e hora.</summary>
+    public ICollection<CampaignRedemptionWindow> RedemptionWindows { get; set; } = [];
+
+    /// <summary>Critérios do público restrito (spec GH-047); vazio no público "todos".</summary>
+    public ICollection<CampaignEligibilityCriterion> EligibilityCriteria { get; set; } = [];
+
+    /// <summary>
+    /// CPFs da lista de clientes específicos (D-8). Não vem nas leituras comuns da campanha (até 10.000 linhas):
+    /// carregue antes de <see cref="SetAudience"/> e de <see cref="Duplicate"/>.
+    /// </summary>
+    public ICollection<CampaignEligibleCustomer> EligibleCustomers { get; set; } = [];
+
     /// <summary>
     /// Cria a campanha em rascunho (PR-01) aplicando a RN02. Datas em UTC; o "agora" é comparado
     /// na precisão de minuto, para um início igual ao minuto atual ser aceito.
@@ -148,19 +163,57 @@ public class Campaign
         UpdatedAt = utcNow;
     }
 
-    /// <summary>Define o público elegível (US-01.5); o restrito depende dos critérios do EP-06.</summary>
-    /// <exception cref="BusinessRuleException">Campanha fora de rascunho ou público restrito.</exception>
-    public void SetAudience(CampaignAudienceType audienceType, DateTime utcNow)
+    /// <summary>Público "todos os clientes" (US-01.5): sem critérios e sem lista.</summary>
+    public void SetAudience(CampaignAudienceType audienceType, DateTime utcNow) => SetAudience(audienceType, [], [], utcNow);
+
+    /// <summary>
+    /// Define o público (US-01.5) e, no restrito, substitui os critérios e a lista de clientes (spec GH-047, D-9).
+    /// Os critérios chegam validados pelo contrato; aqui ficam só as regras que valem para qualquer origem.
+    /// A lista é aplicada por diferença, para não apagar e regravar os CPFs que continuam.
+    /// </summary>
+    /// <param name="documents">CPFs válidos e sem repetição, quando há o critério <see cref="EligibilityCriterionType.SpecificCustomers"/>.</param>
+    /// <exception cref="BusinessRuleException">Campanha fora de rascunho.</exception>
+    public void SetAudience(
+        CampaignAudienceType audienceType,
+        IReadOnlyList<CampaignEligibilityCriterion> criteria,
+        IReadOnlyCollection<string> documents,
+        DateTime utcNow)
     {
         EnsureDraft();
 
-        if (audienceType == CampaignAudienceType.Restricted)
+        if ((audienceType == CampaignAudienceType.Restricted) != (criteria.Count > 0))
         {
-            throw new BusinessRuleException(
-                CampaignErrors.AudienceRestrictedUnavailableCode, CampaignErrors.AudienceRestrictedUnavailableMessage);
+            throw new ArgumentException("O público restrito exige critérios e o público 'todos' não aceita nenhum.", nameof(criteria));
+        }
+
+        if (criteria.Any(criterion => criterion.Type == EligibilityCriterionType.SpecificCustomers) != (documents.Count > 0))
+        {
+            throw new ArgumentException("A lista de CPFs acompanha o critério de clientes específicos.", nameof(documents));
         }
 
         AudienceType = audienceType;
+        EligibilityCriteria.Clear();
+
+        foreach (var criterion in criteria)
+        {
+            criterion.CampaignId = Id;
+            EligibilityCriteria.Add(criterion);
+        }
+
+        var wanted = documents.ToHashSet(StringComparer.Ordinal);
+
+        foreach (var removed in EligibleCustomers.Where(customer => !wanted.Contains(customer.Document)).ToList())
+        {
+            EligibleCustomers.Remove(removed);
+        }
+
+        var kept = EligibleCustomers.Select(customer => customer.Document).ToHashSet(StringComparer.Ordinal);
+
+        foreach (var document in wanted.Where(document => !kept.Contains(document)))
+        {
+            EligibleCustomers.Add(new CampaignEligibleCustomer { CampaignId = Id, Document = document });
+        }
+
         UpdatedAt = utcNow;
     }
 
@@ -265,6 +318,8 @@ public class Campaign
             EnsureValidBenefit(item);
         }
 
+        EnsureUniformBenefit(items);
+
         // Sobreposição (All + categoria, categoria + produto dela) é permitida; o mesmo alvo duas vezes, não.
         if (items.DistinctBy(item => (item.TargetType, item.CategoryId, item.ProductId)).Count() != items.Count)
         {
@@ -362,6 +417,9 @@ public class Campaign
             throw new BusinessRuleException(CampaignErrors.SubmitItemsRequiredCode, CampaignErrors.SubmitItemsRequiredMessage);
         }
 
+        // Rascunho gravado antes da GH-068 (ou cópia de uma campanha antiga) pode ter descontos diferentes.
+        EnsureUniformBenefit(Items.ToList());
+
         if (TotalVoucherLimit is null)
         {
             throw new BusinessRuleException(CampaignErrors.SubmitTotalRequiredCode, CampaignErrors.SubmitTotalRequiredMessage);
@@ -448,6 +506,70 @@ public class Campaign
         UpdatedAt = utcNow;
     }
 
+    /// <summary>
+    /// Substitui os alvos de resgate (spec GH-070, D-2). A existência no catálogo é conferida pelo serviço.
+    /// Se alguma regra falhar, os alvos atuais ficam intactos.
+    /// </summary>
+    /// <exception cref="BusinessRuleException">Campanha fora de rascunho ou alvo repetido.</exception>
+    public void ReplaceRedemptionTargets(IReadOnlyList<CampaignRedemptionTarget> targets, DateTime utcNow)
+    {
+        EnsureDraft();
+
+        if (targets.Any(target => target.TargetType is not (TargetType.Category or TargetType.Product)))
+        {
+            throw new ArgumentException("Alvo de resgate é uma categoria ou um produto.", nameof(targets));
+        }
+
+        if (targets.DistinctBy(target => (target.TargetType, target.CategoryId, target.ProductId)).Count() != targets.Count)
+        {
+            throw new BusinessRuleException(CampaignErrors.RedemptionTargetDuplicatedCode, CampaignErrors.RedemptionTargetDuplicatedMessage);
+        }
+
+        RedemptionTargets.Clear();
+
+        foreach (var target in targets)
+        {
+            target.CampaignId = Id;
+            RedemptionTargets.Add(target);
+        }
+
+        UpdatedAt = utcNow;
+    }
+
+    /// <summary>Substitui as janelas de resgate (spec GH-070, D-3).</summary>
+    /// <exception cref="BusinessRuleException">Campanha fora de rascunho.</exception>
+    public void ReplaceRedemptionWindows(IReadOnlyList<CampaignRedemptionWindow> windows, DateTime utcNow)
+    {
+        EnsureDraft();
+
+        if (windows.Any(window => window.DaysOfWeek == 0
+            || window.StartMinute is < 0 or >= CampaignRedemptionWindow.MinutesPerDay
+            || window.EndMinute is < 0 or >= CampaignRedemptionWindow.MinutesPerDay))
+        {
+            throw new ArgumentException("Janela precisa de ao menos um dia e de minutos dentro do dia.", nameof(windows));
+        }
+
+        RedemptionWindows.Clear();
+
+        foreach (var window in windows)
+        {
+            window.CampaignId = Id;
+            RedemptionWindows.Add(window);
+        }
+
+        UpdatedAt = utcNow;
+    }
+
+    /// <summary>O instante local (no fuso da rede) está em alguma janela de resgate; sem janela, sempre (D-3).</summary>
+    public bool IsRedeemableAt(DateTime networkLocalTime) =>
+        RedemptionWindows.Count == 0 || RedemptionWindows.Any(window => window.Contains(networkLocalTime));
+
+    /// <summary>A compra tem item onde o voucher pode ser usado: os alvos de resgate, se houver; senão, o alvo da concessão (D-2).</summary>
+    public bool HasRedemptionTargetIn(Vouchers.Purchase purchase, CampaignItem concessionTarget) =>
+        RedemptionTargets.Count > 0
+            ? purchase.Items.Any(item => RedemptionTargets.Any(target => target.Matches(item)))
+            : concessionTarget.TargetType == TargetType.All || purchase.Items.Any(concessionTarget.Matches);
+
     /// <summary>Pausa a campanha efetivamente ativa (US-01.8). Não há retomada: a pausada só pode ser encerrada.</summary>
     /// <exception cref="BusinessRuleException">Campanha que não está ativa.</exception>
     public CampaignStatusEvent Pause(Guid actorUserId, DateTime utcNow)
@@ -479,6 +601,27 @@ public class Campaign
 
         Status = current;
         return MoveTo(CampaignStatus.Ended, actorUserId, null, utcNow);
+    }
+
+    /// <summary>
+    /// Cancela a campanha agendada, ativa, pausada ou esgotada pelo status efetivo (US-01.8, RN10; spec GH-061, D-2 a D-4).
+    /// O histórico registra o status efetivo de origem e o motivo sem espaços nas pontas. Os vouchers ficam com o serviço.
+    /// </summary>
+    /// <exception cref="BusinessRuleException">Status efetivo fora de agendada, ativa, pausada ou esgotada.</exception>
+    public CampaignStatusEvent Cancel(Guid actorUserId, string reason, DateTime utcNow)
+    {
+        EnsureUtc(utcNow, nameof(utcNow));
+        ArgumentException.ThrowIfNullOrWhiteSpace(reason);
+
+        var current = EffectiveStatus(utcNow);
+
+        if (current is not (CampaignStatus.Scheduled or CampaignStatus.Active or CampaignStatus.Paused or CampaignStatus.SoldOut))
+        {
+            throw new BusinessRuleException(CampaignErrors.CancelNotAllowedCode, CampaignErrors.CancelNotAllowedMessage);
+        }
+
+        Status = current;
+        return MoveTo(CampaignStatus.Cancelled, actorUserId, reason.Trim(), utcNow);
     }
 
     /// <summary>
@@ -544,6 +687,31 @@ public class Campaign
             });
         }
 
+        // Público restrito com critérios e lista (spec GH-047, D-18); a lista precisa ter sido carregada.
+        foreach (var criterion in EligibilityCriteria.OrderBy(criterion => criterion.Id))
+        {
+            copy.EligibilityCriteria.Add(new CampaignEligibilityCriterion
+            {
+                Id = NextId(),
+                CampaignId = copy.Id,
+                Type = criterion.Type,
+                MinAge = criterion.MinAge,
+                MaxAge = criterion.MaxAge,
+                States = [.. criterion.States],
+                CityCodes = [.. criterion.CityCodes],
+                MinAmount = criterion.MinAmount,
+                MinPurchases = criterion.MinPurchases,
+                CategoryId = criterion.CategoryId,
+                WindowDays = criterion.WindowDays,
+                CustomerCount = criterion.CustomerCount
+            });
+        }
+
+        foreach (var customer in EligibleCustomers)
+        {
+            copy.EligibleCustomers.Add(new CampaignEligibleCustomer { CampaignId = copy.Id, Document = customer.Document });
+        }
+
         foreach (var scope in Scopes.OrderBy(scope => scope.Id))
         {
             copy.Scopes.Add(new CampaignScope
@@ -553,6 +721,31 @@ public class Campaign
                 RegionId = scope.RegionId,
                 EstablishmentId = scope.EstablishmentId,
                 ChannelType = scope.ChannelType
+            });
+        }
+
+        // Restrições do resgate (spec GH-070, D-6).
+        foreach (var target in RedemptionTargets.OrderBy(target => target.Id))
+        {
+            copy.RedemptionTargets.Add(new CampaignRedemptionTarget
+            {
+                Id = NextId(),
+                CampaignId = copy.Id,
+                TargetType = target.TargetType,
+                CategoryId = target.CategoryId,
+                ProductId = target.ProductId
+            });
+        }
+
+        foreach (var window in RedemptionWindows.OrderBy(window => window.Id))
+        {
+            copy.RedemptionWindows.Add(new CampaignRedemptionWindow
+            {
+                Id = NextId(),
+                CampaignId = copy.Id,
+                DaysOfWeek = window.DaysOfWeek,
+                StartMinute = window.StartMinute,
+                EndMinute = window.EndMinute
             });
         }
 
@@ -679,6 +872,15 @@ public class Campaign
         {
             throw new BusinessRuleException(
                 CampaignErrors.VoucherValidityCapBeforeStartCode, CampaignErrors.VoucherValidityCapBeforeStartMessage);
+        }
+    }
+
+    /// <summary>Spec GH-068, D-1: um único desconto por campanha, o mesmo tipo e o mesmo valor em todos os alvos.</summary>
+    private static void EnsureUniformBenefit(IReadOnlyList<CampaignItem> items)
+    {
+        if (items.Select(item => (item.BenefitType, item.BenefitValue)).Distinct().Count() > 1)
+        {
+            throw new BusinessRuleException(CampaignErrors.BenefitNotUniformCode, CampaignErrors.BenefitNotUniformMessage);
         }
     }
 

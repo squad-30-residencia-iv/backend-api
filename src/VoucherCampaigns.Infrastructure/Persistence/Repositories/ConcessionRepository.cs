@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Storage;
 using VoucherCampaigns.Application.Vouchers;
 using VoucherCampaigns.Domain.Campaigns;
+using VoucherCampaigns.Domain.Common;
 using VoucherCampaigns.Domain.Organization;
 using VoucherCampaigns.Domain.Vouchers;
 
@@ -13,8 +14,9 @@ namespace VoucherCampaigns.Infrastructure.Persistence.Repositories;
 /// </summary>
 public class ConcessionRepository(AppDbContext context) : IConcessionRepository
 {
-    private static readonly CampaignStatus[] NeverApproved =
-        [CampaignStatus.Draft, CampaignStatus.PendingApproval, CampaignStatus.Rejected];
+    /// <summary>Status gravados de uma campanha que pode estar em vigor (D-3 da GH-071).</summary>
+    private static readonly CampaignStatus[] MaybeInForce =
+        [CampaignStatus.Scheduled, CampaignStatus.Active, CampaignStatus.Paused];
 
     public Task<Establishment?> FindEstablishmentAsync(Guid establishmentId, Guid networkId, CancellationToken cancellationToken) =>
         context.Establishments.AsNoTracking()
@@ -32,15 +34,43 @@ public class ConcessionRepository(AppDbContext context) : IConcessionRepository
         WithVoucher(context.Concessions.AsNoTracking())
             .FirstOrDefaultAsync(concession => concession.Id == id && concession.NetworkId == networkId, cancellationToken);
 
-    public async Task<IReadOnlyList<Campaign>> GetApprovedCampaignsAsync(Guid networkId, CancellationToken cancellationToken) =>
-        await context.Campaigns.AsNoTracking()
-            .Where(campaign => campaign.NetworkId == networkId && !NeverApproved.Contains(campaign.Status))
+    public async Task<IReadOnlyList<Campaign>> GetApprovedCampaignsAsync(Guid networkId, DateTime utcNow, CancellationToken cancellationToken)
+    {
+        // O minuto do fim conta inteiro (D9): a campanha que termina às 23:59 ainda vale às 23:59:59 e sai às 00:00:00
+        // (BusinessTime.HasPassed: agora >= fim + 1 minuto, ou seja, fim <= agora - 1 minuto).
+        var endedBefore = utcNow.AddMinutes(-1);
+
+        return await context.Campaigns.AsNoTracking()
+            .Where(campaign => campaign.NetworkId == networkId
+                && MaybeInForce.Contains(campaign.Status)
+                && campaign.StartsAt <= utcNow
+                && campaign.EndsAt > endedBefore)
             .Include(campaign => campaign.Network)
             .Include(campaign => campaign.Items.OrderBy(item => item.Id))
             .Include(campaign => campaign.Conditions.OrderBy(condition => condition.Id))
+            .Include(campaign => campaign.EligibilityCriteria.OrderBy(criterion => criterion.Id))
             .Include(campaign => campaign.Scopes)
+            .Include(campaign => campaign.RedemptionTargets.OrderBy(target => target.Id)).ThenInclude(target => target.Product)
+            .Include(campaign => campaign.RedemptionWindows.OrderBy(window => window.Id))
             .AsSplitQuery()
             .ToListAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlySet<Guid>> GetCampaignsListingCustomerAsync(
+        IReadOnlyCollection<Guid> campaignIds, string customerDocument, CancellationToken cancellationToken)
+    {
+        if (campaignIds.Count == 0)
+        {
+            return new HashSet<Guid>();
+        }
+
+        var listed = await context.CampaignEligibleCustomers.AsNoTracking()
+            .Where(customer => customer.Document == customerDocument && campaignIds.Contains(customer.CampaignId))
+            .Select(customer => customer.CampaignId)
+            .ToListAsync(cancellationToken);
+
+        return listed.ToHashSet();
+    }
 
     public async Task<IReadOnlyDictionary<Guid, int>> CountCustomerVouchersAsync(
         Guid networkId, string customerDocument, CancellationToken cancellationToken)
@@ -55,6 +85,13 @@ public class ConcessionRepository(AppDbContext context) : IConcessionRepository
 
         return counts.ToDictionary(entry => entry.CampaignId, entry => entry.Count);
     }
+
+    public Task<int> CountCustomerVouchersInCampaignAsync(Guid campaignId, string customerDocument, CancellationToken cancellationToken) =>
+        context.Vouchers.AsNoTracking()
+            .CountAsync(voucher => voucher.CampaignId == campaignId
+                && voucher.CustomerDocument == customerDocument
+                && voucher.Status != VoucherStatus.Discarded,
+                cancellationToken);
 
     public async Task<IReadOnlyList<Voucher>> GetCustomerVouchersAsync(
         Guid networkId, string customerDocument, CancellationToken cancellationToken) =>
@@ -84,8 +121,11 @@ public class ConcessionRepository(AppDbContext context) : IConcessionRepository
     {
         // Primeiro comando da transação: a linha da campanha fica travada até o commit e a condição
         // é reavaliada com o valor já gravado por quem chegou antes (RNF02).
+        // O status gravado entra na condição (GH-061, D-9): o cancelamento, a pausa ou o encerramento gravados no meio
+        // da concessão travam a linha antes e a reserva não acontece.
         var campaignRows = await context.Campaigns
             .Where(campaign => campaign.Id == campaignId
+                && (campaign.Status == CampaignStatus.Scheduled || campaign.Status == CampaignStatus.Active)
                 && (campaign.TotalVoucherLimit == null
                     || campaign.IssuedVouchers + campaign.ReservedVouchers < campaign.TotalVoucherLimit))
             .ExecuteUpdateAsync(
@@ -94,7 +134,9 @@ public class ConcessionRepository(AppDbContext context) : IConcessionRepository
 
         if (campaignRows == 0)
         {
-            return ReserveOutcome.CampaignSoldOut;
+            return await GetCampaignStatusAsync(campaignId, cancellationToken) is CampaignStatus.Scheduled or CampaignStatus.Active
+                ? ReserveOutcome.CampaignSoldOut
+                : ReserveOutcome.CampaignNotActive;
         }
 
         var itemRows = await context.CampaignItems
@@ -107,6 +149,48 @@ public class ConcessionRepository(AppDbContext context) : IConcessionRepository
         return itemRows == 0 ? ReserveOutcome.TargetSoldOut : ReserveOutcome.Reserved;
     }
 
+    public Task<CampaignStatus?> LockCampaignAsync(Guid campaignId, CancellationToken cancellationToken) =>
+        CampaignRowLock.LockAsync(context, campaignId, cancellationToken);
+
+    private async Task<CampaignStatus?> GetCampaignStatusAsync(Guid campaignId, CancellationToken cancellationToken) =>
+        await context.Campaigns.AsNoTracking()
+            .Where(campaign => campaign.Id == campaignId)
+            .Select(campaign => (CampaignStatus?)campaign.Status)
+            .FirstOrDefaultAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<LiveProvisionalVoucher>> GetLiveProvisionalAsync(
+        Guid campaignId, DateTime utcNow, CancellationToken cancellationToken) =>
+        await context.Vouchers.AsNoTracking()
+            .Where(voucher => voucher.CampaignId == campaignId
+                && voucher.Status == VoucherStatus.Provisional
+                && voucher.ReservedUntil > utcNow)
+            .OrderBy(voucher => voucher.Id)
+            .Select(voucher => new LiveProvisionalVoucher(voucher.Id, voucher.CampaignId, voucher.CampaignItemId, voucher.ConcessionId))
+            .ToListAsync(cancellationToken);
+
+    public async Task<int> CancelAvailableVouchersAsync(Guid campaignId, DateTime utcNow, CancellationToken cancellationToken)
+    {
+        // Validade inclusiva até o último segundo (D9): o vencido fica de fora e segue Expired na leitura (GH-061, D-5).
+        var now = BusinessTime.TruncateToSecond(utcNow);
+
+        return await context.Vouchers
+            .Where(voucher => voucher.CampaignId == campaignId
+                && voucher.Status == VoucherStatus.Available
+                && voucher.ValidUntil >= now)
+            .ExecuteUpdateAsync(
+                setters => setters
+                    .SetProperty(voucher => voucher.Status, VoucherStatus.Cancelled)
+                    .SetProperty(voucher => voucher.CancelledAt, utcNow),
+                cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<Guid>> GetCancelledVoucherIdsAsync(Guid campaignId, CancellationToken cancellationToken) =>
+        await context.Vouchers.AsNoTracking()
+            .Where(voucher => voucher.CampaignId == campaignId && voucher.Status == VoucherStatus.Cancelled)
+            .OrderBy(voucher => voucher.Id)
+            .Select(voucher => voucher.Id)
+            .ToListAsync(cancellationToken);
+
     public async Task<bool> TryConfirmVoucherAsync(Guid voucherId, DateTime utcNow, CancellationToken cancellationToken)
     {
         var rows = await context.Vouchers
@@ -115,7 +199,10 @@ public class ConcessionRepository(AppDbContext context) : IConcessionRepository
                 && voucher.ReservedUntil > utcNow)
             .ExecuteUpdateAsync(
                 setters => setters
-                    .SetProperty(voucher => voucher.Status, VoucherStatus.Available)
+                    // Resgatado na própria compra até o limite (GH-049, D-10) já nasce resgatado ao confirmar.
+                    .SetProperty(
+                        voucher => voucher.Status,
+                        voucher => voucher.UsesCount >= voucher.MaxUses ? VoucherStatus.Redeemed : VoucherStatus.Available)
                     .SetProperty(voucher => voucher.ConfirmedAt, utcNow)
                     .SetProperty(voucher => voucher.ReservedUntil, (DateTime?)null),
                 cancellationToken);
@@ -123,7 +210,8 @@ public class ConcessionRepository(AppDbContext context) : IConcessionRepository
         return rows == 1;
     }
 
-    public async Task<bool> TryDiscardVoucherAsync(Guid voucherId, DateTime utcNow, CancellationToken cancellationToken)
+    public async Task<bool> TryDiscardVoucherAsync(
+        Guid voucherId, DateTime utcNow, CancellationToken cancellationToken, bool cancelledByCampaign = false)
     {
         var rows = await context.Vouchers
             .Where(voucher => voucher.Id == voucherId && voucher.Status == VoucherStatus.Provisional)
@@ -131,6 +219,7 @@ public class ConcessionRepository(AppDbContext context) : IConcessionRepository
                 setters => setters
                     .SetProperty(voucher => voucher.Status, VoucherStatus.Discarded)
                     .SetProperty(voucher => voucher.DiscardedAt, utcNow)
+                    .SetProperty(voucher => voucher.CancelledAt, voucher => cancelledByCampaign ? utcNow : voucher.CancelledAt)
                     .SetProperty(voucher => voucher.ReservedUntil, (DateTime?)null),
                 cancellationToken);
 

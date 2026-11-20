@@ -15,6 +15,13 @@ public static class CampaignErrors
     public const string NetworkUnavailableCode = "NETWORK_UNAVAILABLE";
     public const string NetworkUnavailableMessage = "A rede informada não existe ou está inativa.";
 
+    /// <summary>
+    /// Duas gravações simultâneas da mesma campanha (spec GH-047, 7.1 e PA-10): edição do rascunho ou mudança de
+    /// status. A segunda é recusada para não somar listas nem aprovar duas vezes.
+    /// </summary>
+    public const string ConcurrentUpdateCode = "CAMPAIGN_CONCURRENT_UPDATE";
+    public const string ConcurrentUpdateMessage = "A campanha foi alterada por outra requisição ao mesmo tempo. Recarregue e tente de novo.";
+
     public const string NotDraftCode = "CAMPAIGN_NOT_DRAFT";
     public const string NotDraftMessage = "Somente campanhas em rascunho podem ter a configuração alterada.";
 
@@ -24,8 +31,15 @@ public static class CampaignErrors
     public const string BenefitPercentageAbove100Code = "CAMPAIGN_BENEFIT_PERCENTAGE_ABOVE_100";
     public const string BenefitPercentageAbove100Message = "O benefício percentual não pode ultrapassar 100%.";
 
+    /// <summary>Um único desconto por campanha (spec GH-068, D-1).</summary>
+    public const string BenefitNotUniformCode = "CAMPAIGN_BENEFIT_NOT_UNIFORM";
+    public const string BenefitNotUniformMessage = "Todos os alvos da campanha devem ter o mesmo desconto (tipo e valor).";
+
     public const string DuplicatedTargetCode = "CAMPAIGN_ITEM_DUPLICATED_TARGET";
     public const string DuplicatedTargetMessage = "O mesmo alvo foi informado mais de uma vez.";
+
+    public const string RedemptionTargetDuplicatedCode = "CAMPAIGN_REDEMPTION_TARGET_DUPLICATED";
+    public const string RedemptionTargetDuplicatedMessage = "O mesmo alvo de resgate foi informado mais de uma vez.";
 
     public const string ItemCategoryNotFoundCode = "CAMPAIGN_ITEM_CATEGORY_NOT_FOUND";
     public const string ItemCategoryInactiveCode = "CAMPAIGN_ITEM_CATEGORY_INACTIVE";
@@ -34,6 +48,11 @@ public static class CampaignErrors
     public const string ItemProductInactiveCode = "CAMPAIGN_ITEM_PRODUCT_INACTIVE";
     public const string ItemProductInactiveMessage = "Produto informado está inativo";
 
+    /// <summary>Alvo pelo código do produto (spec GH-068, D-2); a resposta traz os códigos em <c>codes</c>.</summary>
+    public const string ItemProductCodeNotFoundCode = "CAMPAIGN_ITEM_PRODUCT_CODE_NOT_FOUND";
+    public const string ItemProductCodeNotFoundMessage = "Há códigos de produto que não estão cadastrados no catálogo.";
+    public const string ItemProductCodeInactiveMessage = "Há códigos de produto inativos no catálogo.";
+
     public const string QuotaSingleTargetCode = "CAMPAIGN_ITEM_QUOTA_SINGLE_TARGET";
     public const string QuotaSingleTargetMessage = "A quantidade por alvo só se aplica quando a campanha tem mais de um alvo.";
 
@@ -41,10 +60,6 @@ public static class CampaignErrors
     public const string QuotasExceedTotalCode = "CAMPAIGN_ITEM_QUOTAS_EXCEED_TOTAL";
     public const string QuotasExceedTotalMessage =
         "A soma das quantidades por alvo ({0}) ultrapassa a quantidade total da campanha ({1})";
-
-    public const string AudienceRestrictedUnavailableCode = "CAMPAIGN_AUDIENCE_RESTRICTED_UNAVAILABLE";
-    public const string AudienceRestrictedUnavailableMessage =
-        "O público restrito ainda não está disponível: os critérios de elegibilidade serão configurados no EP-06.";
 
     public const string VoucherValidUntilBeforeEndCode = "CAMPAIGN_VOUCHER_VALID_UNTIL_BEFORE_END";
     public const string VoucherValidUntilBeforeEndMessage = "A validade fixa do voucher não pode ser anterior ao fim da campanha";
@@ -127,4 +142,8 @@ public static class CampaignErrors
 
     public const string EndNotAllowedCode = "CAMPAIGN_END_NOT_ALLOWED";
     public const string EndNotAllowedMessage = "Somente uma campanha ativa ou pausada pode ser encerrada.";
+
+    /// <summary>Spec GH-061, D-2: cancela pelo status efetivo; encerrada fica de fora (PA-2).</summary>
+    public const string CancelNotAllowedCode = "CAMPAIGN_CANCEL_NOT_ALLOWED";
+    public const string CancelNotAllowedMessage = "Somente uma campanha agendada, ativa, pausada ou esgotada pode ser cancelada.";
 }

@@ -30,6 +30,12 @@ public interface IOrganizationRepository
     /// <summary>Loja com os canais carregados.</summary>
     Task<Establishment?> GetEstablishmentByIdAsync(Guid id, CancellationToken cancellationToken);
 
+    /// <summary>Regiões pelos ids, numa consulta (spec GH-071, D-4); as que não existem ficam de fora.</summary>
+    Task<IReadOnlyList<Region>> GetRegionsByIdsAsync(IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken);
+
+    /// <summary>Lojas pelos ids, com os canais e a região, numa consulta (spec GH-071, D-4); as que não existem ficam de fora.</summary>
+    Task<IReadOnlyList<Establishment>> GetEstablishmentsByIdsAsync(IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken);
+
     /// <summary>Grava a loja e os canais dela.</summary>
     Task<Establishment> CreateEstablishmentAsync(Establishment establishment, CancellationToken cancellationToken);
 

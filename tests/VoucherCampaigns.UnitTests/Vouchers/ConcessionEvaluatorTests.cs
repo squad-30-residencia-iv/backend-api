@@ -134,16 +134,16 @@ public class ConcessionEvaluatorTests
     [Fact]
     public void ChooseTarget_PrefersTheMostSpecificTargetInThePurchase()
     {
-        var all = Item(TargetType.All, BenefitType.Percentage, 5);
+        var all = Item(TargetType.All, BenefitType.Percentage, 10);
         var category = Item(TargetType.Category, BenefitType.Percentage, 10);
-        var product = Item(TargetType.Product, BenefitType.FixedAmount, 30);
+        var product = Item(TargetType.Product, BenefitType.Percentage, 10);
         var campaign = ActiveCampaign(items: [all, category, product]);
 
         Assert.Equal(product.Id, campaign.ChooseTarget(Purchase()).Id);
         Assert.Equal(category.Id, campaign.ChooseTarget(Purchase(items: [new PurchaseItem("CAD-1", 1, 10m, CanetaId, PapelariaId)])).Id);
         Assert.Equal(all.Id, campaign.ChooseTarget(Purchase(items: [new PurchaseItem("X", 1, 10m, null, null)])).Id);
 
-        var onlyCategory = ActiveCampaign(items: [Item(TargetType.Category, BenefitType.Percentage, 10), Item(TargetType.Product, BenefitType.FixedAmount, 30)]);
+        var onlyCategory = ActiveCampaign(items: [Item(TargetType.Category, BenefitType.Percentage, 10), Item(TargetType.Product, BenefitType.Percentage, 10)]);
         Assert.Equal(TargetType.Category, onlyCategory.ChooseTarget(Purchase(items: [new PurchaseItem("X", 1, 10m, null, null)])).TargetType);
     }
 
@@ -210,7 +210,7 @@ public class ConcessionEvaluatorTests
     [Fact]
     public void Evaluate_TargetWithoutQuota_RefusesWithoutFallingBackToAnotherTarget()
     {
-        var mochila = Item(TargetType.Product, BenefitType.FixedAmount, 30, voucherLimit: 10);
+        var mochila = Item(TargetType.Product, BenefitType.Percentage, 10, voucherLimit: 10);
         var papelaria = Item(TargetType.Category, BenefitType.Percentage, 10, voucherLimit: 50);
         var campaign = ActiveCampaign(items: [mochila, papelaria]);
         mochila.IssuedVouchers = 10;

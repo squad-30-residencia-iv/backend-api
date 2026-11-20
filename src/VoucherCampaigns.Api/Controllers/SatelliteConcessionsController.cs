@@ -1,6 +1,8 @@
+using System.Globalization;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using VoucherCampaigns.Api.Authentication;
+using VoucherCampaigns.Application.Authentication;
 using VoucherCampaigns.Application.Vouchers;
 
 namespace VoucherCampaigns.Api.Controllers;
@@ -12,8 +14,14 @@ namespace VoucherCampaigns.Api.Controllers;
 [ApiController]
 [Authorize(Policy = AuthorizationPolicies.SatelliteIssueVouchers)]
 [Route("api/v1/satellite")]
-public class SatelliteConcessionsController(IConcessionService concessionService) : ControllerBase
+public class SatelliteConcessionsController(
+    IConcessionService concessionService,
+    IConfiguration configuration,
+    ILogger<SatelliteConcessionsController> logger) : ControllerBase
 {
+    /// <summary>Data de retirada da rota antiga de consulta de vouchers (spec GH-071, D-7), combinada com o PDV.</summary>
+    public const string LegacyVoucherLookupSunsetKey = "Satellite:LegacyVoucherLookupSunset";
+
     /// <summary>Avalia a compra com o carrinho fechado e concede, no máximo, um voucher provisório. Não haver concessão não é erro.</summary>
     [HttpPost("concessions")]
     [ProducesResponseType<ConcessionResponse>(StatusCodes.Status200OK)]
@@ -53,13 +61,44 @@ public class SatelliteConcessionsController(IConcessionService concessionService
     public async Task<ActionResult<ConcessionResponse>> Get(Guid id, CancellationToken cancellationToken) =>
         Ok(await concessionService.GetAsync(id, cancellationToken));
 
-    /// <summary>Vouchers do cliente na rede da aplicação, com o status efetivo (US-04.8, US-07.4).</summary>
+    /// <summary>
+    /// Vouchers do cliente na rede da aplicação, com o CPF no corpo (spec GH-066, D-9; SEC-06 da auditoria): a mesma
+    /// resposta da rota <c>GET</c>, sem o CPF em logs de acesso, proxies e histórico.
+    /// </summary>
+    [HttpPost("customers/vouchers/search")]
+    [ProducesResponseType<IReadOnlyList<VoucherResponse>>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
+    public async Task<ActionResult<IReadOnlyList<VoucherResponse>>> SearchCustomerVouchers(
+        CustomerVouchersSearchRequest request, CancellationToken cancellationToken) =>
+        Ok(await concessionService.GetCustomerVouchersAsync(request.Document!, request.Status, cancellationToken));
+
+    /// <summary>
+    /// Vouchers do cliente na rede da aplicação, com o status efetivo (US-04.8, US-07.4). Obsoleta (spec GH-066, D-9):
+    /// fica até o PDV migrar para <c>POST customers/vouchers/search</c>, e responde com <c>Deprecation</c> e <c>Link</c>.
+    /// </summary>
     [HttpGet("customers/{document}/vouchers")]
     [ProducesResponseType<IReadOnlyList<VoucherResponse>>(StatusCodes.Status200OK)]
     [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
     public async Task<ActionResult<IReadOnlyList<VoucherResponse>>> CustomerVouchers(
-        string document, [FromQuery] string? status, CancellationToken cancellationToken) =>
-        Ok(await concessionService.GetCustomerVouchersAsync(document, status, cancellationToken));
+        string document, [FromQuery] string? status, CancellationToken cancellationToken)
+    {
+        Response.Headers["Deprecation"] = "true";
+        Response.Headers.Link = "</api/v1/satellite/customers/vouchers/search>; rel=\"successor-version\"";
+
+        // D-7 (GH-071): a data de retirada, quando combinada, e o registro de quem ainda chama, sem o CPF.
+        if (DateTimeOffset.TryParse(configuration[LegacyVoucherLookupSunsetKey], CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var sunset))
+        {
+            Response.Headers["Sunset"] = sunset.ToUniversalTime().ToString("R", CultureInfo.InvariantCulture);
+        }
+
+        logger.LogWarning(
+            "Rota obsoleta GET /satellite/customers/{{document}}/vouchers chamada pela aplicação {ClientId}; use POST /satellite/customers/vouchers/search.",
+            User.FindFirst(AuthClaimTypes.ClientId)?.Value ?? "desconhecida");
+
+        return Ok(await concessionService.GetCustomerVouchersAsync(document, status, cancellationToken));
+    }
 }

@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using VoucherCampaigns.Api.Authentication;
 using VoucherCampaigns.Api.Filters;
 using VoucherCampaigns.Application.Campaigns;
+using VoucherCampaigns.Application.Eligibility;
 
 namespace VoucherCampaigns.Api.Controllers;
 
@@ -23,8 +24,16 @@ public class CampaignsController(ICampaignService campaignService) : ControllerB
     public async Task<ActionResult<IReadOnlyList<CampaignResponse>>> GetAll(
         [FromQuery, Required(ErrorMessage = CampaignContract.NetworkRequired)] Guid? networkId,
         [FromQuery] string? status,
-        CancellationToken cancellationToken) =>
-        Ok(await campaignService.GetAllAsync(networkId, status, cancellationToken));
+        [FromQuery] int? page,
+        [FromQuery] int? pageSize,
+        CancellationToken cancellationToken)
+    {
+        // Paginação opcional (spec GH-071, D-5): o corpo continua uma lista; o total vai no cabeçalho.
+        var result = await campaignService.ListAsync(networkId, status, page, pageSize, cancellationToken);
+        Response.Headers[PagingHeaders.TotalCount] = result.Total.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+        return Ok(result.Items);
+    }
 
     /// <summary>Detalhe da campanha (US-01.9); campanha de outra rede responde 403.</summary>
     [HttpGet("{id:guid}")]
@@ -77,6 +86,36 @@ public class CampaignsController(ICampaignService campaignService) : ControllerB
         CancellationToken cancellationToken) =>
         Ok(await campaignService.UpdateAudienceAsync(id, request, cancellationToken));
 
+    /// <summary>Lista de clientes específicos do público restrito, paginada, em ordem de CPF (spec GH-047, D-10).</summary>
+    [HttpGet("{id:guid}/audience/customers")]
+    [ProducesResponseType<EligibleCustomersResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<EligibleCustomersResponse>> GetEligibleCustomers(
+        Guid id,
+        [FromQuery] int? page,
+        [FromQuery] int? pageSize,
+        CancellationToken cancellationToken) =>
+        Ok(await campaignService.GetEligibleCustomersAsync(id, page, pageSize, cancellationToken));
+
+    /// <summary>
+    /// Simula o público para um cliente informado, critério a critério, sem emitir voucher e sem gravar nada
+    /// (US-06.6, spec GH-047 D-17). Vale em qualquer status da campanha.
+    /// </summary>
+    [HttpPost("{id:guid}/eligibility/simulate")]
+    [ProducesResponseType<EligibilitySimulationResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    public async Task<ActionResult<EligibilitySimulationResponse>> SimulateEligibility(
+        Guid id,
+        EligibilitySimulationRequest request,
+        CancellationToken cancellationToken) =>
+        Ok(await campaignService.SimulateEligibilityAsync(id, request, cancellationToken));
+
     /// <summary>Define a validade do voucher (prazo relativo ou data fixa) da campanha em rascunho (US-01.12).</summary>
     [HttpPut("{id:guid}/voucher-validity")]
     [ProducesResponseType<CampaignResponse>(StatusCodes.Status200OK)]
@@ -104,6 +143,34 @@ public class CampaignsController(ICampaignService campaignService) : ControllerB
         UpdateUsageRestrictionsRequest request,
         CancellationToken cancellationToken) =>
         Ok(await campaignService.UpdateUsageRestrictionsAsync(id, request, cancellationToken));
+
+    /// <summary>Substitui os alvos de resgate da campanha em rascunho (spec GH-070, D-2); lista vazia = alvo da concessão.</summary>
+    [HttpPut("{id:guid}/redemption-targets")]
+    [ProducesResponseType<CampaignResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<ActionResult<CampaignResponse>> ReplaceRedemptionTargets(
+        Guid id,
+        ReplaceRedemptionTargetsRequest request,
+        CancellationToken cancellationToken) =>
+        Ok(await campaignService.ReplaceRedemptionTargetsAsync(id, request, cancellationToken));
+
+    /// <summary>Substitui as janelas de resgate da campanha em rascunho (spec GH-070, D-3); lista vazia = qualquer dia e hora.</summary>
+    [HttpPut("{id:guid}/redemption-windows")]
+    [ProducesResponseType<CampaignResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<ActionResult<CampaignResponse>> ReplaceRedemptionWindows(
+        Guid id,
+        ReplaceRedemptionWindowsRequest request,
+        CancellationToken cancellationToken) =>
+        Ok(await campaignService.ReplaceRedemptionWindowsAsync(id, request, cancellationToken));
 
     /// <summary>Substitui as condições de geração e o uso na mesma compra da campanha em rascunho (US-01.4).</summary>
     [HttpPut("{id:guid}/conditions")]
@@ -220,6 +287,23 @@ public class CampaignsController(ICampaignService campaignService) : ControllerB
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status422UnprocessableEntity)]
     public async Task<ActionResult<CampaignResponse>> End(Guid id, CancellationToken cancellationToken) =>
         Ok(await campaignService.EndAsync(id, cancellationToken));
+
+    /// <summary>
+    /// Cancela a campanha agendada, ativa, pausada ou esgotada e invalida os vouchers não utilizados (US-01.8, RN10;
+    /// spec GH-061). Motivo obrigatório. Analista e gestor.
+    /// </summary>
+    [HttpPost("{id:guid}/cancel")]
+    [ProducesResponseType<CampaignResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<ActionResult<CampaignResponse>> Cancel(
+        Guid id,
+        CancelCampaignRequest request,
+        CancellationToken cancellationToken) =>
+        Ok(await campaignService.CancelAsync(id, request, cancellationToken));
 
     /// <summary>Cadastra a campanha em rascunho (US-01.1). Datas na hora local da rede, sem fuso.</summary>
     [HttpPost]

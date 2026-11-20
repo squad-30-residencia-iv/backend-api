@@ -19,5 +19,8 @@ public class SatelliteAppConfiguration : IEntityTypeConfiguration<SatelliteApp>
         builder.Property(app => app.Name).HasMaxLength(150).IsRequired();
         builder.Property(app => app.SecretHash).HasMaxLength(200).IsRequired();
         builder.Property(app => app.Scopes).HasMaxLength(200).IsRequired();
+
+        // Carimbo conferido em cada requisição do satélite (spec GH-071, D-1).
+        builder.Property(app => app.SecurityStamp).HasMaxLength(64).IsRequired();
     }
 }

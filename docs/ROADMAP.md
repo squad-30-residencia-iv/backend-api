@@ -21,7 +21,10 @@ Objetivo: chegar o quanto antes a uma **base útil** (campanha configurada, apro
 | GH-023 Modelo único de condições | ✅ Mesclado | Fica `Domain.Campaigns.CampaignCondition` (`campaign_conditions`). Sai o modelo do #36. Migração `RemoveMotorCampaignConditions` |
 | US-01.6 / US-01.11 Submeter, aprovar e reprovar | ✅ Mesclado (#42, #43) | Analista submete, gestor aprova (`Scheduled`/`Active`) ou reprova; histórico em `campaign_status_events` |
 | Issue #26 Auditoria, status efetivo e US-07.5 | ✅ Concluído | `audit_entries` append-only; status efetivo na leitura (PR-04); client credentials das aplicações satélites (`satellite_apps`, esquema `Satellite`) |
-| Issue #45 Motor de concessão (EP-04, 07.2, 07.4) | ✅ Em PR para a `staging` | Concessão em duas fases (`concessions`, `vouchers`, `voucher_events`), saldo atômico, esgotada derivada, idempotência, rotas `/api/v1/satellite/concessions` e `/customers/{cpf}/vouchers` (spec `GH-045-motor-de-concessao.md`) |
+| Issue #45 Motor de concessão (EP-04, 07.2, 07.4) | ✅ Na `staging` e na `main` (PR #53, 2026-11-11) | Concessão em duas fases (`concessions`, `vouchers`, `voucher_events`), saldo atômico, esgotada derivada, idempotência, rotas `/api/v1/satellite/concessions` e `/customers/{cpf}/vouchers` (spec `GH-045-motor-de-concessao.md`) |
+| Issue #49 Resgate (EP-05, 07.1, 07.3) | ✅ Na `staging` (PR #58, 2026-11-12) | Verificação de aplicáveis com desconto previsto e recomendado, resgate com utilização atômica e um voucher por compra, estorno, provisório resgatável na própria compra, campanhas vigentes por API (spec `GH-049-resgate-de-vouchers.md`) |
+| Issue #47 Público restrito (EP-06, 04.2) | ✅ Na `staging` (PR #60, 2026-11-13) | Critérios de perfil, histórico com janela, combinação, clientes específicos, avaliação na emissão com snapshot e simulação (spec `GH-047-publico-restrito.md`) |
+| Issue #50 Acompanhamento (EP-03) | ✅ Na `staging` (PR #59, 2026-11-13) | Indicadores por campanha e por rede com filtros, trilha de auditoria da campanha (criação e edições auditadas), exportação CSV (spec `GH-050-acompanhamento-da-campanha.md`) |
 
 ---
 
@@ -72,6 +75,15 @@ O cálculo na emissão e a recusa no resgate continuam no EP-04 e no EP-05. A sp
 
 Nenhuma das D1–D9 permanece em aberto. O aceite está na seção 2.5.
 
+O cliente respondeu em 2026-11-18 aos pontos da issue #66 (spec `GH-066`, seção 6). As respostas viraram a issue #68 (spec `GH-068`):
+- um único desconto por campanha;
+- o alvo pode ser informado pelo código de produto já cadastrado, com até 1.000 alvos;
+- só um voucher por compra;
+- uma aprovação basta;
+- a validade continua contada a partir do horário da emissão.
+
+Em 2026-11-19 o cliente escolheu as restrições do resgate (issue #70, spec `GH-070`): alvos de resgate e janelas de dias e horários são novos; o CPF titular e o mínimo de resgate separado já existiam; lojas e canais de resgate diferentes não entram.
+
 ### 2.5 Decisões aceitas
 
 | # | Decisão | Registrado em | Observação |
@@ -106,7 +118,7 @@ Nenhuma das D1–D9 permanece em aberto. O aceite está na seção 2.5.
 | **A — Configuração da campanha (EP-01)** | Pessoa 1 | ✅ na `main` (#30): 01.9 → 01.2 → 01.3 → 01.4 → 01.5 ("todos") → 01.12 → 01.7 (só rascunho). Fora desta onda: submeter, aprovar, duplicar, pausar e editar após o vigor |
 | **B — Cadastros de apoio (EP-02)** | Pessoa 2 | 02.4 catálogo → 02.1 hierarquia → 02.2 inativação → 02.3 escopo e canais → 02.6 herança de fuso e moeda |
 | **C — Governança e integrações** | Pessoa 3 | Auditoria → status efetivo → 07.5 auth satélite e padrão de erros da EP-07 |
-| **D — Elegibilidade (EP-06, configuração)** | Pessoa 4 | 06.1 perfil → 06.2 histórico → 06.3 combinação → 06.4 grupos e clientes específicos |
+| **D — Elegibilidade (EP-06, configuração)** | Pessoa 4 | ✅ Issue #47 (spec `GH-047`): 06.1 perfil → 06.2 histórico → 06.3 combinação → 06.4 grupos e clientes específicos |
 
 **Pontos de contato:**
 
@@ -119,8 +131,8 @@ Nenhuma das D1–D9 permanece em aberto. O aceite está na seção 2.5.
 |---|---|
 | **A** | 01.10 duplicar ✅ → 01.8 pausar e encerrar ✅ (efeito sobre vouchers vem na onda 3) |
 | **C** | 01.6 submeter (RN01) → 01.11 aprovar (alçada e auditoria) |
-| **E — Motor (EP-04 + 07.2 / 07.4)** | ✅ Issue #45 (spec `GH-045`): 04.3, 04.4, 04.1 (valor total, itens, categoria, produto e quantidade de compras), 04.5, 04.6, 04.9, 04.7, 04.8 + 07.2 / 07.4. Falta 04.2 com critérios (#47) |
-| **D** | 06.5 elegibilidade na emissão (junto da 04.2, com a trilha E) → 06.6 simulação |
+| **E — Motor (EP-04 + 07.2 / 07.4)** | ✅ Issue #45 (spec `GH-045`): 04.3, 04.4, 04.1 (valor total, itens, categoria, produto e quantidade de compras), 04.5, 04.6, 04.9, 04.7, 04.8 + 07.2 / 07.4. A 04.2 com critérios veio com a #47 |
+| **D** | ✅ 06.5 elegibilidade na emissão (junto da 04.2) → 06.6 simulação (sem a consulta em massa) |
 
 > **Marco 1:** o analista configura e submete, o gestor aprova, a campanha fica ativa e uma aplicação satélite autenticada recebe o voucher por API.
 
@@ -128,15 +140,15 @@ Nenhuma das D1–D9 permanece em aberto. O aceite está na seção 2.5.
 
 | Trilha | Sequência |
 |---|---|
-| **F — Resgate (EP-05 + 07.3)** | 05.1 verificação → 05.2 restrições → 05.3 validade → 05.4 utilizações e concorrência → 05.6 alvo mais específico → 05.5 efeito do status da campanha |
+| **F — Resgate (EP-05 + 07.3)** | ✅ Issue #49 (spec `GH-049`): 05.1 verificação → 05.2 restrições → 05.3 validade → 05.4 utilizações e concorrência → 05.6 alvo mais específico → 05.5 efeito do status da campanha (cenário 1 e recusa de voucher de campanha `Cancelled`), mais o estorno do resgate. Falta a invalidação em lote, que vem com o cancelar da trilha A |
 | **A** | 01.8 cancelar (invalida vouchers, junto da 05.5) → 01.9 com "esgotada" e emitidos → 01.7 edição após entrar em vigor (RN03b, RN02a) |
-| **C** | 07.1 campanhas vigentes por API |
+| **C** | ✅ 07.1 campanhas vigentes por API (issue #49) |
 
 > **Marco 2:** voucher emitido e resgatado nos canais, com histórico completo.
 
 ### Onda 4 — Acompanhamento (EP-03)
 
-03.1 indicadores → 03.3 portfólio → 03.2 filtros → 03.4 tela de auditoria (dados existem desde a onda 1) → 03.5 exportação.
+✅ Issue #50 (spec `GH-050`): 03.1 indicadores → 03.3 portfólio → 03.2 filtros → 03.4 tela de auditoria (criação e edições da campanha passaram a ser auditadas) → 03.5 exportação em CSV (D8). Falta conferir o formato do CSV com as telas do frontend (PA-4 da spec).
 
 ---
 
@@ -144,11 +156,11 @@ Nenhuma das D1–D9 permanece em aberto. O aceite está na seção 2.5.
 
 | Prioridade | US |
 |---|---|
-| **P0 — Fundações** | 02.5 e 01.1 já mescladas · contratos compartilhados (`Voucher` e `VoucherEvent` do #36 ainda fora do padrão) · auditoria ✅ · status efetivo ✅ · 07.5 ✅ |
-| **P1 — Configuração** | 01.9 ✅, 01.2 ✅, 01.3 ✅, 01.4 ✅, 01.5 ✅ (só "todos"), 01.12 ✅, 02.4 ✅, 02.1 ✅, 02.2 ✅, 02.3 ✅, 06.1, 06.2, 06.3, 06.4 |
-| **P2 — Base útil** | 01.6 ✅, 01.11 ✅, 04.1 a 04.9 ✅ (04.2 só público "todos"), 06.5 (só "todos"), 07.2 ✅, 07.4 ✅, 01.10 ✅, 01.8 (pausar e encerrar) ✅ |
-| **P3 — Resgate** | 05.1 a 05.6, 07.3, 07.1, 01.7 (após vigor), 01.8 (cancelar) |
-| **P4 — Gestão** | 03.1 a 03.5, 02.6 completa, 06.6 |
+| **P0 — Fundações** | 02.5 e 01.1 já mescladas · contratos compartilhados ✅ (`Concession`, `Voucher` e `VoucherEvent` da issue #45 substituíram os do #36) · auditoria ✅ · status efetivo ✅ · 07.5 ✅ |
+| **P1 — Configuração** | 01.9 ✅, 01.2 ✅, 01.3 ✅, 01.4 ✅, 01.5 ✅, 01.12 ✅, 02.4 ✅, 02.1 ✅, 02.2 ✅, 02.3 ✅, 06.1 ✅, 06.2 ✅, 06.3 ✅, 06.4 ✅ |
+| **P2 — Base útil** | 01.6 ✅, 01.11 ✅, 04.1 a 04.9 ✅, 06.5 ✅, 07.2 ✅, 07.4 ✅, 01.10 ✅, 01.8 (pausar e encerrar) ✅ |
+| **P3 — Resgate** | 05.1 a 05.6 ✅ (05.5 sem a invalidação em lote), 07.3 ✅, 07.1 ✅, 01.7 (após vigor), 01.8 (cancelar) |
+| **P4 — Gestão** | 03.1 a 03.5 ✅, 02.6 completa, 06.6 ✅ (sem a consulta em massa) |
 
 A US-01.12 já está implementada. O que resta sem ✅ continua pendente.
 
@@ -183,7 +195,18 @@ Ciclo SDD já usado nas US-02.5 e US-01.1 (`docs/prompts/` e `agents.md`):
 - [x] Reconciliar o modelo de condições (GH-023): fica o da US-01.4
 - [x] Issue #26 antes da #27: US-01.6, US-01.11, status efetivo, auditoria e US-07.5
 - [x] Issue #45 (fatia da #27): motor de concessão, com `Concession`, `Voucher` e `VoucherEvent` em `Domain/Vouchers`
-- [ ] Issue #49 (fatia da #27): verificação de aplicáveis e resgate (EP-05, US-07.3) sobre o `Voucher` da #45
+- [x] Issue #49 (fatia da #27): verificação de aplicáveis, resgate, estorno e campanhas vigentes (EP-05, US-07.1, US-07.3) sobre o `Voucher` da #45
+- [x] Issue #50 (fatia da #27): dashboard, filtros, trilha de auditoria da campanha e CSV (EP-03)
 - [x] D1 a D9 aceitas (`docs/ROADMAP.md` 2.5). D1, D2, D3, D4, D7 e D9 estão no código da issue #45. D6: agendada não se edita e o motivo da reprovação é opcional. D8: exportação em CSV
 - [x] US-02.3 escopo por região, loja e canal (issue #46, com 01.10 duplicar e 01.8 pausar e encerrar)
-- [ ] US-02.6 herança de fuso e moeda; EP-06 público restrito
+- [ ] US-02.6 herança de fuso e moeda
+- [x] Issue #47 (última fatia da #27): público restrito, US-04.2 com critérios, US-06.1 a 06.5 e a simulação da 06.6 (spec `GH-047`)
+- [x] US-01.8 cancelar campanha (RN10) com invalidação em lote dos vouchers não utilizados (US-05.5 cenários 2 e 3; PA-1 da spec `GH-049`): issue #61, spec `GH-061`, na `staging` pelo PR #63 (2026-11-14); pontos em aberto na issue #62
+- [x] Issue #66: pontos do cliente de 2026-11-18 (validade só em dias, lojas e produtos em lote, limite por CPF atômico, contrato do público para o PDV) e correções urgentes da auditoria (SEC-01, SEC-02, SEC-04, SEC-06, SEC-07, SEC-08, SEC-21); spec `GH-066`, na `staging` pelo PR #67 (2026-11-18)
+- [x] Issue #68: respostas do cliente aos PAs da `GH-066`. Desconto único por campanha, alvo pelo código do produto e até 1.000 alvos. Spec `GH-068`, na `staging` pelo PR #69 (2026-11-19).
+- [x] Restrições na etapa de resgate (PA-1 da `GH-068`): issue #70, spec `GH-070`. Alvos de resgate e janelas de dias e horários.
+- [x] Issue #71, fatia 1: achados médios da auditoria (SEC-03, SEC-05, PERF-01 a PERF-03, trilha e `Sunset` da rota antiga), spec `GH-071`.
+- [ ] Issue #71, fatias seguintes: achados de severidade baixa e informativa, antes do deploy público.
+- [ ] US-01.7 edição da campanha após entrar em vigor (RN03b, RN02a)
+- [ ] Issue #57: pontos em aberto da spec `GH-045` (PA-4 a PA-14)
+- [ ] Avisar o frontend e o PDV das rotas novas (resgate, campanhas vigentes, dashboard) e conferir o formato do CSV

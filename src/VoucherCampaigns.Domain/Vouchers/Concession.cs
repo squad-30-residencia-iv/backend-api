@@ -44,6 +44,12 @@ public class Concession
     /// <summary>Campanha satisfeita que foi bloqueada (status, saldo ou limite); null sem campanha satisfeita.</summary>
     public Guid? RefusedCampaignId { get; set; }
 
+    /// <summary>
+    /// Snapshot da elegibilidade (RN11a, spec GH-047 D-12), em JSON: critério a critério, com o atributo usado e o resultado.
+    /// Null quando a campanha decidida é para todos os clientes ou não houve campanha.
+    /// </summary>
+    public string? Eligibility { get; set; }
+
     /// <summary>Fim do prazo de reserva (PR-17); só enquanto provisória.</summary>
     public DateTime? ReservedUntil { get; set; }
 

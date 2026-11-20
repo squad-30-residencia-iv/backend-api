@@ -151,7 +151,6 @@ public class ProtectedRouteTests(ApiFactory factory) : IClassFixture<ApiFactory>
 
     [Theory]
     [InlineData("/health")]
-    [InlineData("/api/v1/system/status")]
     public async Task PublicRoutes_WithoutToken_RemainAccessible(string route)
     {
         var response = await factory.CreateClient().GetAsync(route);

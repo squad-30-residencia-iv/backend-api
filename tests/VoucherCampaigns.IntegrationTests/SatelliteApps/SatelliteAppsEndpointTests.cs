@@ -53,6 +53,32 @@ public class SatelliteAppsEndpointTests(ApiFactory factory) : IClassFixture<ApiF
         var fetched = await getResponse.Content.ReadFromJsonAsync<SatelliteAppItemResponse>();
         Assert.Equal(created.App.Id, fetched!.Id);
         Assert.Equal("pdv-loja-1", fetched.ClientId);
+        Assert.Equal(DateTimeKind.Utc, fetched.CreatedAt.Kind);
+        // O PostgreSQL guarda microssegundos; os ticks de 100 ns do .NET não voltam iguais.
+        Assert.Equal(created.App.CreatedAt, fetched.CreatedAt, TimeSpan.FromMilliseconds(1));
+    }
+
+    [Theory]
+    [InlineData("GET", "")]
+    [InlineData("PUT", "")]
+    [InlineData("DELETE", "")]
+    [InlineData("PATCH", "/deactivate")]
+    [InlineData("POST", "/rotate-secret")]
+    public async Task AnyRouteById_WhenTheAppDoesNotExist_ReturnsNotFound404(string method, string suffix)
+    {
+        var client = factory.CreateClient().WithBearer(TestAuth.CreateToken(factory, Roles.Administrador));
+        var request = new HttpRequestMessage(new HttpMethod(method), $"{BaseRoute}/{Guid.NewGuid()}{suffix}");
+        if (method == "PUT")
+        {
+            request.Content = JsonContent.Create(new UpdateSatelliteAppRequest("Nome", [SatelliteScopes.ReadCampaigns]));
+        }
+
+        var response = await client.SendAsync(request);
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        var problem = await TestAuth.ReadProblemAsync(response);
+        Assert.Equal("NOT_FOUND", problem.GetProperty("code").GetString());
+        Assert.Equal("Aplicação satélite não encontrada.", problem.GetProperty("detail").GetString());
     }
 
     [Fact]

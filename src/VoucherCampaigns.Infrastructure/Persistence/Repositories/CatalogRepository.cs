@@ -4,8 +4,22 @@ using VoucherCampaigns.Domain.Catalog;
 
 namespace VoucherCampaigns.Infrastructure.Persistence.Repositories;
 
-public class CatalogRepository(AppDbContext context) : ICatalogRepository
+public class CatalogRepository(AppDbContext context) : ICatalogRepository, IProductImportStore
 {
+    async Task<IReadOnlyList<string>> IProductImportStore.GetExistingCodesAsync(
+        IReadOnlyCollection<string> codes, CancellationToken cancellationToken) =>
+        await context.Products.AsNoTracking()
+            .Where(product => codes.Contains(product.Code))
+            .Select(product => product.Code)
+            .ToListAsync(cancellationToken);
+
+    async Task IProductImportStore.AddAllAsync(IReadOnlyList<Product> products, CancellationToken cancellationToken)
+    {
+        // Uma gravação só: o índice único do código recusa o lote inteiro se outra importação gravou antes.
+        context.Products.AddRange(products);
+        await ConstraintSave.SaveAsync(context, CatalogErrors.ProductCodeTakenCode, CatalogErrors.ProductCodeTakenMessage, cancellationToken);
+    }
+
     public async Task<IReadOnlyList<Category>> GetAllCategoriesAsync(bool? activeOnly, CancellationToken cancellationToken)
     {
         var query = ApplyActive(context.Categories.AsNoTracking(), activeOnly);
@@ -66,6 +80,18 @@ public class CatalogRepository(AppDbContext context) : ICatalogRepository
 
     public Task<Product?> GetProductByIdAsync(Guid id, CancellationToken cancellationToken) =>
         context.Products.AsNoTracking().FirstOrDefaultAsync(product => product.Id == id, cancellationToken);
+
+    public async Task<IReadOnlyList<Product>> GetProductsByIdsAsync(IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken)
+    {
+        var wanted = ids.ToList();
+        return await context.Products.AsNoTracking().Where(product => wanted.Contains(product.Id)).ToListAsync(cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<Category>> GetCategoriesByIdsAsync(IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken)
+    {
+        var wanted = ids.ToList();
+        return await context.Categories.AsNoTracking().Where(category => wanted.Contains(category.Id)).ToListAsync(cancellationToken);
+    }
 
     public async Task<IReadOnlyList<Product>> GetProductsByCodesAsync(IReadOnlyCollection<string> codes, CancellationToken cancellationToken)
     {

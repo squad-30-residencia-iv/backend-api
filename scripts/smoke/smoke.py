@@ -147,7 +147,7 @@ def run_base(base_url: str) -> int:
     status, body = api.call("GET", "/health")
     check("GET /health", status, 200, body)
     status, body = api.call("GET", "/api/v1/system/status")
-    check("GET /api/v1/system/status (público)", status, 200, body)
+    check("GET /api/v1/system/status (sem token)", status, 401, body, "AUTH_UNAUTHENTICATED")
 
     tokens = {}
     for role, email in (("analista", "analista@empresa.com"), ("gestor", "gestor@empresa.com"), ("admin", "admin@empresa.com")):
@@ -161,6 +161,12 @@ def run_base(base_url: str) -> int:
         print("Sem os três tokens: o restante do roteiro base não roda.")
         return 1
     analista, gestor, admin = tokens["analista"], tokens["gestor"], tokens["admin"]
+
+    # /system/status só para o administrador (spec GH-066, D-8).
+    status, body = api.call("GET", "/api/v1/system/status", token=analista)
+    check("GET /api/v1/system/status (analista)", status, 403, body, "AUTH_FORBIDDEN_ROLE")
+    status, body = api.call("GET", "/api/v1/system/status", token=admin)
+    check("GET /api/v1/system/status (admin)", status, 200, body)
 
     status, body = api.call("POST", "/api/v1/satellite/token", {"clientId": Demo.SATELLITE_CLIENT, "clientSecret": Demo.SATELLITE_SECRET})
     satellite = body.get("accessToken") if check("POST /satellite/token", status, 200, body) else None
@@ -199,7 +205,7 @@ def run_base(base_url: str) -> int:
     check("POST /campaigns/{id}/submit (rascunho incompleto)", status, 422, body)
 
     steps = [
-        ("items", {"items": [{"targetType": "Category", "categoryId": Demo.CATEGORY_FASHION, "benefitType": "Percentage", "benefitValue": 10, "voucherLimit": 40}, {"targetType": "All", "benefitType": "FixedAmount", "benefitValue": 15}]}),
+        ("items", {"items": [{"targetType": "Category", "categoryId": Demo.CATEGORY_FASHION, "benefitType": "Percentage", "benefitValue": 10, "voucherLimit": 40}, {"targetType": "All", "benefitType": "Percentage", "benefitValue": 10}]}),
         ("quantities", {"totalVoucherLimit": 100, "perCustomerVoucherLimit": 2}),
         ("audience", {"audienceType": "AllCustomers"}),
         ("voucher-validity", {"type": "Relative", "amount": 30, "unit": "Days"}),
@@ -246,6 +252,40 @@ def run_base(base_url: str) -> int:
 
     status, body = api.call("GET", f"/api/v1/campaigns?networkId={Demo.NETWORK}&status=Active", token=analista)
     check("GET /campaigns?status=Active", status, 200, body)
+
+    # Acompanhamento (spec GH-050): indicadores, lista, trilha e CSV
+    status, body = api.call("GET", f"/api/v1/campaigns/{campaign_id}/dashboard", token=analista)
+    check("GET /campaigns/{id}/dashboard", status, 200, body)
+    if isinstance(body, dict):
+        ind = body.get("indicators", {})
+        print(f"      emitidos {ind.get('issued')}, resgatados {ind.get('redeemed')}, taxa {ind.get('utilizationRate')}, status {body.get('status')}")
+    status, body = api.call("GET", f"/api/v1/campaigns/{campaign_id}/dashboard?from=2020-01-01&to=2019-12-31", token=analista)
+    check("GET /campaigns/{id}/dashboard (período invertido)", status, 400, body, "VALIDATION_ERROR")
+    status, body = api.call("GET", f"/api/v1/dashboard?networkId={Demo.NETWORK}&establishmentId={Demo.STORE_CENTER}", token=analista)
+    check("GET /dashboard?networkId&establishmentId", status, 200, body)
+    if isinstance(body, dict) and not any(c.get("campaignId") == campaign_id for c in body.get("campaigns", [])):
+        print("FAIL  a campanha do roteiro não apareceu na lista do dashboard")
+        FAILURES.append("dashboard lista")
+    status, body = api.call("GET", f"/api/v1/dashboard?networkId={Demo.OTHER_NETWORK}", token=analista)
+    check("GET /dashboard (outra rede)", status, 403, body, "SCOPE_FORBIDDEN")
+    status, body = api.call("GET", f"/api/v1/campaigns/{campaign_id}/audit", token=gestor)
+    check("GET /campaigns/{id}/audit", status, 200, body)
+    if isinstance(body, dict):
+        kinds = [e.get("eventType") for e in body.get("entries", [])]
+        print(f"      trilha: {', '.join(kinds)}")
+        if not kinds or kinds[0] != "CampaignCreated" or "CampaignApproved" not in kinds:
+            print("FAIL  a trilha deveria começar pela criação e conter a aprovação")
+            FAILURES.append("trilha")
+    status, body = api.call("GET", f"/api/v1/dashboard/export?networkId={Demo.NETWORK}", token=analista)
+    check("GET /dashboard/export (CSV)", status, 200, body)
+    status, body = api.call("GET", f"/api/v1/dashboard/export?networkId={Demo.NETWORK}&status=Cancelled", token=analista)
+    if status == 200:
+        # O roteiro do cancelamento (cancelamento.py) já rodou nesta base: há campanha cancelada para exportar.
+        print("OK    GET /dashboard/export?status=Cancelled -> 200 (já há campanha cancelada nesta base)")
+    else:
+        check("GET /dashboard/export (sem dados)", status, 422, body, "EXPORT_EMPTY")
+    status, body = api.call("GET", f"/api/v1/campaigns/{campaign_id}/audit/export", token=analista)
+    check("GET /campaigns/{id}/audit/export (CSV)", status, 200, body)
 
     print()
     if FAILURES:

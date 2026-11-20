@@ -16,6 +16,7 @@ public class SatelliteAppManagementServiceTests : IDisposable
     private readonly FixedTimeProvider _timeProvider = new(new DateTimeOffset(2026, 11, 11, 10, 0, 0, TimeSpan.Zero));
     private readonly SatelliteAppManagementService _service;
     private readonly Guid _networkId = Guid.NewGuid();
+    private readonly RecordingAppStatus _appStatus = new();
 
     public SatelliteAppManagementServiceTests()
     {
@@ -29,7 +30,7 @@ public class SatelliteAppManagementServiceTests : IDisposable
         _context = new AppDbContext(options);
         _context.Database.EnsureCreated();
 
-        _service = new SatelliteAppManagementService(_context, _timeProvider);
+        _service = new SatelliteAppManagementService(_context, _timeProvider, _appStatus);
     }
 
     public void Dispose()
@@ -170,6 +171,41 @@ public class SatelliteAppManagementServiceTests : IDisposable
 
         var storedAfter = await _context.SatelliteApps.AsNoTracking().SingleAsync(a => a.Id == created.App.Id);
         Assert.NotEqual(storedBefore.SecretHash, storedAfter.SecretHash);
+    }
+
+    [Fact]
+    public async Task Deactivate_RotateAndScopeChange_ChangeTheStamp_ButARenameDoesNot()
+    {
+        // SEC-03 (spec GH-071, D-1): o token emitido antes leva o carimbo antigo e deixa de valer.
+        var created = await _service.CreateAsync(
+            new("App Carimbo", "app-stamp", _networkId, [SatelliteScopes.ReadCampaigns]), CancellationToken.None);
+        var stamps = new List<string> { await StampAsync(created.App.Id) };
+
+        await _service.UpdateAsync(created.App.Id, new("Outro nome", [SatelliteScopes.ReadCampaigns]), CancellationToken.None);
+        Assert.Equal(stamps[^1], await StampAsync(created.App.Id));
+
+        await _service.UpdateAsync(created.App.Id, new("Outro nome", [SatelliteScopes.IssueVouchers]), CancellationToken.None);
+        stamps.Add(await StampAsync(created.App.Id));
+        await _service.RotateSecretAsync(created.App.Id, CancellationToken.None);
+        stamps.Add(await StampAsync(created.App.Id));
+        await _service.DeactivateAsync(created.App.Id, CancellationToken.None);
+        stamps.Add(await StampAsync(created.App.Id));
+
+        Assert.Equal(stamps.Count, stamps.Distinct().Count());
+        Assert.All(_appStatus.Forgotten, id => Assert.Equal(created.App.Id, id));
+        Assert.Equal(4, _appStatus.Forgotten.Count);
+    }
+
+    private async Task<string> StampAsync(Guid id) =>
+        (await _context.SatelliteApps.AsNoTracking().SingleAsync(app => app.Id == id)).SecurityStamp;
+
+    private sealed class RecordingAppStatus : ISatelliteAppStatus
+    {
+        public List<Guid> Forgotten { get; } = [];
+
+        public Task<bool> IsCurrentAsync(Guid applicationId, string? stamp, CancellationToken cancellationToken) => Task.FromResult(true);
+
+        public void Forget(Guid applicationId) => Forgotten.Add(applicationId);
     }
 
     private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider

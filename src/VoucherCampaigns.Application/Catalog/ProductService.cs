@@ -14,12 +14,14 @@ public interface IProductService
 
     Task<ProductResponse> CreateAsync(CreateProductRequest request, CancellationToken cancellationToken = default);
 
+    Task<ImportProductsResponse> ImportAsync(ImportProductsRequest request, CancellationToken cancellationToken = default);
+
     Task<ProductResponse> UpdateAsync(Guid id, UpdateProductRequest request, CancellationToken cancellationToken = default);
 
     Task InactivateAsync(Guid id, CancellationToken cancellationToken = default);
 }
 
-public class ProductService(ICatalogRepository repository, TimeProvider timeProvider) : IProductService
+public class ProductService(ICatalogRepository repository, IProductImportStore importStore, TimeProvider timeProvider) : IProductService
 {
     public async Task<IReadOnlyList<ProductResponse>> GetAllAsync(Guid? categoryId, bool? activeOnly, CancellationToken cancellationToken = default)
     {
@@ -64,6 +66,69 @@ public class ProductService(ICatalogRepository repository, TimeProvider timeProv
         };
 
         return Map(await repository.CreateProductAsync(product, cancellationToken));
+    }
+
+    /// <summary>
+    /// Produtos em lote (spec GH-066, D-3; ponto 3 do cliente): as mesmas regras do cadastro um a um, linha a linha, e tudo
+    /// ou nada. O erro aponta a linha (<c>Products[i].Code</c>); código já existente no catálogo recusa o lote com 422.
+    /// </summary>
+    public async Task<ImportProductsResponse> ImportAsync(ImportProductsRequest request, CancellationToken cancellationToken = default)
+    {
+        var categoryId = InputValues.RequiredId(request.CategoryId, nameof(request.CategoryId), CatalogContract.ProductCategoryRequired);
+        var lines = request.Products;
+
+        if (lines is null || lines.Count is 0 or > CatalogContract.MaxImportLines)
+        {
+            throw new RequestValidationException(nameof(request.Products), CatalogContract.ImportProductsRequired);
+        }
+
+        var parsed = new List<(string Code, string Name)>(lines.Count);
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+
+        for (var index = 0; index < lines.Count; index++)
+        {
+            var field = $"{nameof(request.Products)}[{index}]";
+            var code = InputValues.RequiredText(
+                lines[index]?.Code ?? string.Empty, $"{field}.Code", CatalogContract.ProductCodeRequired,
+                CatalogContract.ProductCodeMaxLength, CatalogContract.ProductCodeMaxLengthMessage);
+            var name = InputValues.RequiredText(
+                lines[index]?.Name ?? string.Empty, $"{field}.Name", CatalogContract.ProductNameRequired,
+                CatalogContract.NameMaxLength, CatalogContract.NameMaxLengthMessage);
+
+            if (!seen.Add(code))
+            {
+                throw new RequestValidationException($"{field}.Code", CatalogContract.ImportCodeRepeated);
+            }
+
+            parsed.Add((code, name));
+        }
+
+        await RequireActiveCategoryAsync(categoryId, cancellationToken);
+
+        var taken = await importStore.GetExistingCodesAsync(seen, cancellationToken);
+
+        if (taken.Count > 0)
+        {
+            throw new BusinessRuleException(
+                CatalogErrors.ProductCodeTakenCode,
+                CatalogErrors.ProductCodeTakenMessage,
+                new Dictionary<string, object?> { ["codes"] = taken.Order(StringComparer.Ordinal).ToList() });
+        }
+
+        var now = timeProvider.GetUtcNow().UtcDateTime;
+        var products = parsed.Select(line => new Product
+        {
+            Id = Guid.CreateVersion7(),
+            CategoryId = categoryId,
+            Code = line.Code,
+            Name = line.Name,
+            IsActive = true,
+            CreatedAt = now
+        }).ToList();
+
+        await importStore.AddAllAsync(products, cancellationToken);
+
+        return new ImportProductsResponse(products.Count, products.Select(Map).ToList());
     }
 
     public async Task<ProductResponse> UpdateAsync(Guid id, UpdateProductRequest request, CancellationToken cancellationToken = default)

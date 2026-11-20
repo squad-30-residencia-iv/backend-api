@@ -2,6 +2,7 @@ using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
 using Microsoft.Extensions.DependencyInjection;
+using VoucherCampaigns.Infrastructure.Persistence;
 using Microsoft.IdentityModel.JsonWebTokens;
 using Microsoft.IdentityModel.Tokens;
 using VoucherCampaigns.Application.Authentication;
@@ -79,11 +80,17 @@ public static class TestAuth
         string[]? scopes = null,
         Guid? networkId = null,
         DateTime? expires = null,
-        string? signingKey = null)
+        string? signingKey = null,
+        bool includeStamp = true)
     {
         var options = factory.Services.GetRequiredService<AuthOptions>();
         var satellite = factory.Services.GetRequiredService<SatelliteAuthOptions>();
         var expiresAt = expires ?? DateTime.UtcNow.AddMinutes(10);
+
+        // O token só vale com o id e o carimbo atuais da aplicação (spec GH-071, D-1).
+        using var scope = factory.Services.CreateScope();
+        var app = scope.ServiceProvider.GetRequiredService<AppDbContext>().SatelliteApps
+            .Single(candidate => candidate.ClientId == SatelliteClientId);
 
         var descriptor = new SecurityTokenDescriptor
         {
@@ -94,7 +101,7 @@ public static class TestAuth
             Expires = expiresAt,
             Claims = new Dictionary<string, object>
             {
-                [AuthClaimTypes.UserId] = Guid.NewGuid().ToString(),
+                [AuthClaimTypes.UserId] = app.Id.ToString(),
                 [AuthClaimTypes.ClientId] = SatelliteClientId,
                 [AuthClaimTypes.NetworkId] = (networkId ?? DemoDataSeeder.NetworkId).ToString(),
                 [AuthClaimTypes.Scope] = scopes ?? [.. SatelliteScopes.All]
@@ -103,6 +110,11 @@ public static class TestAuth
                 JwtAuthService.CreateSigningKey(options with { SigningKey = signingKey ?? options.SigningKey }),
                 SecurityAlgorithms.HmacSha256)
         };
+
+        if (includeStamp)
+        {
+            descriptor.Claims[AuthClaimTypes.Stamp] = app.SecurityStamp;
+        }
 
         return new JsonWebTokenHandler().CreateToken(descriptor);
     }

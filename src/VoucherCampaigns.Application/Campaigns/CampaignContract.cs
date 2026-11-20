@@ -3,7 +3,7 @@ namespace VoucherCampaigns.Application.Campaigns;
 /// <summary>Mensagens de contrato e de recurso ausente das rotas de campanha.</summary>
 public static class CampaignContract
 {
-    public const int MaxItems = 100;
+    public const int MaxItems = 1_000;
 
     /// <summary>Maior valor de <c>decimal(10,2)</c>.</summary>
     public const decimal MaxBenefitValue = 99_999_999.99m;
@@ -19,13 +19,32 @@ public static class CampaignContract
 
     public const string RejectionReasonTooLong = "O motivo deve ter no máximo 500 caracteres.";
 
+    public const int MaxCancellationReasonLength = 500;
+    public const string CancellationReasonRequired = "Informe o motivo do cancelamento.";
+    public const string CancellationReasonTooLong = "O motivo deve ter no máximo 500 caracteres.";
+
     public const string ItemsRequired = "Informe ao menos um alvo da campanha.";
-    public const string ItemsTooMany = "A campanha pode ter no máximo 100 alvos.";
+    public const string ItemsTooMany = "A campanha pode ter no máximo 1.000 alvos.";
     public const string TargetTypeRequired = "Informe o tipo do alvo.";
     public const string TargetTypeInvalid = "Tipo de alvo inválido. Use All, Category ou Product.";
     public const string TargetCategoryRequired = "Informe a categoria do alvo, sem produto.";
     public const string TargetProductRequired = "Informe o produto do alvo, sem categoria.";
     public const string TargetAllWithId = "O alvo All não aceita categoria nem produto.";
+    public const int MaxProductCodeLength = 50;
+    public const string TargetProductIdAndCode = "Informe o produto pelo id ou pelo código, não pelos dois.";
+    public const string TargetProductCodeOnlyForProduct = "O código do produto só vale para o alvo Product.";
+    public const string TargetProductCodeTooLong = "O código do produto deve ter no máximo 50 caracteres.";
+
+    // Restrições no resgate (spec GH-070).
+    public const int MaxRedemptionWindows = 14;
+    public const string RedemptionTargetsRequired = "Informe a lista de alvos de resgate (vazia para usar o alvo da concessão).";
+    public const string RedemptionTargetsTooMany = "A campanha pode ter no máximo 1.000 alvos de resgate.";
+    public const string RedemptionTargetTypeInvalid = "Tipo de alvo de resgate inválido. Use Category ou Product.";
+    public const string RedemptionWindowsRequired = "Informe a lista de janelas de resgate (vazia para qualquer dia e hora).";
+    public const string RedemptionWindowsTooMany = "A campanha pode ter no máximo 14 janelas de resgate.";
+    public const string RedemptionWindowDaysRequired = "Informe ao menos um dia da semana da janela.";
+    public const string RedemptionWindowDayInvalid = "Dia da semana inválido. Use Monday, Tuesday, Wednesday, Thursday, Friday, Saturday ou Sunday, sem repetir.";
+    public const string RedemptionWindowTimeInvalid = "Informe o horário no formato HH:mm (00:00 a 23:59).";
     public const string BenefitTypeRequired = "Informe o tipo do benefício.";
     public const string BenefitTypeInvalid = "Tipo de benefício inválido. Use Percentage ou FixedAmount.";
     public const string BenefitValueRequired = "Informe o valor do benefício.";
@@ -44,11 +63,12 @@ public static class CampaignContract
     public const int MaxValidityHours = 87_600;
 
     public const string ValidityTypeRequired = "Informe o tipo de validade do voucher.";
-    public const string ValidityTypeInvalid = "Tipo de validade inválido. Use Relative ou FixedDate.";
+    public const string ValidityTypeInvalid = "Tipo de validade inválido. Use Relative.";
+    public const string ValidityOnlyDays = "A validade do voucher é em dias, contados a partir da emissão. Use type Relative com unit Days.";
     public const string ValidityAmountRequired = "Informe o prazo de validade do voucher.";
-    public const string ValidityAmountRange = "O prazo de validade deve ser de 1 a 3.650 dias ou de 1 a 87.600 horas.";
+    public const string ValidityAmountRange = "O prazo de validade deve ser de 1 a 3.650 dias.";
     public const string ValidityUnitRequired = "Informe a unidade do prazo de validade.";
-    public const string ValidityUnitInvalid = "Unidade inválida. Use Days ou Hours.";
+    public const string ValidityUnitInvalid = "Unidade inválida. Use Days.";
     public const string ValidUntilRequired = "Informe a data de validade do voucher.";
     public const string ValidityRelativeWithDate = "A validade relativa não aceita data fixa.";
     public const string ValidityFixedWithRelative = "A validade por data fixa não aceita prazo, unidade nem teto.";

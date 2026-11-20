@@ -31,4 +31,33 @@ public class SatelliteTokenRateLimitEndpointTests(ApiFactory factory) : IClassFi
         var problem = await TestAuth.ReadProblemAsync(blockedResponse);
         Assert.Equal("SATELLITE_TOKEN_RATE_LIMIT_EXCEEDED", problem.GetProperty("code").GetString());
     }
+
+    [Fact]
+    public async Task TokenRequests_AboveThePerIpLimit_Return429WithRetryAfter()
+    {
+        // SEC-05 (spec GH-071, D-2): limite por origem, além do bloqueio por clientId. Fábrica própria com limite baixo.
+        var connectionString = ApiFactory.NewSqliteConnectionString();
+        await using var limited = ApiFactory.For("Sqlite", connectionString, settings: new Dictionary<string, string?>
+        {
+            ["Auth:Satellite:TokenRateLimit:PermitLimit"] = "3",
+            ["Auth:Satellite:TokenRateLimit:WindowSeconds"] = "60"
+        });
+        var client = limited.CreateClient();
+
+        // clientIds diferentes: o bloqueio por clientId (5 erros) não entra na conta.
+        for (var attempt = 0; attempt < 3; attempt++)
+        {
+            var allowed = await client.PostAsJsonAsync(TokenRoute, new SatelliteTokenRequest($"pdv-ip-{attempt}", "segredo-errado"));
+            Assert.Equal(HttpStatusCode.Unauthorized, allowed.StatusCode);
+        }
+
+        var refused = await client.PostAsJsonAsync(TokenRoute, new SatelliteTokenRequest("pdv-ip-x", "segredo-errado"));
+
+        Assert.Equal(HttpStatusCode.TooManyRequests, refused.StatusCode);
+        Assert.Equal("SATELLITE_TOKEN_RATE_LIMITED", (await TestAuth.ReadProblemAsync(refused)).GetProperty("code").GetString());
+        Assert.True(refused.Headers.RetryAfter is not null, "sem Retry-After");
+
+        await limited.DisposeAsync();
+        ApiFactory.DeleteSqliteDatabase(connectionString);
+    }
 }

@@ -16,5 +16,8 @@ public enum ConcessionRefusal
     TargetSoldOut,
 
     /// <summary>O cliente já atingiu o limite de vouchers desta campanha (RF06c).</summary>
-    CustomerLimitReached
+    CustomerLimitReached,
+
+    /// <summary>O cliente não atende ao público restrito da campanha (RN11, US-04.2 cenário 2, spec GH-047).</summary>
+    CustomerNotEligible
 }

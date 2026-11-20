@@ -6,7 +6,8 @@ namespace VoucherCampaigns.Infrastructure.Authentication;
 
 /// <summary>
 /// Token da aplicação satélite (US-07.5): mesmo emissor e chave do token de usuário, audiência própria,
-/// sem papel. Claims: <c>sub</c> (aplicação), <c>client_id</c>, <c>escopoId</c> (rede) e <c>scope</c> (lista).
+/// sem papel. Claims: <c>sub</c> (aplicação), <c>client_id</c>, <c>escopoId</c> (rede), <c>scope</c> (lista) e
+/// <c>stamp</c> (carimbo da aplicação, conferido a cada requisição: spec GH-071, D-1).
 /// </summary>
 public class SatelliteTokenService(
     AuthOptions authOptions,
@@ -40,7 +41,8 @@ public class SatelliteTokenService(
                 [AuthClaimTypes.UserId] = app.ApplicationId.ToString(),
                 [AuthClaimTypes.ClientId] = app.ClientId,
                 [AuthClaimTypes.NetworkId] = app.NetworkId.ToString(),
-                [AuthClaimTypes.Scope] = app.Scopes.ToArray()
+                [AuthClaimTypes.Scope] = app.Scopes.ToArray(),
+                [AuthClaimTypes.Stamp] = app.SecurityStamp
             },
             SigningCredentials = new SigningCredentials(JwtAuthService.CreateSigningKey(authOptions), SecurityAlgorithms.HmacSha256)
         };

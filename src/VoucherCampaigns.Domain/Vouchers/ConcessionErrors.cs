@@ -18,6 +18,10 @@ public static class ConcessionErrors
     public const string ReservationExpiredCode = "CONCESSION_RESERVATION_EXPIRED";
     public const string ReservationExpiredMessage = "O prazo de reserva desta concessão expirou e o voucher foi descartado.";
 
+    /// <summary>Spec GH-061, D-6 e D-11: o provisório foi descartado pelo cancelamento da campanha.</summary>
+    public const string CampaignCancelledCode = "CONCESSION_CAMPAIGN_CANCELLED";
+    public const string CampaignCancelledMessage = "A campanha foi cancelada; o voucher desta compra não vale.";
+
     public const string AlreadyCancelledCode = "CONCESSION_ALREADY_CANCELLED";
     public const string AlreadyCancelledMessage = "Esta concessão já foi desfeita.";
 

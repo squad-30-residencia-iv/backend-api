@@ -8,9 +8,15 @@ namespace VoucherCampaigns.Application.Vouchers;
 public enum ReserveOutcome
 {
     Reserved,
+
+    /// <summary>O status gravado não é agendada nem ativa: pausada, encerrada ou cancelada no meio da concessão (GH-061, D-9).</summary>
+    CampaignNotActive,
     CampaignSoldOut,
     TargetSoldOut
 }
+
+/// <summary>Provisório com a reserva em dia, a descartar no cancelamento da campanha (GH-061, D-6).</summary>
+public record LiveProvisionalVoucher(Guid VoucherId, Guid CampaignId, Guid CampaignItemId, Guid ConcessionId);
 
 /// <summary>Reserva provisória vencida, a liberar (PR-17).</summary>
 public record ExpiredReservation(Guid VoucherId, Guid CampaignId, Guid CampaignItemId, Guid ConcessionId);
@@ -36,11 +42,25 @@ public interface IConcessionRepository
     /// <summary>Como <see cref="FindByTransactionAsync"/>, pelo id; null quando é de outra rede.</summary>
     Task<Concession?> FindByIdAsync(Guid id, Guid networkId, CancellationToken cancellationToken);
 
-    /// <summary>Campanhas aprovadas da rede (status gravado fora de rascunho, aprovação e reprovada), com itens, condições, escopo e rede. Sem rastreamento.</summary>
-    Task<IReadOnlyList<Campaign>> GetApprovedCampaignsAsync(Guid networkId, CancellationToken cancellationToken);
+    /// <summary>
+    /// Campanhas aprovadas da rede que podem estar em vigor agora (spec GH-071, D-3; PERF-01): status gravado agendada,
+    /// ativa ou pausada e vigência que contém <paramref name="utcNow"/>. Com itens, condições, escopo e rede, sem
+    /// rastreamento. O filtro é um pré-corte no banco; o status efetivo continua no domínio.
+    /// </summary>
+    Task<IReadOnlyList<Campaign>> GetApprovedCampaignsAsync(Guid networkId, DateTime utcNow, CancellationToken cancellationToken);
+
+    /// <summary>Das campanhas informadas, as que têm o CPF na lista de clientes específicos (spec GH-047, D-8), numa consulta.</summary>
+    Task<IReadOnlySet<Guid>> GetCampaignsListingCustomerAsync(
+        IReadOnlyCollection<Guid> campaignIds, string customerDocument, CancellationToken cancellationToken);
 
     /// <summary>Vouchers não descartados do cliente na rede, contados por campanha (RF06c).</summary>
     Task<IReadOnlyDictionary<Guid, int>> CountCustomerVouchersAsync(Guid networkId, string customerDocument, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// A mesma conta de <see cref="CountCustomerVouchersAsync"/> para uma campanha, lida dentro da transação da reserva depois
+    /// da trava da campanha (spec GH-066, D-4): vê o voucher de quem reservou antes e já gravou.
+    /// </summary>
+    Task<int> CountCustomerVouchersInCampaignAsync(Guid campaignId, string customerDocument, CancellationToken cancellationToken);
 
     /// <summary>Vouchers do cliente na rede, dos mais recentes para os mais antigos, com campanha, alvo e concessão.</summary>
     Task<IReadOnlyList<Voucher>> GetCustomerVouchersAsync(Guid networkId, string customerDocument, CancellationToken cancellationToken);
@@ -56,11 +76,30 @@ public interface IConcessionRepository
     /// </summary>
     Task<ReserveOutcome> TryReserveAsync(Guid campaignId, Guid campaignItemId, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Trava a linha da campanha na transação e devolve o status gravado. Vem antes de mexer no voucher na confirmação,
+    /// no desfazimento e na liberação da reserva: a mesma ordem do cancelamento (GH-061, 7.1), sem deadlock.
+    /// </summary>
+    Task<CampaignStatus?> LockCampaignAsync(Guid campaignId, CancellationToken cancellationToken);
+
+    /// <summary>Provisórios da campanha com a reserva em dia (GH-061, D-6).</summary>
+    Task<IReadOnlyList<LiveProvisionalVoucher>> GetLiveProvisionalAsync(Guid campaignId, DateTime utcNow, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Leva a <c>Cancelled</c>, num comando só, os vouchers <c>Available</c> da campanha dentro da validade, com
+    /// <c>cancelled_at</c> (GH-061, D-5, D-7 e D-12). Devolve quantos mudaram.
+    /// </summary>
+    Task<int> CancelAvailableVouchersAsync(Guid campaignId, DateTime utcNow, CancellationToken cancellationToken);
+
+    /// <summary>Ids dos vouchers <c>Cancelled</c> da campanha, para o evento de cada um (GH-061, D-8).</summary>
+    Task<IReadOnlyList<Guid>> GetCancelledVoucherIdsAsync(Guid campaignId, CancellationToken cancellationToken);
+
     /// <summary>Provisório com a reserva ainda válida vira disponível; falso quando outro pedido chegou antes ou a reserva venceu.</summary>
     Task<bool> TryConfirmVoucherAsync(Guid voucherId, DateTime utcNow, CancellationToken cancellationToken);
 
     /// <summary>Provisório vira descartado; falso quando já não estava provisório.</summary>
-    Task<bool> TryDiscardVoucherAsync(Guid voucherId, DateTime utcNow, CancellationToken cancellationToken);
+    /// <param name="cancelledByCampaign">Descarte pelo cancelamento da campanha: grava também <c>cancelled_at</c> (GH-061, D-11).</param>
+    Task<bool> TryDiscardVoucherAsync(Guid voucherId, DateTime utcNow, CancellationToken cancellationToken, bool cancelledByCampaign = false);
 
     /// <summary>Reserva consumida em definitivo: <c>reserved - 1</c>, <c>issued + 1</c>, na campanha e no alvo.</summary>
     Task ConsumeReservationAsync(Guid campaignId, Guid campaignItemId, CancellationToken cancellationToken);

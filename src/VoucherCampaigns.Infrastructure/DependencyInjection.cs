@@ -5,7 +5,9 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using VoucherCampaigns.Application.Audit;
 using VoucherCampaigns.Application.Authentication;
 using VoucherCampaigns.Application.Campaigns;
+using VoucherCampaigns.Application.Dashboard;
 using VoucherCampaigns.Application.Ports;
+using VoucherCampaigns.Application.Reports;
 using VoucherCampaigns.Application.SystemStatus;
 using VoucherCampaigns.Application.Vouchers;
 using VoucherCampaigns.Infrastructure.Authentication;
@@ -56,9 +58,18 @@ public static class DependencyInjection
         services.AddScoped<ICampaignRepository, CampaignRepository>();
         services.AddScoped<ICatalogRepository, CatalogRepository>();
         services.AddScoped<IOrganizationRepository, OrganizationRepository>();
+        services.AddScoped<IEstablishmentImportStore, OrganizationRepository>();
+        services.AddScoped<IProductImportStore, CatalogRepository>();
         services.AddScoped<IAuditTrail, AuditTrail>();
         services.AddScoped<IConcessionRepository, ConcessionRepository>();
         services.AddScoped<IReservationReleaser, ReservationReleaser>();
+        services.AddScoped<IRedemptionRepository, RedemptionRepository>();
+        services.AddScoped<IDashboardRepository, DashboardRepository>();
+        services.AddScoped<IRedemptionReverser, RedemptionReverser>();
+        services.AddScoped<IPortalVoucherReadRepository, PortalVoucherReadRepository>();
+        services.AddScoped<IReportReadRepository, ReportReadRepository>();
+        services.AddScoped<IAuditQueryRepository, AuditQueryRepository>();
+        services.AddScoped<ICampaignVoucherCanceller, CampaignVoucherCanceller>();
         services.AddSingleton(provider => ReadVoucherOptions(provider.GetRequiredService<IConfiguration>()));
 
         services.AddSingleton(provider =>
@@ -69,6 +80,8 @@ public static class DependencyInjection
         services.AddScoped<IUserCredentialStore, DatabaseUserCredentialStore>();
         services.AddScoped<IAuthService, JwtAuthService>();
         services.AddScoped<ISatelliteCredentialStore, DatabaseSatelliteCredentialStore>();
+        services.AddMemoryCache();
+        services.AddScoped<ISatelliteAppStatus, SatelliteAppStatus>();
         services.AddScoped<ISatelliteTokenService, SatelliteTokenService>();
         services.AddSingleton<ISatelliteTokenRateLimiter, SatelliteTokenRateLimiter>();
         services.AddScoped<VoucherCampaigns.Application.Identity.ISatelliteAppManagementService, VoucherCampaigns.Infrastructure.Identity.SatelliteAppManagementService>();

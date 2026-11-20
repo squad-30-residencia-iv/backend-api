@@ -34,9 +34,9 @@ public static class SatelliteScopes
                 normalized = ReadCampaigns;
                 return true;
 
+            // "voucher:read" saiu (spec GH-066, D-5; SEC-04 da auditoria): o nome prometia leitura e concedia emissão.
             case "vouchers:issue":
             case "voucher:issue":
-            case "voucher:read":
                 normalized = IssueVouchers;
                 return true;
 

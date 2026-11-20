@@ -1,10 +1,12 @@
 using VoucherCampaigns.Application.Audit;
 using VoucherCampaigns.Application.Authentication;
 using VoucherCampaigns.Application.Common;
+using VoucherCampaigns.Application.Eligibility;
 using VoucherCampaigns.Application.Ports;
 using VoucherCampaigns.Domain.Audit;
 using VoucherCampaigns.Domain.Campaigns;
 using VoucherCampaigns.Domain.Common;
+using VoucherCampaigns.Domain.Eligibility;
 using VoucherCampaigns.Domain.Organization;
 using VoucherCampaigns.Domain.Vouchers;
 
@@ -17,12 +19,18 @@ public class ConcessionService(
     ICurrentSatelliteApp app,
     IAuditTrail audit,
     IReservationReleaser releaser,
+    IRedemptionReverser redemptionReverser,
     VoucherOptions options,
     TimeProvider timeProvider) : IConcessionService
 {
+    private static readonly EstablishmentErrors Errors = new(
+        ConcessionErrors.EstablishmentNotFoundCode, ConcessionErrors.EstablishmentNotFoundMessage,
+        ConcessionErrors.EstablishmentInactiveCode, ConcessionErrors.EstablishmentInactiveMessage,
+        ConcessionErrors.ChannelNotEnabledCode, ConcessionErrors.ChannelNotEnabledMessage);
+
     public async Task<ConcessionResponse> GrantAsync(ConcessionRequest request, CancellationToken cancellationToken)
     {
-        var input = ParseRequest(request);
+        var input = PurchaseParsing.Parse(request);
         var networkId = app.NetworkId;
         var utcNow = timeProvider.GetUtcNow().UtcDateTime;
 
@@ -36,15 +44,19 @@ public class ConcessionService(
             return Map(existing, utcNow);
         }
 
+        // Atributos do público só depois da idempotência: a repetição devolve a decisão original, mesmo com outros atributos (GH-047).
+        var profile = EligibilityParsing.ParseProfile(request.Customer!, input.Document, utcNow, nameof(request.Customer));
+
         // Reservas vencidas liberam saldo antes da avaliação (D-6).
         await releaser.ReleaseExpiredAsync(networkId, utcNow, cancellationToken);
 
-        var purchase = await ResolvePurchaseAsync(input, cancellationToken);
-        var candidates = (await concessions.GetApprovedCampaignsAsync(networkId, cancellationToken))
+        var purchase = await PurchaseParsing.ResolveAsync(catalog, input, request.CustomerPurchaseCount, cancellationToken);
+        var candidates = (await concessions.GetApprovedCampaignsAsync(networkId, utcNow, cancellationToken))
             .Where(campaign => campaign.IsInScope(establishment, input.Channel))
             .ToList();
         var customerVouchers = await concessions.CountCustomerVouchersAsync(networkId, input.Document, cancellationToken);
-        var evaluation = ConcessionEvaluator.Evaluate(candidates, purchase, customerVouchers, utcNow);
+        var eligibility = await EvaluateEligibilityAsync(candidates, profile, utcNow, cancellationToken);
+        var evaluation = ConcessionEvaluator.Evaluate(candidates, purchase, customerVouchers, utcNow, eligibility);
 
         var refusal = evaluation.Refusal;
         var refusedCampaignId = evaluation.RefusedCampaignId;
@@ -58,7 +70,23 @@ public class ConcessionService(
 
             if (outcome != ReserveOutcome.Reserved)
             {
-                refusal ??= outcome == ReserveOutcome.CampaignSoldOut ? ConcessionRefusal.CampaignSoldOut : ConcessionRefusal.TargetSoldOut;
+                refusal ??= outcome switch
+                {
+                    ReserveOutcome.CampaignNotActive => ConcessionRefusal.CampaignNotActive,
+                    ReserveOutcome.CampaignSoldOut => ConcessionRefusal.CampaignSoldOut,
+                    _ => ConcessionRefusal.TargetSoldOut
+                };
+                refusedCampaignId ??= eligible.Campaign.Id;
+                continue;
+            }
+
+            // Limite por cliente atômico (spec GH-066, D-4; SEC-02 da auditoria): a contagem da avaliação foi lida antes da
+            // transação. Com a linha da campanha já travada pela reserva, as concessões da mesma campanha passam uma de cada
+            // vez e a recontagem vê o voucher de quem chegou antes; atingido o limite, a transação é descartada com a reserva.
+            if (eligible.Campaign.PerCustomerVoucherLimit is { } customerLimit
+                && await concessions.CountCustomerVouchersInCampaignAsync(eligible.Campaign.Id, input.Document, cancellationToken) >= customerLimit)
+            {
+                refusal ??= ConcessionRefusal.CustomerLimitReached;
                 refusedCampaignId ??= eligible.Campaign.Id;
                 continue;
             }
@@ -66,6 +94,10 @@ public class ConcessionService(
             var concession = NewConcession(input, purchase, networkId, utcNow);
             concession.Status = ConcessionStatus.Provisional;
             concession.ReservedUntil = utcNow.AddMinutes(options.ReservationMinutes);
+
+            // Snapshot dos atributos usados na decisão (RN11a, spec GH-047 D-12); null no público "todos".
+            var decided = eligibility.GetValueOrDefault(eligible.Campaign.Id);
+            concession.Eligibility = decided is null ? null : EligibilityParsing.Snapshot(decided);
 
             var voucher = new Voucher
             {
@@ -98,9 +130,11 @@ public class ConcessionService(
                 eligible.Campaign.AudienceType?.ToString(),
                 eligible.EstimatedBenefit,
                 voucher.ValidUntil,
-                concession.ReservedUntil)));
+                concession.ReservedUntil,
+                decided is null ? null : EligibilityParsing.Summary(decided))));
             AppendAudit(AuditEventTypes.VoucherIssued, eligible.Campaign.Id, nameof(Voucher), voucher.Id, utcNow, new VoucherAuditPayload(
-                concession.Id, concession.TransactionId, voucher.Code, eligible.Target.Id, voucher.ValidUntil, concession.ReservedUntil));
+                concession.Id, concession.TransactionId, voucher.Code, eligible.Target.Id, voucher.ValidUntil, concession.ReservedUntil,
+                decided is null ? null : EligibilityParsing.Summary(decided)));
 
             if (!await concessions.TrySaveChangesAsync(cancellationToken))
             {
@@ -124,13 +158,18 @@ public class ConcessionService(
         refused.Status = ConcessionStatus.NotGranted;
         refused.Refusal = refusal ?? ConcessionRefusal.NoCampaignMatched;
         refused.RefusedCampaignId = refusedCampaignId;
+        var refusedEligibility = refusedCampaignId is { } blockedId ? eligibility.GetValueOrDefault(blockedId) : null;
+        refused.Eligibility = refusedEligibility is null ? null : EligibilityParsing.Snapshot(refusedEligibility);
         concessions.Add(refused);
 
         // Só a campanha satisfeita e bloqueada é auditada (D-20); compra sem campanha não é ação relevante.
         if (refused.Refusal != ConcessionRefusal.NoCampaignMatched)
         {
+            // Na recusa por público, o critério que falhou fica na auditoria, não na resposta ao satélite (D-13).
+            var failed = refused.Refusal == ConcessionRefusal.CustomerNotEligible ? refusedEligibility?.FirstFailed : null;
             AppendAudit(AuditEventTypes.VoucherIssuanceRefused, refusedCampaignId, nameof(Concession), refused.Id, utcNow,
-                new RefusedPayload(refused.TransactionId, refusedCampaignId, refused.Refusal.ToString()!));
+                new RefusedPayload(refused.TransactionId, refusedCampaignId, refused.Refusal.ToString()!,
+                    failed?.Type.ToString(), failed?.Outcome.ToString()));
         }
 
         if (!await concessions.TrySaveChangesAsync(cancellationToken))
@@ -158,6 +197,13 @@ public class ConcessionService(
                 case ConcessionStatus.Confirmed:
                     return Map(concession, utcNow);
                 case ConcessionStatus.Cancelled:
+                    // Descartada pelo cancelamento da campanha (GH-061, D-11): o PDV recebe o motivo próprio. A desfeita
+                    // pelo próprio PDV antes do cancelamento continua "já desfeita" (sem cancelled_at).
+                    if (concession.Voucher?.CancelledAt is not null)
+                    {
+                        throw new BusinessRuleException(ConcessionErrors.CampaignCancelledCode, ConcessionErrors.CampaignCancelledMessage);
+                    }
+
                     throw new BusinessRuleException(ConcessionErrors.AlreadyCancelledCode, ConcessionErrors.AlreadyCancelledMessage);
                 case ConcessionStatus.Expired:
                     await releaser.ReleaseExpiredAsync(app.NetworkId, utcNow, cancellationToken);
@@ -168,6 +214,15 @@ public class ConcessionService(
 
             await using (var transaction = await concessions.BeginTransactionAsync(cancellationToken))
             {
+                // Campanha antes do voucher, na ordem do cancelamento (GH-061, 7.1): sem deadlock com ele.
+                // O status lido sob a trava decide (F5): o cancelamento que passou à frente pode ter deixado de lado
+                // este provisório por já vê-lo vencido no relógio dele; a confirmação, com o relógio lido antes, não o valida.
+                if (await concessions.LockCampaignAsync(voucher.CampaignId, cancellationToken) == CampaignStatus.Cancelled)
+                {
+                    throw new BusinessRuleException(ConcessionErrors.CampaignCancelledCode, ConcessionErrors.CampaignCancelledMessage);
+                }
+
+                // O voucher vira disponível ou, se já foi resgatado na própria compra até o limite (GH-049, D-10), resgatado.
                 if (await concessions.TryConfirmVoucherAsync(voucher.Id, utcNow, cancellationToken))
                 {
                     await concessions.ConsumeReservationAsync(voucher.CampaignId, voucher.CampaignItemId, cancellationToken);
@@ -214,10 +269,14 @@ public class ConcessionService(
 
             await using (var transaction = await concessions.BeginTransactionAsync(cancellationToken))
             {
+                await concessions.LockCampaignAsync(voucher.CampaignId, cancellationToken);
+
                 if (await concessions.TryDiscardVoucherAsync(voucher.Id, utcNow, cancellationToken))
                 {
                     await concessions.ReleaseReservationAsync(voucher.CampaignId, voucher.CampaignItemId, cancellationToken);
                     await concessions.MarkConcessionAsync(concession.Id, ConcessionStatus.Cancelled, utcNow, cancellationToken);
+                    // Resgatado na própria compra (GH-049, D-10): a venda desfeita estorna o resgate junto.
+                    await redemptionReverser.ReverseAllOfVoucherAsync(voucher.Id, "ConcessionCancelled", app.ApplicationId, utcNow, cancellationToken);
                     concessions.Add(NewEvent(voucher, VoucherEventTypes.Cancelled, utcNow, null));
                     AppendAudit(AuditEventTypes.VoucherCancelled, voucher.CampaignId, nameof(Voucher), voucher.Id, utcNow,
                         new VoucherAuditPayload(concession.Id, concession.TransactionId, voucher.Code, voucher.CampaignItemId, voucher.ValidUntil, null));
@@ -240,7 +299,7 @@ public class ConcessionService(
     public async Task<IReadOnlyList<VoucherResponse>> GetCustomerVouchersAsync(
         string document, string? status, CancellationToken cancellationToken)
     {
-        var normalized = ParseDocument(document, "document");
+        var normalized = PurchaseParsing.ParseDocument(document, "document");
         var filter = ParseStatusFilter(status);
         var utcNow = timeProvider.GetUtcNow().UtcDateTime;
 
@@ -249,59 +308,49 @@ public class ConcessionService(
         return vouchers
             .Select(voucher => (Voucher: voucher, Status: voucher.EffectiveStatus(utcNow)))
             .Where(entry => filter is null ? entry.Status != VoucherStatus.Discarded : entry.Status == filter)
-            .Select(entry => MapVoucher(
-                entry.Voucher,
-                entry.Voucher.Campaign ?? throw MissingNavigation(nameof(Voucher.Campaign)),
-                entry.Voucher.Item ?? throw MissingNavigation(nameof(Voucher.Item)),
-                entry.Voucher.Concession ?? throw MissingNavigation(nameof(Voucher.Concession)),
-                utcNow))
+            .Select(entry => VoucherMapper.Map(entry.Voucher, utcNow))
             .ToList();
     }
 
-    private async Task<Establishment> RequireEstablishmentAsync(ParsedRequest input, Guid networkId, CancellationToken cancellationToken)
+    /// <summary>
+    /// Público restrito das candidatas (spec GH-047, 1.3): uma consulta para a lista de CPFs e uma para o catálogo do
+    /// histórico, só quando alguma candidata é restrita. A idade usa a data da compra no fuso da rede (D-11).
+    /// </summary>
+    private async Task<IReadOnlyDictionary<Guid, EligibilityResult>> EvaluateEligibilityAsync(
+        IReadOnlyList<Campaign> candidates, ParsedProfile parsed, DateTime utcNow, CancellationToken cancellationToken)
     {
-        var establishment = await concessions.FindEstablishmentAsync(input.EstablishmentId, networkId, cancellationToken)
-            ?? throw new BusinessRuleException(ConcessionErrors.EstablishmentNotFoundCode, ConcessionErrors.EstablishmentNotFoundMessage);
+        var restricted = candidates.Where(campaign => campaign.AudienceType == CampaignAudienceType.Restricted).ToList();
 
-        // D7: a loja inativada não encerra a campanha; só a concessão nela é recusada.
-        if (!establishment.IsActive)
+        if (restricted.Count == 0)
         {
-            throw new BusinessRuleException(ConcessionErrors.EstablishmentInactiveCode, ConcessionErrors.EstablishmentInactiveMessage);
+            return new Dictionary<Guid, EligibilityResult>();
         }
 
-        if (!establishment.EnabledChannels().Contains(input.Channel))
-        {
-            throw new BusinessRuleException(
-                ConcessionErrors.ChannelNotEnabledCode,
-                string.Format(ConcessionErrors.ChannelNotEnabledMessage, establishment.Code, ChannelName(input.Channel)));
-        }
+        var profile = await EligibilityParsing.ResolveAsync(catalog, parsed, cancellationToken);
+        var withList = restricted
+            .Where(campaign => campaign.EligibilityCriteria.Any(criterion => criterion.Type == EligibilityCriterionType.SpecificCustomers))
+            .Select(campaign => campaign.Id)
+            .ToList();
+        var listed = await concessions.GetCampaignsListingCustomerAsync(withList, parsed.Document, cancellationToken);
 
-        return establishment;
+        return restricted.ToDictionary(
+            campaign => campaign.Id,
+            campaign =>
+            {
+                var purchaseDate = DateOnly.FromDateTime(NetworkTime.ToLocal(utcNow, VoucherMapper.TimeZoneOf(campaign)).DateTime);
+                return EligibilityEvaluator.Evaluate(campaign.EligibilityCriteria, profile, purchaseDate, listed.Contains(campaign.Id));
+            });
     }
+
+    private async Task<Establishment> RequireEstablishmentAsync(ParsedPurchase input, Guid networkId, CancellationToken cancellationToken) =>
+        PurchaseParsing.RequireEstablishment(
+            await concessions.FindEstablishmentAsync(input.EstablishmentId, networkId, cancellationToken), input.Channel, Errors);
 
     private async Task<Concession> RequireConcessionAsync(Guid concessionId, CancellationToken cancellationToken) =>
         await concessions.FindByIdAsync(concessionId, app.NetworkId, cancellationToken)
             ?? throw new ResourceNotFoundException(ConcessionContract.ConcessionNotFound);
 
-    /// <summary>Resolve os códigos no catálogo (D-12): o código desconhecido conta só no total e na quantidade.</summary>
-    private async Task<Purchase> ResolvePurchaseAsync(ParsedRequest input, CancellationToken cancellationToken)
-    {
-        var codes = input.Items.Select(item => item.ProductCode).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-        var products = (await catalog.GetProductsByCodesAsync(codes, cancellationToken))
-            .ToDictionary(product => product.Code, StringComparer.OrdinalIgnoreCase);
-
-        var items = input.Items
-            .Select(item =>
-            {
-                var product = products.GetValueOrDefault(item.ProductCode);
-                return new PurchaseItem(item.ProductCode, item.Quantity, item.UnitPrice, product?.Id, product?.CategoryId);
-            })
-            .ToList();
-
-        return new Purchase(input.TotalAmount, items, input.CustomerPurchaseCount);
-    }
-
-    private Concession NewConcession(ParsedRequest input, Purchase purchase, Guid networkId, DateTime utcNow) => new()
+    private Concession NewConcession(ParsedPurchase input, Purchase purchase, Guid networkId, DateTime utcNow) => new()
     {
         Id = Guid.CreateVersion7(new DateTimeOffset(utcNow)),
         NetworkId = networkId,
@@ -312,7 +361,7 @@ public class ConcessionService(
         Channel = input.Channel,
         TotalAmount = input.TotalAmount,
         ItemCount = purchase.ItemCount,
-        CustomerPurchaseCount = input.CustomerPurchaseCount,
+        CustomerPurchaseCount = purchase.CustomerPurchaseCount,
         RequestedAt = utcNow
     };
 
@@ -353,13 +402,13 @@ public class ConcessionService(
 
         if (voucher is not null)
         {
-            var mappedCampaign = campaign ?? throw MissingNavigation(nameof(Voucher.Campaign));
-            var mappedItem = item ?? throw MissingNavigation(nameof(Voucher.Item));
-            voucherResponse = MapVoucher(voucher, mappedCampaign, mappedItem, concession, utcNow);
+            var mappedCampaign = campaign ?? throw VoucherMapper.MissingNavigation(nameof(Voucher.Campaign));
+            var mappedItem = item ?? throw VoucherMapper.MissingNavigation(nameof(Voucher.Item));
+            voucherResponse = VoucherMapper.Map(voucher, mappedCampaign, mappedItem, concession, utcNow);
 
             if (status == ConcessionStatus.Provisional && concession.ReservedUntil is { } until)
             {
-                reservedUntil = NetworkTime.ToLocal(until, TimeZoneOf(mappedCampaign));
+                reservedUntil = NetworkTime.ToLocal(until, VoucherMapper.TimeZoneOf(mappedCampaign));
             }
         }
 
@@ -370,127 +419,6 @@ public class ConcessionService(
             status == ConcessionStatus.NotGranted ? concession.Refusal?.ToString() : null,
             reservedUntil,
             voucherResponse);
-    }
-
-    private static VoucherResponse MapVoucher(Voucher voucher, Campaign campaign, CampaignItem item, Concession concession, DateTime utcNow)
-    {
-        var timeZone = TimeZoneOf(campaign);
-
-        return new VoucherResponse(
-            voucher.Id,
-            voucher.Code,
-            campaign.Id,
-            campaign.Name,
-            voucher.EffectiveStatus(utcNow).ToString(),
-            NetworkTime.ToLocal(voucher.IssuedAt, timeZone),
-            NetworkTime.ToLocal(voucher.ValidUntil, timeZone),
-            voucher.MaxUses,
-            voucher.RemainingUses,
-            campaign.AllowUseInSamePurchase,
-            new VoucherTargetResponse(item.TargetType.ToString(), item.CategoryId, item.ProductId, item.BenefitType.ToString(), item.BenefitValue),
-            concession.Id,
-            concession.TransactionId);
-    }
-
-    private static TimeZoneInfo TimeZoneOf(Campaign campaign) =>
-        NetworkTime.Resolve((campaign.Network ?? throw MissingNavigation(nameof(Campaign.Network))).TimeZone);
-
-    private static InvalidOperationException MissingNavigation(string navigation) =>
-        new($"O repositório não carregou '{navigation}'.");
-
-    private static string ChannelName(ChannelType channel) => channel == ChannelType.Physical ? "físico" : "virtual";
-
-    private static ParsedRequest ParseRequest(ConcessionRequest request)
-    {
-        var transactionId = InputValues.RequiredText(
-            request.TransactionId, nameof(request.TransactionId), ConcessionContract.TransactionIdRequired,
-            ConcessionContract.MaxTransactionIdLength, ConcessionContract.TransactionIdTooLong);
-        var document = ParseDocument(request.Customer?.Document, $"{nameof(request.Customer)}.{nameof(ConcessionCustomerRequest.Document)}");
-        var establishmentId = InputValues.RequiredId(request.EstablishmentId, nameof(request.EstablishmentId), ConcessionContract.EstablishmentRequired);
-        var channel = ParseChannel(request.Channel);
-        var totalAmount = ParseAmount(request.TotalAmount, nameof(request.TotalAmount));
-
-        var items = new List<ParsedItem>();
-
-        for (var index = 0; index < request.Items!.Count; index++)
-        {
-            var item = request.Items[index];
-            var field = $"{nameof(request.Items)}[{index}]";
-
-            if (item is null)
-            {
-                throw new RequestValidationException($"{field}.{nameof(PurchaseItemRequest.ProductCode)}", ConcessionContract.ItemProductCodeRequired);
-            }
-
-            var code = InputValues.RequiredText(
-                item.ProductCode, $"{field}.{nameof(item.ProductCode)}", ConcessionContract.ItemProductCodeRequired,
-                ConcessionContract.MaxProductCodeLength, ConcessionContract.ItemProductCodeTooLong);
-            var unitPrice = item.UnitPrice!.Value;
-
-            if (unitPrice < 0 || decimal.Round(unitPrice, 2) != unitPrice || unitPrice > ConcessionContract.MaxAmount)
-            {
-                throw new RequestValidationException($"{field}.{nameof(item.UnitPrice)}", ConcessionContract.ItemUnitPriceInvalid);
-            }
-
-            items.Add(new ParsedItem(code, item.Quantity!.Value, unitPrice));
-        }
-
-        return new ParsedRequest(transactionId, document, establishmentId, channel, totalAmount, items, request.CustomerPurchaseCount);
-    }
-
-    /// <summary>CPF com ou sem máscara; grava só os 11 dígitos (D-16).</summary>
-    private static string ParseDocument(string? value, string field)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            throw new RequestValidationException(field, ConcessionContract.CustomerDocumentRequired);
-        }
-
-        var digits = new string(value.Where(char.IsAsciiDigit).ToArray());
-        var others = value.Count(character => !char.IsAsciiDigit(character) && character is not ('.' or '-' or ' '));
-
-        if (digits.Length != ConcessionContract.DocumentLength || others > 0)
-        {
-            throw new RequestValidationException(field, ConcessionContract.CustomerDocumentInvalid);
-        }
-
-        return digits;
-    }
-
-    private static ChannelType ParseChannel(string? value)
-    {
-        var trimmed = value?.Trim() ?? string.Empty;
-
-        if (trimmed.Length == 0)
-        {
-            throw new RequestValidationException(nameof(ConcessionRequest.Channel), ConcessionContract.ChannelRequired);
-        }
-
-        return Enum.TryParse<ChannelType>(trimmed, ignoreCase: true, out var channel) && Enum.IsDefined(channel)
-            ? channel
-            : throw new RequestValidationException(nameof(ConcessionRequest.Channel), ConcessionContract.ChannelInvalid);
-    }
-
-    private static decimal ParseAmount(decimal? value, string field)
-    {
-        var amount = value ?? throw new RequestValidationException(field, ConcessionContract.TotalAmountRequired);
-
-        if (amount <= 0)
-        {
-            throw new RequestValidationException(field, ConcessionContract.TotalAmountPositive);
-        }
-
-        if (decimal.Round(amount, 2) != amount)
-        {
-            throw new RequestValidationException(field, ConcessionContract.TotalAmountScale);
-        }
-
-        if (amount > ConcessionContract.MaxAmount)
-        {
-            throw new RequestValidationException(field, ConcessionContract.TotalAmountTooLarge);
-        }
-
-        return amount;
     }
 
     private static VoucherStatus? ParseStatusFilter(string? status)
@@ -507,17 +435,6 @@ public class ConcessionService(
             : throw new RequestValidationException("status", ConcessionContract.VoucherStatusInvalid);
     }
 
-    private sealed record ParsedRequest(
-        string TransactionId,
-        string Document,
-        Guid EstablishmentId,
-        ChannelType Channel,
-        decimal TotalAmount,
-        IReadOnlyList<ParsedItem> Items,
-        int? CustomerPurchaseCount);
-
-    private sealed record ParsedItem(string ProductCode, int Quantity, decimal UnitPrice);
-
     private sealed record IssuedPayload(
         string TransactionId,
         Guid CampaignId,
@@ -527,7 +444,8 @@ public class ConcessionService(
         string? AudienceType,
         decimal EstimatedBenefit,
         DateTime ValidUntil,
-        DateTime? ReservedUntil);
+        DateTime? ReservedUntil,
+        object? Eligibility);
 
     private sealed record VoucherAuditPayload(
         Guid ConcessionId,
@@ -535,7 +453,9 @@ public class ConcessionService(
         string Code,
         Guid CampaignItemId,
         DateTime ValidUntil,
-        DateTime? ReservedUntil);
+        DateTime? ReservedUntil,
+        object? Eligibility = null);
 
-    private sealed record RefusedPayload(string TransactionId, Guid? CampaignId, string Reason);
+    private sealed record RefusedPayload(
+        string TransactionId, Guid? CampaignId, string Reason, string? FailedCriterion = null, string? FailedOutcome = null);
 }
