@@ -19,17 +19,20 @@ public class PortalVoucherQueryService(
     private static readonly CultureInfo PtBr = CultureInfo.GetCultureInfo("pt-BR");
     private const int CpfLength = 11;
 
-    public async Task<IReadOnlyList<PortalVoucherListItemResponse>> ListAsync(
+    public async Task<PagedResult<PortalVoucherListItemResponse>> ListAsync(
         Guid? networkId,
         Guid? campaignId,
         string? status,
         string? search,
         DateTime? issuedFrom,
         DateTime? issuedTo,
+        int? page,
+        int? pageSize,
         CancellationToken cancellationToken)
     {
         var scopedNetworkId = InputValues.RequiredId(networkId, "NetworkId", PortalVoucherContract.NetworkRequired);
         NetworkScope.Ensure(currentUser, scopedNetworkId);
+        var paging = PageRequest.Parse(page, pageSize);
 
         var network = await networks.FindByIdAsync(scopedNetworkId, cancellationToken)
             ?? throw new ResourceNotFoundException(OrganizationContract.NetworkNotFound);
@@ -50,18 +53,20 @@ public class PortalVoucherQueryService(
         var searchDigits = DigitsOnly(search);
         var searchText = search?.Trim();
 
-        var items = await vouchers.ListByNetworkAsync(scopedNetworkId, campaignId, cancellationToken);
+        // Filtros e página no banco (spec GH-071, D-5); o status efetivo da resposta é recalculado no domínio.
+        var filter = new PortalVoucherFilter(scopedNetworkId, campaignId, statusFilter, fromUtc, toUtcExclusive, searchText, searchDigits, utcNow);
+        var (total, items) = await vouchers.ListPageAsync(filter, paging?.Skip, paging?.Take, cancellationToken);
 
-        return items
+        var responses = items
             .Select(voucher => (Voucher: voucher, Status: voucher.EffectiveStatus(utcNow)))
             .Where(entry => statusFilter is null
                 ? entry.Status != VoucherStatus.Discarded
                 : entry.Status == statusFilter)
-            .Where(entry => fromUtc is null || entry.Voucher.IssuedAt >= fromUtc)
-            .Where(entry => toUtcExclusive is null || entry.Voucher.IssuedAt < toUtcExclusive)
             .Where(entry => MatchesSearch(entry.Voucher, searchText, searchDigits))
             .Select(entry => MapListItem(entry.Voucher, entry.Status, timeZone))
             .ToList();
+
+        return new PagedResult<PortalVoucherListItemResponse>(responses, total);
     }
 
     public async Task<PortalVoucherDetailResponse> GetByIdAsync(Guid id, CancellationToken cancellationToken)

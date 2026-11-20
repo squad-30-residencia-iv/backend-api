@@ -12,6 +12,13 @@ public interface ICampaignRepository
     /// </summary>
     Task<IReadOnlyList<Campaign>> GetByNetworkAsync(Guid networkId, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Como <see cref="GetByNetworkAsync"/>, com o filtro do status efetivo no banco e a página opcional (spec GH-071,
+    /// D-5). O total é o da consulta filtrada inteira.
+    /// </summary>
+    Task<(int Total, IReadOnlyList<Campaign> Items)> GetPageByNetworkAsync(
+        Guid networkId, CampaignStatus? status, DateTime utcNow, int? skip, int? take, CancellationToken cancellationToken);
+
     /// <summary>Campanha com a rede (para o fuso) e os itens, ou null. Sem rastreamento.</summary>
     Task<Campaign?> FindByIdAsync(Guid id, CancellationToken cancellationToken);
 

@@ -59,26 +59,35 @@ public class CampaignService(
         return Map(campaign, network, utcNow);
     }
 
-    public async Task<IReadOnlyList<CampaignResponse>> GetAllAsync(Guid? networkId, string? status, CancellationToken cancellationToken)
+    public async Task<IReadOnlyList<CampaignResponse>> GetAllAsync(Guid? networkId, string? status, CancellationToken cancellationToken) =>
+        (await ListAsync(networkId, status, null, null, cancellationToken)).Items;
+
+    /// <summary>Listagem com o filtro de status no banco e a página opcional (spec GH-071, D-5).</summary>
+    public async Task<PagedResult<CampaignResponse>> ListAsync(
+        Guid? networkId, string? status, int? page, int? pageSize, CancellationToken cancellationToken)
     {
         var scopedNetworkId = InputValues.RequiredId(networkId, "NetworkId", CampaignContract.NetworkRequired);
         NetworkScope.Ensure(currentUser, scopedNetworkId);
 
         var statusFilter = ParseStatus(status);
+        var paging = PageRequest.Parse(page, pageSize);
 
         // Rede inativa continua consultável: é só leitura.
         var network = await networks.FindByIdAsync(scopedNetworkId, cancellationToken)
             ?? throw new ResourceNotFoundException(OrganizationContract.NetworkNotFound);
 
         var utcNow = timeProvider.GetUtcNow().UtcDateTime;
-        var items = await campaigns.GetByNetworkAsync(scopedNetworkId, cancellationToken);
+        var (total, items) = await campaigns.GetPageByNetworkAsync(
+            scopedNetworkId, statusFilter, utcNow, paging?.Skip, paging?.Take, cancellationToken);
         var counters = await LoadCountersAsync(scopedNetworkId, null, utcNow, cancellationToken);
 
-        // O filtro olha o status efetivo (PR-04), o mesmo devolvido em "status".
-        return items
+        // O filtro olha o status efetivo (PR-04), o mesmo devolvido em "status"; o banco já filtrou pela mesma regra.
+        var responses = items
             .Where(campaign => statusFilter is null || campaign.EffectiveStatus(utcNow) == statusFilter)
             .Select(campaign => Map(campaign, network, utcNow, counters.GetValueOrDefault(campaign.Id)))
             .ToList();
+
+        return new PagedResult<CampaignResponse>(responses, total);
     }
 
     public async Task<CampaignResponse> GetByIdAsync(Guid id, CancellationToken cancellationToken)
@@ -240,12 +249,9 @@ public class CampaignService(
         // a substituição em memória é descartada com a requisição.
         var before = SnapshotScopes(campaign);
         campaign.ReplaceScopes(scopes, utcNow.UtcDateTime);
-        AuditSection(campaign, "scopes", before, SnapshotScopes(campaign), utcNow.UtcDateTime);
+        AuditScopes(campaign, before, SnapshotScopes(campaign), utcNow.UtcDateTime);
 
-        foreach (var entry in entries)
-        {
-            await EnsureScopeLocationAsync(campaign.NetworkId, entry, cancellationToken);
-        }
+        await EnsureScopeLocationsAsync(campaign.NetworkId, entries, cancellationToken);
 
         await SaveGuardedAsync(campaign, cancellationToken);
 
@@ -338,7 +344,7 @@ public class CampaignService(
         var before = SnapshotAudience(campaign);
         var changes = CustomerListChange.Between(campaign.EligibleCustomers.Select(customer => customer.Document), audience.Documents);
         campaign.SetAudience(audienceType, audience.Criteria, audience.Documents, utcNow);
-        AuditSection(campaign, "audience", before, SnapshotAudience(campaign, changes), utcNow);
+        AuditAudience(campaign, before, SnapshotAudience(campaign, changes), utcNow);
 
         // Substituir a lista por diferença exige que ninguém a tenha mudado no meio (clique duplo no portal).
         await SaveGuardedAsync(campaign, cancellationToken);
@@ -560,10 +566,7 @@ public class CampaignService(
         var before = SnapshotConditions(campaign);
         campaign.ReplaceConditions(conditions, request.AllowUseInSamePurchase!.Value, utcNow.UtcDateTime);
 
-        foreach (var condition in conditions)
-        {
-            await EnsureConditionInCatalogAsync(condition, cancellationToken);
-        }
+        await EnsureConditionsInCatalogAsync(conditions, cancellationToken);
 
         AuditSection(campaign, "conditions", before, SnapshotConditions(campaign), utcNow.UtcDateTime);
         await SaveGuardedAsync(campaign, cancellationToken);
@@ -710,12 +713,34 @@ public class CampaignService(
         return amount;
     }
 
-    /// <summary>Mesmas mensagens dos alvos (EP-02), com códigos próprios da condição (D-9).</summary>
-    private async Task EnsureConditionInCatalogAsync(CampaignCondition condition, CancellationToken cancellationToken)
+    /// <summary>
+    /// Mesmas mensagens dos alvos (EP-02), com códigos próprios da condição (D-9). Uma consulta para as categorias e uma
+    /// para os produtos (spec GH-071, D-4); a primeira condição com problema, na ordem informada, responde.
+    /// </summary>
+    private async Task EnsureConditionsInCatalogAsync(IReadOnlyList<CampaignCondition> conditions, CancellationToken cancellationToken)
+    {
+        var categoryIds = conditions.Where(condition => condition.CategoryId is not null).Select(condition => condition.CategoryId!.Value).Distinct().ToList();
+        var productIds = conditions.Where(condition => condition.ProductId is not null).Select(condition => condition.ProductId!.Value).Distinct().ToList();
+
+        var categories = categoryIds.Count == 0
+            ? new Dictionary<Guid, Category>()
+            : (await catalog.GetCategoriesByIdsAsync(categoryIds, cancellationToken)).ToDictionary(category => category.Id);
+        var products = productIds.Count == 0
+            ? new Dictionary<Guid, Product>()
+            : (await catalog.GetProductsByIdsAsync(productIds, cancellationToken)).ToDictionary(product => product.Id);
+
+        foreach (var condition in conditions)
+        {
+            EnsureConditionInCatalog(condition, categories, products);
+        }
+    }
+
+    private static void EnsureConditionInCatalog(
+        CampaignCondition condition, IReadOnlyDictionary<Guid, Category> categories, IReadOnlyDictionary<Guid, Product> products)
     {
         if (condition.CategoryId is { } categoryId)
         {
-            var category = await catalog.GetCategoryByIdAsync(categoryId, cancellationToken)
+            var category = categories.GetValueOrDefault(categoryId)
                 ?? throw new BusinessRuleException(CampaignErrors.ConditionCategoryNotFoundCode, CatalogErrors.ProductCategoryNotFoundMessage);
 
             if (!category.IsActive)
@@ -726,7 +751,7 @@ public class CampaignService(
 
         if (condition.ProductId is { } productId)
         {
-            var product = await catalog.GetProductByIdAsync(productId, cancellationToken)
+            var product = products.GetValueOrDefault(productId)
                 ?? throw new BusinessRuleException(CampaignErrors.ConditionProductNotFoundCode, CampaignErrors.ItemProductNotFoundMessage);
 
             if (!product.IsActive)
@@ -753,6 +778,15 @@ public class CampaignService(
     /// <summary>Registro do usuário do token sobre a campanha, com o payload em JSON (spec GH-026-trilha-de-auditoria).</summary>
     private void AppendAudit<TPayload>(Campaign campaign, string eventType, Guid actorUserId, DateTime occurredAt, TPayload payload)
     {
+        var json = AuditJson.Serialize(payload);
+
+        // D-6 (GH-071): nenhuma seção pode derrubar a gravação por não caber na coluna da trilha (500 no PostgreSQL).
+        // As seções grandes já têm resumo; o que ainda passar do limite vira só a seção e a marca de truncado.
+        if (json.Length > AuditJson.MaxPayloadLength)
+        {
+            json = AuditJson.Serialize(new TruncatedPayload((payload as SectionChangePayload)?.Section, true));
+        }
+
         audit.Append(new AuditEntry
         {
             // Sequência dentro do mesmo instante: a trilha (GH-050) ordena por instante e depois por id.
@@ -765,7 +799,7 @@ public class CampaignService(
             EntityType = nameof(Campaign),
             EntityId = campaign.Id,
             OccurredAt = occurredAt,
-            Payload = AuditJson.Serialize(payload)
+            Payload = json
         });
     }
 
@@ -814,6 +848,41 @@ public class CampaignService(
         var added = after.Except(before).Count();
         var removed = before.Except(after).Count();
         AuditSection(campaign, "items", ItemsSummary.Of(before, null), ItemsSummary.Of(after, new ItemsChange(added, removed)), utcNow);
+    }
+
+    /// <summary>
+    /// D-6 (GH-071): a lista de locais inteira quando cabe; senão, quantos locais, se vale a rede inteira, quantas regiões
+    /// e lojas, os canais e, no depois, quantos locais entraram e saíram.
+    /// </summary>
+    private void AuditScopes(Campaign campaign, List<ScopeSnapshot> before, List<ScopeSnapshot> after, DateTime utcNow)
+    {
+        const string section = "scopes";
+
+        if (AuditJson.Serialize(new SectionChangePayload(section, before, after)).Length <= AuditJson.MaxPayloadLength)
+        {
+            AuditSection(campaign, section, before, after, utcNow);
+            return;
+        }
+
+        var beforeKeys = before.Select(ScopesSummary.Key).ToHashSet();
+        var afterKeys = after.Select(ScopesSummary.Key).ToHashSet();
+        var changes = new ItemsChange(afterKeys.Count(key => !beforeKeys.Contains(key)), beforeKeys.Count(key => !afterKeys.Contains(key)));
+        AuditSection(campaign, section, ScopesSummary.Of(before, null), ScopesSummary.Of(after, changes), utcNow);
+    }
+
+    /// <summary>D-6 (GH-071): o público inteiro quando cabe; senão, os critérios com a quantidade de UFs e municípios no lugar das listas.</summary>
+    private void AuditAudience(Campaign campaign, AudienceSnapshot before, AudienceSnapshot after, DateTime utcNow)
+    {
+        const string section = "audience";
+
+        if (AuditJson.Serialize(new SectionChangePayload(section, before, after)).Length <= AuditJson.MaxPayloadLength)
+        {
+            AuditSection(campaign, section, before, after, utcNow);
+            return;
+        }
+
+        // Os resumos de antes e depois podem ter as mesmas quantidades: o que entrou e saiu mantém a troca na trilha.
+        AuditSection(campaign, section, AudienceSummary.Of(before, null), AudienceSummary.Of(after, LocationChange.Between(before, after)), utcNow);
     }
 
     /// <summary>D-5 (GH-070): a lista inteira quando cabe na coluna da trilha; senão, quantos alvos de cada tipo e o que mudou.</summary>
@@ -991,6 +1060,76 @@ public class CampaignService(
 
     private sealed record ScopeSnapshot(Guid? RegionId, Guid? EstablishmentId, IReadOnlyList<string> Channels);
 
+    /// <summary>Resumo do escopo para a trilha quando a lista não cabe (D-6 da GH-071).</summary>
+    private sealed record ScopesSummary(
+        int Locations, bool Network, int Regions, int Establishments, IReadOnlyList<string> Channels, ItemsChange? Changes)
+    {
+        public static string Key(ScopeSnapshot scope) => $"{scope.RegionId}|{scope.EstablishmentId}|{string.Join(',', scope.Channels)}";
+
+        public static ScopesSummary Of(IReadOnlyList<ScopeSnapshot> scopes, ItemsChange? changes) =>
+            new(
+                scopes.Count,
+                scopes.Any(scope => scope.RegionId is null && scope.EstablishmentId is null),
+                scopes.Count(scope => scope.RegionId is not null && scope.EstablishmentId is null),
+                scopes.Count(scope => scope.EstablishmentId is not null),
+                scopes.SelectMany(scope => scope.Channels).Distinct().Order(StringComparer.Ordinal).ToList(),
+                changes);
+    }
+
+    /// <summary>Público para a trilha quando as listas de UFs e municípios não cabem (D-6 da GH-071).</summary>
+    private sealed record AudienceSummary(
+        string? AudienceType, IReadOnlyList<CriterionSummary> Criteria, CustomerListChange? CustomerChanges, LocationChange? LocationChanges)
+    {
+        public static AudienceSummary Of(AudienceSnapshot audience, LocationChange? locationChanges) =>
+            new(
+                audience.AudienceType,
+                audience.Criteria.Select(criterion => new CriterionSummary(
+                    criterion.Type,
+                    criterion.MinAge,
+                    criterion.MaxAge,
+                    criterion.States?.Count,
+                    criterion.CityCodes?.Count,
+                    criterion.MinAmount,
+                    criterion.MinPurchases,
+                    criterion.CategoryId,
+                    criterion.WindowDays,
+                    criterion.CustomerCount)).ToList(),
+                audience.CustomerChanges,
+                locationChanges);
+    }
+
+    /// <summary>UFs e municípios que entraram e saíram dos critérios de localização (D-6 da GH-071).</summary>
+    private sealed record LocationChange(int StatesAdded, int StatesRemoved, int CityCodesAdded, int CityCodesRemoved)
+    {
+        public static LocationChange Between(AudienceSnapshot before, AudienceSnapshot after)
+        {
+            var statesBefore = before.Criteria.SelectMany(criterion => criterion.States ?? []).ToHashSet(StringComparer.Ordinal);
+            var statesAfter = after.Criteria.SelectMany(criterion => criterion.States ?? []).ToHashSet(StringComparer.Ordinal);
+            var citiesBefore = before.Criteria.SelectMany(criterion => criterion.CityCodes ?? []).ToHashSet(StringComparer.Ordinal);
+            var citiesAfter = after.Criteria.SelectMany(criterion => criterion.CityCodes ?? []).ToHashSet(StringComparer.Ordinal);
+
+            return new LocationChange(
+                statesAfter.Count(state => !statesBefore.Contains(state)),
+                statesBefore.Count(state => !statesAfter.Contains(state)),
+                citiesAfter.Count(city => !citiesBefore.Contains(city)),
+                citiesBefore.Count(city => !citiesAfter.Contains(city)));
+        }
+    }
+
+    private sealed record CriterionSummary(
+        string Type,
+        int? MinAge,
+        int? MaxAge,
+        int? StatesCount,
+        int? CityCodesCount,
+        decimal? MinAmount,
+        int? MinPurchases,
+        Guid? CategoryId,
+        int? WindowDays,
+        int? CustomerCount);
+
+    private sealed record TruncatedPayload(string? Section, bool Truncated);
+
     private sealed record StatusChangePayload(string FromStatus, string ToStatus, string? Reason);
 
     private sealed record DuplicatePayload(Guid SourceCampaignId);
@@ -1032,21 +1171,40 @@ public class CampaignService(
         return (regionId, establishmentId, parsed);
     }
 
-    /// <summary>Local existente, ativo e na rede da campanha; na loja, só canal que ela opera (PR-11).</summary>
-    private async Task EnsureScopeLocationAsync(
+    /// <summary>
+    /// Locais existentes, ativos e na rede da campanha; na loja, só canal que ela opera (PR-11). Uma consulta para as
+    /// lojas (com a região) e uma para as regiões (spec GH-071, D-4); o primeiro local com problema, na ordem informada, responde.
+    /// </summary>
+    private async Task EnsureScopeLocationsAsync(
+        Guid networkId,
+        IReadOnlyList<(Guid? RegionId, Guid? EstablishmentId, IReadOnlyList<ChannelType> Channels)> entries,
+        CancellationToken cancellationToken)
+    {
+        var establishmentIds = entries.Where(entry => entry.EstablishmentId is not null).Select(entry => entry.EstablishmentId!.Value).Distinct().ToList();
+        var regionIds = entries.Where(entry => entry.EstablishmentId is null && entry.RegionId is not null).Select(entry => entry.RegionId!.Value).Distinct().ToList();
+
+        var establishments = (await organization.GetEstablishmentsByIdsAsync(establishmentIds, cancellationToken)).ToDictionary(store => store.Id);
+        var regions = (await organization.GetRegionsByIdsAsync(regionIds, cancellationToken)).ToDictionary(region => region.Id);
+
+        foreach (var entry in entries)
+        {
+            EnsureScopeLocation(networkId, entry, establishments, regions);
+        }
+    }
+
+    private static void EnsureScopeLocation(
         Guid networkId,
         (Guid? RegionId, Guid? EstablishmentId, IReadOnlyList<ChannelType> Channels) entry,
-        CancellationToken cancellationToken)
+        IReadOnlyDictionary<Guid, Establishment> establishments,
+        IReadOnlyDictionary<Guid, Region> regions)
     {
         if (entry.EstablishmentId is { } establishmentId)
         {
-            var establishment = await organization.GetEstablishmentByIdAsync(establishmentId, cancellationToken)
+            var establishment = establishments.GetValueOrDefault(establishmentId)
                 ?? throw new BusinessRuleException(
                     CampaignErrors.ScopeEstablishmentNotFoundCode, CampaignErrors.ScopeEstablishmentNotFoundMessage);
 
-            var storeRegion = await organization.GetRegionByIdAsync(establishment.RegionId, cancellationToken);
-
-            if (storeRegion?.NetworkId != networkId)
+            if (establishment.Region?.NetworkId != networkId)
             {
                 throw new BusinessRuleException(CampaignErrors.ScopeOutsideNetworkCode, CampaignErrors.ScopeOutsideNetworkMessage);
             }
@@ -1072,7 +1230,7 @@ public class CampaignService(
 
         if (entry.RegionId is { } regionId)
         {
-            var region = await organization.GetRegionByIdAsync(regionId, cancellationToken)
+            var region = regions.GetValueOrDefault(regionId)
                 ?? throw new BusinessRuleException(
                     CampaignErrors.ScopeRegionNotFoundCode, OrganizationErrors.EstablishmentRegionNotFoundMessage);
 

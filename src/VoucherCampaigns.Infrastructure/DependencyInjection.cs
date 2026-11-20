@@ -80,6 +80,8 @@ public static class DependencyInjection
         services.AddScoped<IUserCredentialStore, DatabaseUserCredentialStore>();
         services.AddScoped<IAuthService, JwtAuthService>();
         services.AddScoped<ISatelliteCredentialStore, DatabaseSatelliteCredentialStore>();
+        services.AddMemoryCache();
+        services.AddScoped<ISatelliteAppStatus, SatelliteAppStatus>();
         services.AddScoped<ISatelliteTokenService, SatelliteTokenService>();
         services.AddSingleton<ISatelliteTokenRateLimiter, SatelliteTokenRateLimiter>();
         services.AddScoped<VoucherCampaigns.Application.Identity.ISatelliteAppManagementService, VoucherCampaigns.Infrastructure.Identity.SatelliteAppManagementService>();

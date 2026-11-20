@@ -14,8 +14,9 @@ namespace VoucherCampaigns.Infrastructure.Persistence.Repositories;
 /// </summary>
 public class ConcessionRepository(AppDbContext context) : IConcessionRepository
 {
-    private static readonly CampaignStatus[] NeverApproved =
-        [CampaignStatus.Draft, CampaignStatus.PendingApproval, CampaignStatus.Rejected];
+    /// <summary>Status gravados de uma campanha que pode estar em vigor (D-3 da GH-071).</summary>
+    private static readonly CampaignStatus[] MaybeInForce =
+        [CampaignStatus.Scheduled, CampaignStatus.Active, CampaignStatus.Paused];
 
     public Task<Establishment?> FindEstablishmentAsync(Guid establishmentId, Guid networkId, CancellationToken cancellationToken) =>
         context.Establishments.AsNoTracking()
@@ -33,9 +34,17 @@ public class ConcessionRepository(AppDbContext context) : IConcessionRepository
         WithVoucher(context.Concessions.AsNoTracking())
             .FirstOrDefaultAsync(concession => concession.Id == id && concession.NetworkId == networkId, cancellationToken);
 
-    public async Task<IReadOnlyList<Campaign>> GetApprovedCampaignsAsync(Guid networkId, CancellationToken cancellationToken) =>
-        await context.Campaigns.AsNoTracking()
-            .Where(campaign => campaign.NetworkId == networkId && !NeverApproved.Contains(campaign.Status))
+    public async Task<IReadOnlyList<Campaign>> GetApprovedCampaignsAsync(Guid networkId, DateTime utcNow, CancellationToken cancellationToken)
+    {
+        // O minuto do fim conta inteiro (D9): a campanha que termina às 23:59 ainda vale às 23:59:59 e sai às 00:00:00
+        // (BusinessTime.HasPassed: agora >= fim + 1 minuto, ou seja, fim <= agora - 1 minuto).
+        var endedBefore = utcNow.AddMinutes(-1);
+
+        return await context.Campaigns.AsNoTracking()
+            .Where(campaign => campaign.NetworkId == networkId
+                && MaybeInForce.Contains(campaign.Status)
+                && campaign.StartsAt <= utcNow
+                && campaign.EndsAt > endedBefore)
             .Include(campaign => campaign.Network)
             .Include(campaign => campaign.Items.OrderBy(item => item.Id))
             .Include(campaign => campaign.Conditions.OrderBy(condition => condition.Id))
@@ -45,6 +54,7 @@ public class ConcessionRepository(AppDbContext context) : IConcessionRepository
             .Include(campaign => campaign.RedemptionWindows.OrderBy(window => window.Id))
             .AsSplitQuery()
             .ToListAsync(cancellationToken);
+    }
 
     public async Task<IReadOnlySet<Guid>> GetCampaignsListingCustomerAsync(
         IReadOnlyCollection<Guid> campaignIds, string customerDocument, CancellationToken cancellationToken)

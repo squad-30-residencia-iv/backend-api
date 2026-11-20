@@ -93,7 +93,8 @@ public class CampaignCancellationEndpointTests : IClassFixture<ApiFactory>
         var (redeem, _) = await RedeemAsync(satellite, Redeem(voucher.Id, scenario.StoreId, document: document));
         Assert.Equal(HttpStatusCode.UnprocessableEntity, redeem.StatusCode);
         Assert.Equal("REDEMPTION_CANCELLED", (await redeem.Content.ReadFromJsonAsync<JsonElement>()).GetProperty("code").GetString());
-        await NotGrantedAsync(satellite, Purchase(scenario.StoreId, document: TestCpf.New()), "CampaignNotActive");
+        // Cancelada não entra nas candidatas (GH-071, D-3).
+        await NotGrantedAsync(satellite, Purchase(scenario.StoreId, document: TestCpf.New()), "NoCampaignMatched");
         var listed = await satellite.GetFromJsonAsync<JsonElement>("/api/v1/satellite/campaigns");
         Assert.DoesNotContain(scenario.CampaignId.ToString(), listed.GetRawText());
     }

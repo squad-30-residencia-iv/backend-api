@@ -12,4 +12,7 @@ public static class AuthClaimTypes
 
     /// <summary>Escopos da aplicação satélite; uma claim por escopo.</summary>
     public const string Scope = "scope";
+
+    /// <summary>Carimbo da aplicação satélite no momento da emissão (spec GH-071, D-1).</summary>
+    public const string Stamp = "stamp";
 }

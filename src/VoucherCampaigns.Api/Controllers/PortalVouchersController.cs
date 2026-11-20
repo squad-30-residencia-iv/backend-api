@@ -27,8 +27,16 @@ public class PortalVouchersController(IPortalVoucherQueryService vouchers) : Con
         [FromQuery] string? search,
         [FromQuery] DateTime? issuedFrom,
         [FromQuery] DateTime? issuedTo,
-        CancellationToken cancellationToken) =>
-        Ok(await vouchers.ListAsync(networkId, campaignId, status, search, issuedFrom, issuedTo, cancellationToken));
+        [FromQuery] int? page,
+        [FromQuery] int? pageSize,
+        CancellationToken cancellationToken)
+    {
+        // Paginação opcional (spec GH-071, D-5): o corpo continua uma lista; o total vai no cabeçalho.
+        var result = await vouchers.ListAsync(networkId, campaignId, status, search, issuedFrom, issuedTo, page, pageSize, cancellationToken);
+        Response.Headers[PagingHeaders.TotalCount] = result.Total.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+        return Ok(result.Items);
+    }
 
     /// <summary>Detalhe e histórico do voucher no portal (GH-050).</summary>
     [HttpGet("{id:guid}")]

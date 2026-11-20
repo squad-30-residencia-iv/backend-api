@@ -21,6 +21,6 @@ public class DatabaseSatelliteCredentialStore(AppDbContext db) : ISatelliteCrede
 
         var scopes = app.Scopes.Split(' ', StringSplitOptions.RemoveEmptyEntries);
 
-        return new SatelliteAppAccount(app.Id, app.ClientId, app.NetworkId, scopes);
+        return new SatelliteAppAccount(app.Id, app.ClientId, app.NetworkId, scopes, app.SecurityStamp);
     }
 }

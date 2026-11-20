@@ -7,4 +7,4 @@ public interface ISatelliteCredentialStore
     Task<SatelliteAppAccount?> FindByCredentialsAsync(string clientId, string clientSecret, CancellationToken cancellationToken);
 }
 
-public record SatelliteAppAccount(Guid ApplicationId, string ClientId, Guid NetworkId, IReadOnlyList<string> Scopes);
+public record SatelliteAppAccount(Guid ApplicationId, string ClientId, Guid NetworkId, IReadOnlyList<string> Scopes, string SecurityStamp);

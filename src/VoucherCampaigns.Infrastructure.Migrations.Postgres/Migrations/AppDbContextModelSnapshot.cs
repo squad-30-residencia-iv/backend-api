@@ -738,6 +738,12 @@ namespace VoucherCampaigns.Infrastructure.Migrations.Postgres.Migrations
                         .HasColumnType("character varying(200)")
                         .HasColumnName("secret_hash");
 
+                    b.Property<string>("SecurityStamp")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("security_stamp");
+
                     b.HasKey("Id")
                         .HasName("pk_satellite_apps");
 

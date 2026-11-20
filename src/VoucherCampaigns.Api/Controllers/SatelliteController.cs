@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using VoucherCampaigns.Api.Authentication;
 using VoucherCampaigns.Api.Errors;
 using VoucherCampaigns.Application.Authentication;
@@ -14,6 +15,7 @@ public class SatelliteController(ISatelliteTokenService tokenService) : Controll
     /// <summary>Troca o clientId e o clientSecret da aplicação por um token de acesso (client credentials).</summary>
     [AllowAnonymous]
     [HttpPost("token")]
+    [EnableRateLimiting(SatelliteTokenRateLimitOptions.PolicyName)]
     [ProducesResponseType<SatelliteTokenResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
     [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
@@ -25,7 +27,10 @@ public class SatelliteController(ISatelliteTokenService tokenService) : Controll
     {
         var clientId = request.ClientId?.Trim().ToLowerInvariant() ?? string.Empty;
 
-        if (rateLimiter.IsLockedOut(clientId))
+        // O bloqueio é por clientId + IP (spec GH-071, D-2): errar o segredo de outra origem não trava o PDV legítimo.
+        var origin = HttpContext.Connection.RemoteIpAddress?.ToString();
+
+        if (rateLimiter.IsLockedOut(clientId, origin))
         {
             return ApiProblems.Result(
                 HttpContext,
@@ -38,12 +43,12 @@ public class SatelliteController(ISatelliteTokenService tokenService) : Controll
 
         if (response is null)
         {
-            rateLimiter.RecordFailure(clientId);
+            rateLimiter.RecordFailure(clientId, origin);
             return ApiProblems.Result(
                 HttpContext, StatusCodes.Status401Unauthorized, ErrorCodes.InvalidClient, ApiProblems.InvalidClientDetail);
         }
 
-        rateLimiter.Reset(clientId);
+        rateLimiter.Reset(clientId, origin);
         return Ok(response);
     }
 

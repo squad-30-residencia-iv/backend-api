@@ -59,7 +59,7 @@ public class SatelliteCampaignService(IConcessionRepository concessions, ICurren
                 ?? throw new ResourceNotFoundException(ConcessionContract.EstablishmentNotFoundForList);
         }
 
-        var campaigns = await concessions.GetApprovedCampaignsAsync(app.NetworkId, cancellationToken);
+        var campaigns = await concessions.GetApprovedCampaignsAsync(app.NetworkId, utcNow, cancellationToken);
 
         return campaigns
             .Where(campaign => campaign.EffectiveStatus(utcNow) == CampaignStatus.Active)

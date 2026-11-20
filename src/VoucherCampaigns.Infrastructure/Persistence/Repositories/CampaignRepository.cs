@@ -23,6 +23,30 @@ public class CampaignRepository(AppDbContext context) : ICampaignRepository
             .ToListAsync(cancellationToken);
     }
 
+    public async Task<(int Total, IReadOnlyList<Campaign> Items)> GetPageByNetworkAsync(
+        Guid networkId, CampaignStatus? status, DateTime utcNow, int? skip, int? take, CancellationToken cancellationToken)
+    {
+        var query = context.Campaigns.AsNoTracking().Where(campaign => campaign.NetworkId == networkId);
+
+        if (status is { } effective)
+        {
+            query = query.Where(EffectiveStatusFilters.Campaign(effective, utcNow));
+        }
+
+        var total = await query.CountAsync(cancellationToken);
+        var ordered = query.OrderByDescending(campaign => campaign.CreatedAt).ThenByDescending(campaign => campaign.Id);
+        IQueryable<Campaign> page = ordered;
+
+        if (skip is { } offset && take is { } size)
+        {
+            page = ordered.Skip(offset).Take(size);
+        }
+
+        var items = await WithItems(page).ToListAsync(cancellationToken);
+
+        return (total, items);
+    }
+
     public Task<Campaign?> FindByIdAsync(Guid id, CancellationToken cancellationToken) =>
         WithItems(context.Campaigns.AsNoTracking())
             .Include(campaign => campaign.Network)

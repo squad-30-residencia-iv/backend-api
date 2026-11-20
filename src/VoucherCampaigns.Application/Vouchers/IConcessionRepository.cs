@@ -42,8 +42,12 @@ public interface IConcessionRepository
     /// <summary>Como <see cref="FindByTransactionAsync"/>, pelo id; null quando é de outra rede.</summary>
     Task<Concession?> FindByIdAsync(Guid id, Guid networkId, CancellationToken cancellationToken);
 
-    /// <summary>Campanhas aprovadas da rede (status gravado fora de rascunho, aprovação e reprovada), com itens, condições, escopo e rede. Sem rastreamento.</summary>
-    Task<IReadOnlyList<Campaign>> GetApprovedCampaignsAsync(Guid networkId, CancellationToken cancellationToken);
+    /// <summary>
+    /// Campanhas aprovadas da rede que podem estar em vigor agora (spec GH-071, D-3; PERF-01): status gravado agendada,
+    /// ativa ou pausada e vigência que contém <paramref name="utcNow"/>. Com itens, condições, escopo e rede, sem
+    /// rastreamento. O filtro é um pré-corte no banco; o status efetivo continua no domínio.
+    /// </summary>
+    Task<IReadOnlyList<Campaign>> GetApprovedCampaignsAsync(Guid networkId, DateTime utcNow, CancellationToken cancellationToken);
 
     /// <summary>Das campanhas informadas, as que têm o CPF na lista de clientes específicos (spec GH-047, D-8), numa consulta.</summary>
     Task<IReadOnlySet<Guid>> GetCampaignsListingCustomerAsync(
