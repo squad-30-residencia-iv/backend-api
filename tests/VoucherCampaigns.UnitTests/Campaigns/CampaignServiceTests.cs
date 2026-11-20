@@ -312,6 +312,17 @@ public class CampaignServiceTests
         public Task<IReadOnlyList<Campaign>> GetByNetworkAsync(Guid networkId, CancellationToken cancellationToken) =>
             Task.FromResult<IReadOnlyList<Campaign>>(Added.Where(campaign => campaign.NetworkId == networkId).ToList());
 
+        public Task<(int Total, IReadOnlyList<Campaign> Items)> GetPageByNetworkAsync(
+            Guid networkId, CampaignStatus? status, DateTime utcNow, int? skip, int? take, CancellationToken cancellationToken)
+        {
+            var filtered = Added
+                .Where(campaign => campaign.NetworkId == networkId && (status is null || campaign.EffectiveStatus(utcNow) == status))
+                .ToList();
+            IReadOnlyList<Campaign> page = skip is { } offset && take is { } size ? filtered.Skip(offset).Take(size).ToList() : filtered;
+
+            return Task.FromResult((filtered.Count, page));
+        }
+
         public Task<Campaign?> FindByIdAsync(Guid id, CancellationToken cancellationToken) =>
             Task.FromResult(Added.FirstOrDefault(campaign => campaign.Id == id));
 
@@ -411,6 +422,8 @@ public class CampaignServiceTests
         public Task<bool> ExistsRegionByNameInNetworkAsync(Guid networkId, string name, Guid? excludeId, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<IReadOnlyList<Establishment>> GetEstablishmentsAsync(Guid regionId, bool? activeOnly, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<Establishment?> GetEstablishmentByIdAsync(Guid id, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<IReadOnlyList<Region>> GetRegionsByIdsAsync(IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<IReadOnlyList<Establishment>> GetEstablishmentsByIdsAsync(IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<Establishment> CreateEstablishmentAsync(Establishment establishment, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<Establishment> UpdateEstablishmentAsync(Establishment establishment, CancellationToken cancellationToken) => throw new NotSupportedException();
         public Task<bool> ExistsEstablishmentByCodeInRegionAsync(Guid regionId, string code, Guid? excludeId, CancellationToken cancellationToken) => throw new NotSupportedException();

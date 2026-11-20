@@ -24,6 +24,10 @@
 - [x] [SQUAD-2] Avisar o frontend: `CampaignResponse` ganhou `reservedVouchers`, `issuedVouchers` passou a ser real (confirmados) e `status` pode vir `SoldOut` (esgotada derivada); o fim da vigência agora vale até 23:59:59 (D9); `PUT /conditions` aceita `CustomerPurchaseCount` com `minQuantity`. O portal (US-024) mostra a parcela do limite e os dois contadores. Utilizados e a lista de vouchers passam a ter leitura no portal pelo PR #65 (`redeemedVouchers`, `expiredVouchers`, `GET /vouchers`).
 - [x] [SQUAD-2] Issue #49 (resgate): spec `GH-049-resgate-de-vouchers.md` e implementação na `staging` (PR #58). Encerrada, pausada e esgotada **resgatam** (RN07a); só cancelada não. O provisório resgata na própria compra quando a campanha permite (D-10), e a confirmação o consolida.
 - [x] [SQUAD-2] Issue #68 (respostas do cliente aos PAs da GH-066): spec `completed/GH-068-desconto-unico-e-alvo-por-codigo.md`, na `staging` pelo PR #69 (2026-11-19).
+- [x] [SQUAD-2] Issue #71, fatia 1 do endurecimento: spec `completed/GH-071-endurecimento-fatia-1.md`. Fatias seguintes (baixa e informativa) na issue #71.
+- [ ] [SQUAD-2] Avisar o frontend e o PDV (issue #71):
+  - frontend: `GET /campaigns` e `GET /vouchers` aceitam `page` e `pageSize` (1 a 100) e devolvem `X-Total-Count`; sem os parâmetros, a resposta é a mesma de antes;
+  - PDV: o token passa a cair (401) assim que a aplicação é inativada, troca o segredo ou muda os escopos, e o token emitido antes da migração é recusado uma vez; o `POST /satellite/token` tem limite por IP (`429 SATELLITE_TOKEN_RATE_LIMITED`); campanha encerrada, cancelada ou fora da vigência recusa a concessão com `NoCampaignMatched` (antes `CampaignNotActive`); combinar a data de retirada da `GET /satellite/customers/{cpf}/vouchers` (`Satellite:LegacyVoucherLookupSunset`).
 - [ ] [SQUAD-2] Avisar o frontend (issue #68):
   - todos os alvos da campanha precisam ter o mesmo desconto, senão `422 CAMPAIGN_BENEFIT_NOT_UNIFORM`, na gravação dos alvos e na submissão;
   - o alvo de produto aceita `productCode` no lugar de `productId`; os códigos recusados vêm em `codes`, com `422 CAMPAIGN_ITEM_PRODUCT_CODE_NOT_FOUND` ou `CAMPAIGN_ITEM_PRODUCT_INACTIVE`;
@@ -77,6 +81,13 @@
 
 ## ✅ Últimas Entregas Concluídas
 
+- **Issue #71: endurecimento, fatia 1 (achados médios da auditoria).** Spec `completed/GH-071-endurecimento-fatia-1.md` (2026-11-19).
+  - **SEC-03:** carimbo da aplicação no token, conferido a cada requisição (cache de 30 s); inativar, trocar o segredo ou mudar os escopos derruba o token na hora.
+  - **SEC-05:** limite por IP no `POST /satellite/token`; o bloqueio por segredo errado passa a ser por `clientId` + IP, com teto de entradas.
+  - **PERF-01 e PERF-02:** a concessão filtra status e vigência no banco; condições e escopo são validados em lote.
+  - **PERF-03:** paginação opcional com `X-Total-Count` e o filtro de status no SQL em `GET /campaigns` e `GET /vouchers`.
+  - **Trilha:** resumo para escopo e público quando não cabem nos 2.000 caracteres, e a marca `truncated` como rede de segurança.
+  - **SEC-06:** `Sunset` configurável e log de uso, sem CPF, na rota antiga.
 - **Issue #68: respostas do cliente aos PAs da GH-066.** Spec `completed/GH-068-desconto-unico-e-alvo-por-codigo.md`. Na staging pelo PR #69 (2026-11-19).
   - **Desconto único:** todos os alvos com o mesmo tipo e valor (`422 CAMPAIGN_BENEFIT_NOT_UNIFORM`), na gravação e na submissão.
   - **Alvo por código:** `productCode` no lugar de `productId`; códigos recusados em `codes`; até 1.000 alvos, com o catálogo validado em lote.

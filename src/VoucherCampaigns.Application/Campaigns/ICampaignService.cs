@@ -1,3 +1,4 @@
+using VoucherCampaigns.Application.Common;
 using VoucherCampaigns.Application.Eligibility;
 
 namespace VoucherCampaigns.Application.Campaigns;
@@ -7,6 +8,9 @@ public interface ICampaignService
     Task<CampaignResponse> CreateAsync(CreateCampaignRequest request, CancellationToken cancellationToken);
 
     Task<IReadOnlyList<CampaignResponse>> GetAllAsync(Guid? networkId, string? status, CancellationToken cancellationToken);
+
+    /// <summary>Listagem paginada (spec GH-071, D-5): sem <c>page</c> e <c>pageSize</c>, traz tudo.</summary>
+    Task<PagedResult<CampaignResponse>> ListAsync(Guid? networkId, string? status, int? page, int? pageSize, CancellationToken cancellationToken);
 
     Task<CampaignResponse> GetByIdAsync(Guid id, CancellationToken cancellationToken);
 

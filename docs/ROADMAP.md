@@ -205,7 +205,8 @@ Ciclo SDD já usado nas US-02.5 e US-01.1 (`docs/prompts/` e `agents.md`):
 - [x] Issue #66: pontos do cliente de 2026-11-18 (validade só em dias, lojas e produtos em lote, limite por CPF atômico, contrato do público para o PDV) e correções urgentes da auditoria (SEC-01, SEC-02, SEC-04, SEC-06, SEC-07, SEC-08, SEC-21); spec `GH-066`, na `staging` pelo PR #67 (2026-11-18)
 - [x] Issue #68: respostas do cliente aos PAs da `GH-066`. Desconto único por campanha, alvo pelo código do produto e até 1.000 alvos. Spec `GH-068`, na `staging` pelo PR #69 (2026-11-19).
 - [ ] Restrições na etapa de resgate (PA-1 da `GH-068`), quando o cliente definir.
-- [ ] Issue de endurecimento com os demais achados da auditoria (PA-10 da `GH-066`).
+- [x] Issue #71, fatia 1: achados médios da auditoria (SEC-03, SEC-05, PERF-01 a PERF-03, trilha e `Sunset` da rota antiga), spec `GH-071`.
+- [ ] Issue #71, fatias seguintes: achados de severidade baixa e informativa, antes do deploy público.
 - [ ] US-01.7 edição da campanha após entrar em vigor (RN03b, RN02a)
 - [ ] Issue #57: pontos em aberto da spec `GH-045` (PA-4 a PA-14)
 - [ ] Avisar o frontend e o PDV das rotas novas (resgate, campanhas vigentes, dashboard) e conferir o formato do CSV

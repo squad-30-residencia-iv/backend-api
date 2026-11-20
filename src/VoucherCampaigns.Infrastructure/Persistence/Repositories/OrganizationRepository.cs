@@ -135,6 +135,21 @@ public class OrganizationRepository(AppDbContext context) : IOrganizationReposit
             .Include(establishment => establishment.Channels)
             .FirstOrDefaultAsync(establishment => establishment.Id == id, cancellationToken);
 
+    public async Task<IReadOnlyList<Region>> GetRegionsByIdsAsync(IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken) =>
+        ids.Count == 0
+            ? []
+            : await context.Regions.AsNoTracking().Where(region => ids.Contains(region.Id)).ToListAsync(cancellationToken);
+
+    public async Task<IReadOnlyList<Establishment>> GetEstablishmentsByIdsAsync(IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken) =>
+        ids.Count == 0
+            ? []
+            : await context.Establishments.AsNoTracking()
+                .Include(establishment => establishment.Channels)
+                .Include(establishment => establishment.Region)
+                .Where(establishment => ids.Contains(establishment.Id))
+                .AsSplitQuery()
+                .ToListAsync(cancellationToken);
+
     public async Task<Establishment> CreateEstablishmentAsync(Establishment establishment, CancellationToken cancellationToken)
     {
         context.Establishments.Add(establishment);

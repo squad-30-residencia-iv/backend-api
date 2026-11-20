@@ -1,6 +1,8 @@
+using System.Globalization;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using VoucherCampaigns.Api.Authentication;
+using VoucherCampaigns.Application.Authentication;
 using VoucherCampaigns.Application.Vouchers;
 
 namespace VoucherCampaigns.Api.Controllers;
@@ -12,8 +14,14 @@ namespace VoucherCampaigns.Api.Controllers;
 [ApiController]
 [Authorize(Policy = AuthorizationPolicies.SatelliteIssueVouchers)]
 [Route("api/v1/satellite")]
-public class SatelliteConcessionsController(IConcessionService concessionService) : ControllerBase
+public class SatelliteConcessionsController(
+    IConcessionService concessionService,
+    IConfiguration configuration,
+    ILogger<SatelliteConcessionsController> logger) : ControllerBase
 {
+    /// <summary>Data de retirada da rota antiga de consulta de vouchers (spec GH-071, D-7), combinada com o PDV.</summary>
+    public const string LegacyVoucherLookupSunsetKey = "Satellite:LegacyVoucherLookupSunset";
+
     /// <summary>Avalia a compra com o carrinho fechado e concede, no máximo, um voucher provisório. Não haver concessão não é erro.</summary>
     [HttpPost("concessions")]
     [ProducesResponseType<ConcessionResponse>(StatusCodes.Status200OK)]
@@ -80,6 +88,16 @@ public class SatelliteConcessionsController(IConcessionService concessionService
     {
         Response.Headers["Deprecation"] = "true";
         Response.Headers.Link = "</api/v1/satellite/customers/vouchers/search>; rel=\"successor-version\"";
+
+        // D-7 (GH-071): a data de retirada, quando combinada, e o registro de quem ainda chama, sem o CPF.
+        if (DateTimeOffset.TryParse(configuration[LegacyVoucherLookupSunsetKey], CultureInfo.InvariantCulture, DateTimeStyles.AssumeUniversal, out var sunset))
+        {
+            Response.Headers["Sunset"] = sunset.ToUniversalTime().ToString("R", CultureInfo.InvariantCulture);
+        }
+
+        logger.LogWarning(
+            "Rota obsoleta GET /satellite/customers/{{document}}/vouchers chamada pela aplicação {ClientId}; use POST /satellite/customers/vouchers/search.",
+            User.FindFirst(AuthClaimTypes.ClientId)?.Value ?? "desconhecida");
 
         return Ok(await concessionService.GetCustomerVouchersAsync(document, status, cancellationToken));
     }

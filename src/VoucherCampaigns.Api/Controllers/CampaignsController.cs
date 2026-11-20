@@ -24,8 +24,16 @@ public class CampaignsController(ICampaignService campaignService) : ControllerB
     public async Task<ActionResult<IReadOnlyList<CampaignResponse>>> GetAll(
         [FromQuery, Required(ErrorMessage = CampaignContract.NetworkRequired)] Guid? networkId,
         [FromQuery] string? status,
-        CancellationToken cancellationToken) =>
-        Ok(await campaignService.GetAllAsync(networkId, status, cancellationToken));
+        [FromQuery] int? page,
+        [FromQuery] int? pageSize,
+        CancellationToken cancellationToken)
+    {
+        // Paginação opcional (spec GH-071, D-5): o corpo continua uma lista; o total vai no cabeçalho.
+        var result = await campaignService.ListAsync(networkId, status, page, pageSize, cancellationToken);
+        Response.Headers[PagingHeaders.TotalCount] = result.Total.ToString(System.Globalization.CultureInfo.InvariantCulture);
+
+        return Ok(result.Items);
+    }
 
     /// <summary>Detalhe da campanha (US-01.9); campanha de outra rede responde 403.</summary>
     [HttpGet("{id:guid}")]

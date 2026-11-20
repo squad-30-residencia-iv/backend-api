@@ -206,14 +206,15 @@ public class SatelliteConcessionsEndpointTests : IClassFixture<ApiFactory>
         Assert.NotNull(granted.Voucher);
     }
 
-    // Esquema da US-04.4: só a efetivamente ativa concede.
+    // Esquema da US-04.4: só a efetivamente ativa concede. Desde a GH-071 (D-3), a agendada antes do início e a
+    // encerrada nem entram nas candidatas (filtro no banco): o motivo é NoCampaignMatched. A pausada na vigência entra.
     [Theory]
     [InlineData("Draft", "NoCampaignMatched")]
     [InlineData("PendingApproval", "NoCampaignMatched")]
     [InlineData("Rejected", "NoCampaignMatched")]
-    [InlineData("Scheduled", "CampaignNotActive")]
+    [InlineData("Scheduled", "NoCampaignMatched")]
     [InlineData("Paused", "CampaignNotActive")]
-    [InlineData("Ended", "CampaignNotActive")]
+    [InlineData("Ended", "NoCampaignMatched")]
     public async Task Grant_WhenTheCampaignIsNotEffectivelyActive_IsNotGranted(string status, string reason)
     {
         _factory.Clock.UtcNow = Setup;
@@ -439,7 +440,8 @@ public class SatelliteConcessionsEndpointTests : IClassFixture<ApiFactory>
 
         (await User(_factory).PostAsync($"{ReadyCampaign.Route}/{scenario.CampaignId}/end", null)).EnsureSuccessStatusCode();
         var vouchers = await satellite.GetFromJsonAsync<List<VoucherResponseDto>>("/api/v1/satellite/customers/55566677788/vouchers");
-        await NotGrantedAsync(satellite, Purchase(scenario.StoreId, document: "55566677788"), "CampaignNotActive");
+        // Encerrada não entra nas candidatas (GH-071, D-3).
+        await NotGrantedAsync(satellite, Purchase(scenario.StoreId, document: "55566677788"), "NoCampaignMatched");
 
         Assert.Equal("Available", Assert.Single(vouchers!, voucher => voucher.Id == granted.Voucher!.Id).Status);
     }

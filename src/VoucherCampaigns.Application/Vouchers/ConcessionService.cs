@@ -51,7 +51,7 @@ public class ConcessionService(
         await releaser.ReleaseExpiredAsync(networkId, utcNow, cancellationToken);
 
         var purchase = await PurchaseParsing.ResolveAsync(catalog, input, request.CustomerPurchaseCount, cancellationToken);
-        var candidates = (await concessions.GetApprovedCampaignsAsync(networkId, cancellationToken))
+        var candidates = (await concessions.GetApprovedCampaignsAsync(networkId, utcNow, cancellationToken))
             .Where(campaign => campaign.IsInScope(establishment, input.Channel))
             .ToList();
         var customerVouchers = await concessions.CountCustomerVouchersAsync(networkId, input.Document, cancellationToken);
