@@ -11,9 +11,10 @@ public static class RedemptionEvaluator
 {
     /// <summary>
     /// Primeiro motivo que se aplica, na ordem do fluxo: já resgatado nesta compra, status efetivo (provisório só na própria
-    /// compra com a permissão da campanha), campanha cancelada, escopo, faixa de valor, alvo presente e compra já com outro resgate.
+    /// compra com a permissão da campanha), campanha cancelada, escopo, janela de resgate, faixa de valor, alvo presente e compra já com outro resgate.
     /// </summary>
     /// <param name="existingInTransaction">Resgate já gravado para esta transação, se houver.</param>
+    /// <param name="networkLocalNow">O mesmo instante de <paramref name="utcNow"/> no fuso da rede, para as janelas de resgate (GH-070, D-3).</param>
     public static RedemptionRefusal? Refusal(
         Voucher voucher,
         Campaign campaign,
@@ -24,7 +25,8 @@ public static class RedemptionEvaluator
         ChannelType channel,
         string transactionId,
         Redemption? existingInTransaction,
-        DateTime utcNow)
+        DateTime utcNow,
+        DateTime networkLocalNow)
     {
         // O voucher que esta compra já resgatou explica mais do que o status dele (que pode ter virado Redeemed por isso).
         if (existingInTransaction is not null && existingInTransaction.VoucherId == voucher.Id)
@@ -65,6 +67,12 @@ public static class RedemptionEvaluator
             return RedemptionRefusal.OutOfScope;
         }
 
+        // Antes da faixa de valor: fora do horário o operador não resolve mexendo no carrinho (GH-070, D-3).
+        if (!campaign.IsRedeemableAt(networkLocalNow))
+        {
+            return RedemptionRefusal.OutsideRedemptionWindow;
+        }
+
         if (campaign.MinPurchaseAmount is { } minimum && purchase.TotalAmount < minimum)
         {
             return RedemptionRefusal.AmountBelowMinimum;
@@ -75,7 +83,7 @@ public static class RedemptionEvaluator
             return RedemptionRefusal.AmountAboveMaximum;
         }
 
-        if (target.TargetType != TargetType.All && !purchase.Items.Any(target.Matches))
+        if (!campaign.HasRedemptionTargetIn(purchase, target))
         {
             return RedemptionRefusal.TargetNotInPurchase;
         }
@@ -90,13 +98,17 @@ public static class RedemptionEvaluator
 
     /// <summary>
     /// Desconto do voucher nesta compra (D-7): percentual sobre os itens do alvo (alvo "todos" = valor total) ou o valor
-    /// fixo limitado a essa base, para o desconto nunca passar do que o alvo vale na compra.
+    /// fixo limitado a essa base, para o desconto nunca passar do que o alvo vale na compra. Com alvos de resgate na
+    /// campanha (GH-070, D-2), a base são os itens que casam com algum deles, cada item contado uma vez; o benefício
+    /// continua o do alvo da concessão.
     /// </summary>
-    public static decimal Discount(CampaignItem target, Purchase purchase)
+    public static decimal Discount(CampaignItem target, Purchase purchase, IReadOnlyCollection<CampaignRedemptionTarget>? redemptionTargets = null)
     {
-        var baseAmount = target.TargetType == TargetType.All
-            ? purchase.TotalAmount
-            : purchase.Items.Where(target.Matches).Sum(item => item.Amount);
+        var baseAmount = redemptionTargets is { Count: > 0 }
+            ? purchase.Items.Where(item => redemptionTargets.Any(redemptionTarget => redemptionTarget.Matches(item))).Sum(item => item.Amount)
+            : target.TargetType == TargetType.All
+                ? purchase.TotalAmount
+                : purchase.Items.Where(target.Matches).Sum(item => item.Amount);
 
         return target.BenefitType == BenefitType.FixedAmount
             ? Math.Min(target.BenefitValue, baseAmount)

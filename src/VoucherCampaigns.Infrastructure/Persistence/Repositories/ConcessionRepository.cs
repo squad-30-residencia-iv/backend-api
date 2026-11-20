@@ -50,6 +50,8 @@ public class ConcessionRepository(AppDbContext context) : IConcessionRepository
             .Include(campaign => campaign.Conditions.OrderBy(condition => condition.Id))
             .Include(campaign => campaign.EligibilityCriteria.OrderBy(criterion => criterion.Id))
             .Include(campaign => campaign.Scopes)
+            .Include(campaign => campaign.RedemptionTargets.OrderBy(target => target.Id)).ThenInclude(target => target.Product)
+            .Include(campaign => campaign.RedemptionWindows.OrderBy(window => window.Id))
             .AsSplitQuery()
             .ToListAsync(cancellationToken);
     }

@@ -28,6 +28,11 @@
 - [ ] [SQUAD-2] Avisar o frontend e o PDV (issue #71):
   - frontend: `GET /campaigns` e `GET /vouchers` aceitam `page` e `pageSize` (1 a 100) e devolvem `X-Total-Count`; sem os parâmetros, a resposta é a mesma de antes;
   - PDV: o token passa a cair (401) assim que a aplicação é inativada, troca o segredo ou muda os escopos, e o token emitido antes da migração é recusado uma vez; o `POST /satellite/token` tem limite por IP (`429 SATELLITE_TOKEN_RATE_LIMITED`); campanha encerrada, cancelada ou fora da vigência recusa a concessão com `NoCampaignMatched` (antes `CampaignNotActive`); combinar a data de retirada da `GET /satellite/customers/{cpf}/vouchers` (`Satellite:LegacyVoucherLookupSunset`).
+- [x] [SQUAD-2] Issue #70 (restrições no resgate, ponto 8 do cliente): spec `completed/GH-070-restricoes-no-resgate.md`.
+- [ ] [SQUAD-2] Avisar o frontend e o PDV (issue #70):
+  - etapa nova do portal com `PUT /campaigns/{id}/redemption-targets` (categorias e produtos por id ou código, até 1.000; vazia = alvo da concessão) e `PUT /campaigns/{id}/redemption-windows` (dias e `HH:mm` no fuso da rede, até 14; vazia = sempre; fim antes do início = vira a noite);
+  - `redemptionTargets` e `redemptionWindows` no `CampaignResponse` e em `GET /satellite/campaigns`;
+  - no PDV, o motivo novo `OutsideRedemptionWindow` (`422 REDEMPTION_OUTSIDE_REDEMPTION_WINDOW`), e o desconto com alvos de resgate passa a ser calculado sobre os itens deles.
 - [ ] [SQUAD-2] Avisar o frontend (issue #68):
   - todos os alvos da campanha precisam ter o mesmo desconto, senão `422 CAMPAIGN_BENEFIT_NOT_UNIFORM`, na gravação dos alvos e na submissão;
   - o alvo de produto aceita `productCode` no lugar de `productId`; os códigos recusados vêm em `codes`, com `422 CAMPAIGN_ITEM_PRODUCT_CODE_NOT_FOUND` ou `CAMPAIGN_ITEM_PRODUCT_INACTIVE`;
@@ -88,6 +93,11 @@
   - **PERF-03:** paginação opcional com `X-Total-Count` e o filtro de status no SQL em `GET /campaigns` e `GET /vouchers`.
   - **Trilha:** resumo para escopo e público quando não cabem nos 2.000 caracteres, e a marca `truncated` como rede de segurança.
   - **SEC-06:** `Sunset` configurável e log de uso, sem CPF, na rota antiga.
+- **Issue #70: restrições no resgate (ponto 8 do cliente).** Spec `completed/GH-070-restricoes-no-resgate.md` (2026-11-19).
+  - **Já existiam:** só o CPF que ganhou usa o voucher; o mínimo do resgate (`usage-restrictions`) é separado do da concessão (condição `PurchaseTotal`). Agora há testes que prendem as duas regras.
+  - **Alvos de resgate:** `PUT /campaigns/{id}/redemption-targets`; o voucher só serve com item deles na compra, e o desconto é calculado sobre esses itens.
+  - **Janelas de resgate:** `PUT /campaigns/{id}/redemption-windows`, no fuso da rede, com janela que vira a noite; fora delas, `422 REDEMPTION_OUTSIDE_REDEMPTION_WINDOW`.
+  - **Não entrou:** lojas e canais de resgate diferentes (o cliente não quer).
 - **Issue #68: respostas do cliente aos PAs da GH-066.** Spec `completed/GH-068-desconto-unico-e-alvo-por-codigo.md`. Na staging pelo PR #69 (2026-11-19).
   - **Desconto único:** todos os alvos com o mesmo tipo e valor (`422 CAMPAIGN_BENEFIT_NOT_UNIFORM`), na gravação e na submissão.
   - **Alvo por código:** `productCode` no lugar de `productId`; códigos recusados em `codes`; até 1.000 alvos, com o catálogo validado em lote.

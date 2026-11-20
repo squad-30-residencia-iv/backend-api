@@ -200,11 +200,14 @@ public class RedemptionService(
         var target = voucher.Item ?? throw VoucherMapper.MissingNavigation(nameof(Voucher.Item));
         var concession = voucher.Concession ?? throw VoucherMapper.MissingNavigation(nameof(Voucher.Concession));
 
+        // As janelas de resgate valem no fuso da rede (GH-070, D-3).
+        var networkLocalNow = NetworkTime.ToLocal(context.UtcNow, VoucherMapper.TimeZoneOf(campaign)).DateTime;
         var refusal = RedemptionEvaluator.Refusal(
             voucher, campaign, target, concession, context.Purchase, context.Store, context.Input.Channel,
-            context.Input.TransactionId, context.Existing, context.UtcNow);
+            context.Input.TransactionId, context.Existing, context.UtcNow, networkLocalNow);
 
-        return new RedemptionCandidate(voucher, refusal, refusal is null ? RedemptionEvaluator.Discount(target, context.Purchase) : 0m);
+        return new RedemptionCandidate(
+            voucher, refusal, refusal is null ? RedemptionEvaluator.Discount(target, context.Purchase, campaign.RedemptionTargets.ToList()) : 0m);
     }
 
     /// <summary>Vencido na tentativa de resgate persiste o status (US-05.3, cenário 2); toda recusa é auditada com o motivo (D-15).</summary>

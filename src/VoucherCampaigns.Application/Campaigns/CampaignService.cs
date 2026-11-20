@@ -1,3 +1,4 @@
+using System.Globalization;
 using VoucherCampaigns.Application.Audit;
 using VoucherCampaigns.Application.Authentication;
 using VoucherCampaigns.Application.Common;
@@ -480,6 +481,71 @@ public class CampaignService(
         return await RespondAsync(campaign, campaign.Network!, utcNow, cancellationToken);
     }
 
+    /// <summary>
+    /// Alvos de resgate (spec GH-070, D-2): mesmo caminho dos alvos da concessão (contrato, códigos numa consulta,
+    /// catálogo em lote), sem benefício nem cota.
+    /// </summary>
+    public async Task<CampaignResponse> ReplaceRedemptionTargetsAsync(
+        Guid id,
+        ReplaceRedemptionTargetsRequest request,
+        CancellationToken cancellationToken)
+    {
+        var campaign = await RequireForUpdateAsync(id, cancellationToken);
+        var utcNow = timeProvider.GetUtcNow();
+        var parsed = new List<(CampaignItem Item, string? ProductCode)>();
+
+        for (var index = 0; index < request.Targets!.Count; index++)
+        {
+            parsed.Add(ParseRedemptionTarget(request.Targets[index], $"Targets[{index}]"));
+        }
+
+        await ResolveProductCodesAsync(parsed, cancellationToken);
+        var probes = parsed.Select(entry => entry.Item).ToList();
+        await EnsureTargetsInCatalogAsync(probes, cancellationToken);
+
+        // Ids em sequência para os alvos voltarem na ordem informada.
+        var targets = probes
+            .Select((probe, index) => new CampaignRedemptionTarget
+            {
+                Id = Guid.CreateVersion7(utcNow.AddMilliseconds(index)),
+                TargetType = probe.TargetType,
+                CategoryId = probe.CategoryId,
+                ProductId = probe.ProductId
+            })
+            .ToList();
+
+        var before = SnapshotRedemptionTargets(campaign);
+        campaign.ReplaceRedemptionTargets(targets, utcNow.UtcDateTime);
+        AuditRedemptionTargets(campaign, before, SnapshotRedemptionTargets(campaign), utcNow.UtcDateTime);
+        await SaveGuardedAsync(campaign, cancellationToken);
+
+        // Relida para a resposta trazer o código de cada produto.
+        return await MapStoredAsync(campaign.Id, utcNow.UtcDateTime, cancellationToken);
+    }
+
+    /// <summary>Janelas de resgate (spec GH-070, D-3), no fuso da rede.</summary>
+    public async Task<CampaignResponse> ReplaceRedemptionWindowsAsync(
+        Guid id,
+        ReplaceRedemptionWindowsRequest request,
+        CancellationToken cancellationToken)
+    {
+        var windows = request.Windows!.Select((window, index) => ParseRedemptionWindow(window, $"Windows[{index}]")).ToList();
+        var campaign = await RequireForUpdateAsync(id, cancellationToken);
+        var utcNow = timeProvider.GetUtcNow();
+
+        for (var index = 0; index < windows.Count; index++)
+        {
+            windows[index].Id = Guid.CreateVersion7(utcNow.AddMilliseconds(index));
+        }
+
+        var before = SnapshotRedemptionWindows(campaign);
+        campaign.ReplaceRedemptionWindows(windows, utcNow.UtcDateTime);
+        AuditSection(campaign, "redemptionWindows", before, SnapshotRedemptionWindows(campaign), utcNow.UtcDateTime);
+        await SaveGuardedAsync(campaign, cancellationToken);
+
+        return await RespondAsync(campaign, campaign.Network!, utcNow.UtcDateTime, cancellationToken);
+    }
+
     public async Task<CampaignResponse> ReplaceConditionsAsync(
         Guid id,
         ReplaceCampaignConditionsRequest request,
@@ -819,6 +885,40 @@ public class CampaignService(
         AuditSection(campaign, section, AudienceSummary.Of(before, null), AudienceSummary.Of(after, LocationChange.Between(before, after)), utcNow);
     }
 
+    /// <summary>D-5 (GH-070): a lista inteira quando cabe na coluna da trilha; senão, quantos alvos de cada tipo e o que mudou.</summary>
+    private void AuditRedemptionTargets(
+        Campaign campaign, List<RedemptionTargetSnapshot> before, List<RedemptionTargetSnapshot> after, DateTime utcNow)
+    {
+        const string section = "redemptionTargets";
+
+        if (before.SequenceEqual(after))
+        {
+            return;
+        }
+
+        if (AuditJson.Serialize(new SectionChangePayload(section, before, after)).Length <= AuditJson.MaxPayloadLength)
+        {
+            AuditSection(campaign, section, before, after, utcNow);
+            return;
+        }
+
+        var changes = new ItemsChange(after.Except(before).Count(), before.Except(after).Count());
+        AuditSection(campaign, section, RedemptionTargetsSummary.Of(before, null), RedemptionTargetsSummary.Of(after, changes), utcNow);
+    }
+
+    private static List<RedemptionTargetSnapshot> SnapshotRedemptionTargets(Campaign campaign) =>
+        campaign.RedemptionTargets.OrderBy(target => target.Id)
+            .Select(target => new RedemptionTargetSnapshot(target.TargetType.ToString(), target.CategoryId, target.ProductId))
+            .ToList();
+
+    private static List<RedemptionWindowSnapshot> SnapshotRedemptionWindows(Campaign campaign) =>
+        campaign.RedemptionWindows.OrderBy(window => window.Id)
+            .Select(window => new RedemptionWindowSnapshot(
+                RedemptionRestrictionsMapper.Days(window),
+                RedemptionRestrictionsMapper.Time(window.StartMinute),
+                RedemptionRestrictionsMapper.Time(window.EndMinute)))
+            .ToList();
+
     private static DetailsSnapshot SnapshotDetails(Campaign campaign, TimeZoneInfo timeZone) =>
         new(campaign.Name, campaign.Description, NetworkTime.ToLocal(campaign.StartsAt, timeZone), NetworkTime.ToLocal(campaign.EndsAt, timeZone));
 
@@ -937,6 +1037,20 @@ public class CampaignService(
                 items.Select(item => item.BenefitValue).Distinct().Order().ToList(),
                 items.GroupBy(item => item.TargetType).OrderBy(group => group.Key, StringComparer.Ordinal).ToDictionary(group => group.Key, group => group.Count()),
                 items.Sum(item => item.VoucherLimit ?? 0),
+                changes);
+    }
+
+    private sealed record RedemptionTargetSnapshot(string TargetType, Guid? CategoryId, Guid? ProductId);
+
+    private sealed record RedemptionWindowSnapshot(IReadOnlyList<string> DaysOfWeek, string Start, string End);
+
+    /// <summary>Resumo dos alvos de resgate para a trilha quando a lista não cabe (D-5 da GH-070).</summary>
+    private sealed record RedemptionTargetsSummary(int Count, IReadOnlyDictionary<string, int> Targets, ItemsChange? Changes)
+    {
+        public static RedemptionTargetsSummary Of(IReadOnlyList<RedemptionTargetSnapshot> targets, ItemsChange? changes) =>
+            new(
+                targets.Count,
+                targets.GroupBy(target => target.TargetType).OrderBy(group => group.Key, StringComparer.Ordinal).ToDictionary(group => group.Key, group => group.Count()),
                 changes);
     }
 
@@ -1312,6 +1426,82 @@ public class CampaignService(
         }
     }
 
+    /// <summary>Alvo de resgate (D-2 da GH-070): só categoria ou produto, com as mesmas regras de id e código dos alvos.</summary>
+    private static (CampaignItem Item, string? ProductCode) ParseRedemptionTarget(RedemptionTargetRequest? request, string field)
+    {
+        if (request is null)
+        {
+            throw new RequestValidationException(field, CampaignContract.TargetTypeRequired);
+        }
+
+        var targetType = ParseEnum<TargetType>(request.TargetType, $"{field}.TargetType", CampaignContract.RedemptionTargetTypeInvalid);
+
+        if (targetType == TargetType.All)
+        {
+            throw new RequestValidationException($"{field}.TargetType", CampaignContract.RedemptionTargetTypeInvalid);
+        }
+
+        var categoryId = NonEmpty(request.CategoryId);
+        var productId = NonEmpty(request.ProductId);
+        var productCode = string.IsNullOrWhiteSpace(request.ProductCode) ? null : request.ProductCode.Trim();
+
+        if (productCode is not null && targetType != TargetType.Product)
+        {
+            throw new RequestValidationException($"{field}.ProductCode", CampaignContract.TargetProductCodeOnlyForProduct);
+        }
+
+        if (productCode is not null && productId is not null)
+        {
+            throw new RequestValidationException($"{field}.ProductCode", CampaignContract.TargetProductIdAndCode);
+        }
+
+        switch (targetType)
+        {
+            case TargetType.Category when categoryId is null || productId is not null:
+                throw new RequestValidationException($"{field}.CategoryId", CampaignContract.TargetCategoryRequired);
+            case TargetType.Product when (productId is null && productCode is null) || categoryId is not null:
+                throw new RequestValidationException($"{field}.ProductId", CampaignContract.TargetProductRequired);
+        }
+
+        // O item só leva o alvo pela resolução de códigos e pela conferência do catálogo, as mesmas dos alvos da concessão.
+        return (new CampaignItem { TargetType = targetType, CategoryId = categoryId, ProductId = productId }, productCode);
+    }
+
+    /// <summary>Janela de resgate (D-3 da GH-070): dias sem repetição e horários <c>HH:mm</c>.</summary>
+    private static CampaignRedemptionWindow ParseRedemptionWindow(RedemptionWindowRequest? request, string field)
+    {
+        if (request?.DaysOfWeek is not { Count: > 0 } values)
+        {
+            throw new RequestValidationException($"{field}.DaysOfWeek", CampaignContract.RedemptionWindowDaysRequired);
+        }
+
+        var days = values
+            .Select(value => ParseEnum<DayOfWeek>(value, $"{field}.DaysOfWeek", CampaignContract.RedemptionWindowDayInvalid))
+            .ToList();
+
+        if (days.Distinct().Count() != days.Count)
+        {
+            throw new RequestValidationException($"{field}.DaysOfWeek", CampaignContract.RedemptionWindowDayInvalid);
+        }
+
+        return new CampaignRedemptionWindow
+        {
+            DaysOfWeek = CampaignRedemptionWindow.MaskOf(days),
+            StartMinute = ParseMinuteOfDay(request.Start, $"{field}.Start"),
+            EndMinute = ParseMinuteOfDay(request.End, $"{field}.End")
+        };
+    }
+
+    private static int ParseMinuteOfDay(string? value, string field)
+    {
+        if (!TimeOnly.TryParseExact(value?.Trim(), "HH:mm", CultureInfo.InvariantCulture, DateTimeStyles.None, out var time))
+        {
+            throw new RequestValidationException(field, CampaignContract.RedemptionWindowTimeInvalid);
+        }
+
+        return time.Hour * 60 + time.Minute;
+    }
+
     private static Guid? NonEmpty(Guid? value) => value == Guid.Empty ? null : value;
 
     /// <summary>Aceita só os nomes do enum, sem diferenciar maiúsculas; números são recusados.</summary>
@@ -1389,7 +1579,9 @@ public class CampaignService(
             campaign.ReservedVouchers,
             counters.Redeemed,
             counters.Expired,
-            MapEligibility(campaign));
+            MapEligibility(campaign),
+            RedemptionRestrictionsMapper.Targets(campaign),
+            RedemptionRestrictionsMapper.Windows(campaign));
     }
 
     private static CampaignEligibilityResponse? MapEligibility(Campaign campaign) =>

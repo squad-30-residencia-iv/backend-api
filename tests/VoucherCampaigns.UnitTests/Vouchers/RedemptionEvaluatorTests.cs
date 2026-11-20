@@ -181,9 +181,11 @@ public class RedemptionEvaluatorTests
         ChannelType channel = ChannelType.Physical,
         Domain.Organization.Establishment? store = null,
         Redemption? existing = null,
-        DateTime? utcNow = null) =>
+        DateTime? utcNow = null,
+        DateTime? networkLocalNow = null) =>
         RedemptionEvaluator.Refusal(
-            voucher, campaign, Target(campaign), voucher.Concession!, purchase, store ?? Store(), channel, Transaction, existing, utcNow ?? DuringPeriod);
+            voucher, campaign, Target(campaign), voucher.Concession!, purchase, store ?? Store(), channel, Transaction, existing,
+            utcNow ?? DuringPeriod, networkLocalNow ?? utcNow ?? DuringPeriod);
 
     private static CampaignItem Target(Campaign campaign) => campaign.Items.OrderBy(item => item.Id).First();
 

@@ -34,6 +34,17 @@ public static class CampaignContract
     public const string TargetProductIdAndCode = "Informe o produto pelo id ou pelo código, não pelos dois.";
     public const string TargetProductCodeOnlyForProduct = "O código do produto só vale para o alvo Product.";
     public const string TargetProductCodeTooLong = "O código do produto deve ter no máximo 50 caracteres.";
+
+    // Restrições no resgate (spec GH-070).
+    public const int MaxRedemptionWindows = 14;
+    public const string RedemptionTargetsRequired = "Informe a lista de alvos de resgate (vazia para usar o alvo da concessão).";
+    public const string RedemptionTargetsTooMany = "A campanha pode ter no máximo 1.000 alvos de resgate.";
+    public const string RedemptionTargetTypeInvalid = "Tipo de alvo de resgate inválido. Use Category ou Product.";
+    public const string RedemptionWindowsRequired = "Informe a lista de janelas de resgate (vazia para qualquer dia e hora).";
+    public const string RedemptionWindowsTooMany = "A campanha pode ter no máximo 14 janelas de resgate.";
+    public const string RedemptionWindowDaysRequired = "Informe ao menos um dia da semana da janela.";
+    public const string RedemptionWindowDayInvalid = "Dia da semana inválido. Use Monday, Tuesday, Wednesday, Thursday, Friday, Saturday ou Sunday, sem repetir.";
+    public const string RedemptionWindowTimeInvalid = "Informe o horário no formato HH:mm (00:00 a 23:59).";
     public const string BenefitTypeRequired = "Informe o tipo do benefício.";
     public const string BenefitTypeInvalid = "Tipo de benefício inválido. Use Percentage ou FixedAmount.";
     public const string BenefitValueRequired = "Informe o valor do benefício.";

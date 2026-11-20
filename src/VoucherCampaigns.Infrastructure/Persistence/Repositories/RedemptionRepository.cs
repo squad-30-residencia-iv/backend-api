@@ -151,6 +151,8 @@ public class RedemptionRepository(AppDbContext context) : IRedemptionRepository
         query
             .Include(voucher => voucher.Campaign!).ThenInclude(campaign => campaign.Network)
             .Include(voucher => voucher.Campaign!).ThenInclude(campaign => campaign.Scopes)
+            .Include(voucher => voucher.Campaign!).ThenInclude(campaign => campaign.RedemptionTargets)
+            .Include(voucher => voucher.Campaign!).ThenInclude(campaign => campaign.RedemptionWindows)
             .Include(voucher => voucher.Item)
             .Include(voucher => voucher.Concession)
             .AsSplitQuery();

@@ -30,6 +30,7 @@ public static class RedemptionErrors
         RedemptionRefusal.Cancelled => "O voucher foi cancelado.",
         RedemptionRefusal.CampaignCancelled => "A campanha do voucher foi cancelada.",
         RedemptionRefusal.OutOfScope => "O voucher não vale nesta loja ou canal.",
+        RedemptionRefusal.OutsideRedemptionWindow => "O voucher não pode ser usado neste dia e horário.",
         RedemptionRefusal.AmountBelowMinimum => "A compra precisa ser de pelo menos R$ {0} para usar este voucher.",
         RedemptionRefusal.AmountAboveMaximum => "A compra não pode passar de R$ {0} para usar este voucher.",
         RedemptionRefusal.TargetNotInPurchase => "A compra não tem itens do alvo deste voucher.",
