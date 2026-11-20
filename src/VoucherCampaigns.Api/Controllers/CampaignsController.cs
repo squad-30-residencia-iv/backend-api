@@ -136,6 +136,34 @@ public class CampaignsController(ICampaignService campaignService) : ControllerB
         CancellationToken cancellationToken) =>
         Ok(await campaignService.UpdateUsageRestrictionsAsync(id, request, cancellationToken));
 
+    /// <summary>Substitui os alvos de resgate da campanha em rascunho (spec GH-070, D-2); lista vazia = alvo da concessão.</summary>
+    [HttpPut("{id:guid}/redemption-targets")]
+    [ProducesResponseType<CampaignResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<ActionResult<CampaignResponse>> ReplaceRedemptionTargets(
+        Guid id,
+        ReplaceRedemptionTargetsRequest request,
+        CancellationToken cancellationToken) =>
+        Ok(await campaignService.ReplaceRedemptionTargetsAsync(id, request, cancellationToken));
+
+    /// <summary>Substitui as janelas de resgate da campanha em rascunho (spec GH-070, D-3); lista vazia = qualquer dia e hora.</summary>
+    [HttpPut("{id:guid}/redemption-windows")]
+    [ProducesResponseType<CampaignResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<ActionResult<CampaignResponse>> ReplaceRedemptionWindows(
+        Guid id,
+        ReplaceRedemptionWindowsRequest request,
+        CancellationToken cancellationToken) =>
+        Ok(await campaignService.ReplaceRedemptionWindowsAsync(id, request, cancellationToken));
+
     /// <summary>Substitui as condições de geração e o uso na mesma compra da campanha em rascunho (US-01.4).</summary>
     [HttpPut("{id:guid}/conditions")]
     [ProducesResponseType<CampaignResponse>(StatusCodes.Status200OK)]

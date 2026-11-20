@@ -10,6 +10,8 @@ namespace VoucherCampaigns.Application.Campaigns;
 /// <param name="Audience"><c>All</c> ou <c>Restricted</c> (spec GH-047, D-15).</param>
 /// <param name="RequiredAttributes">Atributos do cliente que o satélite deve mandar na concessão desta campanha; vazio no público "todos".</param>
 /// <param name="HistoryWindows">Janelas, em dias, do histórico pedido pelos critérios. Sem limites nem CPFs: só o que mandar.</param>
+/// <param name="RedemptionTargets">Onde o voucher pode ser usado (spec GH-070, D-4); vazio = no alvo da concessão.</param>
+/// <param name="RedemptionWindows">Dias e horários do resgate no fuso da rede (spec GH-070, D-4); vazio = sempre.</param>
 public record SatelliteCampaignResponse(
     Guid Id,
     string Name,
@@ -24,7 +26,9 @@ public record SatelliteCampaignResponse(
     decimal? MaxPurchaseAmount,
     int? MaxUsesPerVoucher,
     IReadOnlyList<string> RequiredAttributes,
-    IReadOnlyList<int> HistoryWindows);
+    IReadOnlyList<int> HistoryWindows,
+    IReadOnlyList<RedemptionTargetResponse> RedemptionTargets,
+    IReadOnlyList<RedemptionWindowResponse> RedemptionWindows);
 
 public record SatelliteConditionResponse(string Type, decimal? MinAmount, int? MinQuantity, Guid? CategoryId, Guid? ProductId);
 
@@ -107,7 +111,9 @@ public class SatelliteCampaignService(IConcessionRepository concessions, ICurren
             campaign.MaxUsesPerVoucher,
             RequiredAttributes(campaign),
             campaign.EligibilityCriteria.Where(criterion => criterion.WindowDays is not null)
-                .Select(criterion => criterion.WindowDays!.Value).Distinct().Order().ToList());
+                .Select(criterion => criterion.WindowDays!.Value).Distinct().Order().ToList(),
+            RedemptionRestrictionsMapper.Targets(campaign),
+            RedemptionRestrictionsMapper.Windows(campaign));
     }
 
     /// <summary>Nomes dos campos de <c>customer</c> na concessão (D-15), na ordem do contrato.</summary>

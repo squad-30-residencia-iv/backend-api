@@ -38,6 +38,9 @@ public static class CampaignErrors
     public const string DuplicatedTargetCode = "CAMPAIGN_ITEM_DUPLICATED_TARGET";
     public const string DuplicatedTargetMessage = "O mesmo alvo foi informado mais de uma vez.";
 
+    public const string RedemptionTargetDuplicatedCode = "CAMPAIGN_REDEMPTION_TARGET_DUPLICATED";
+    public const string RedemptionTargetDuplicatedMessage = "O mesmo alvo de resgate foi informado mais de uma vez.";
+
     public const string ItemCategoryNotFoundCode = "CAMPAIGN_ITEM_CATEGORY_NOT_FOUND";
     public const string ItemCategoryInactiveCode = "CAMPAIGN_ITEM_CATEGORY_INACTIVE";
     public const string ItemProductNotFoundCode = "CAMPAIGN_ITEM_PRODUCT_NOT_FOUND";

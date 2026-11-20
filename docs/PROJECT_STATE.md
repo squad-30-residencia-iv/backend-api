@@ -24,6 +24,11 @@
 - [x] [SQUAD-2] Avisar o frontend: `CampaignResponse` ganhou `reservedVouchers`, `issuedVouchers` passou a ser real (confirmados) e `status` pode vir `SoldOut` (esgotada derivada); o fim da vigência agora vale até 23:59:59 (D9); `PUT /conditions` aceita `CustomerPurchaseCount` com `minQuantity`. O portal (US-024) mostra a parcela do limite e os dois contadores. Utilizados e a lista de vouchers passam a ter leitura no portal pelo PR #65 (`redeemedVouchers`, `expiredVouchers`, `GET /vouchers`).
 - [x] [SQUAD-2] Issue #49 (resgate): spec `GH-049-resgate-de-vouchers.md` e implementação na `staging` (PR #58). Encerrada, pausada e esgotada **resgatam** (RN07a); só cancelada não. O provisório resgata na própria compra quando a campanha permite (D-10), e a confirmação o consolida.
 - [x] [SQUAD-2] Issue #68 (respostas do cliente aos PAs da GH-066): spec `completed/GH-068-desconto-unico-e-alvo-por-codigo.md`, na `staging` pelo PR #69 (2026-11-19).
+- [x] [SQUAD-2] Issue #70 (restrições no resgate, ponto 8 do cliente): spec `completed/GH-070-restricoes-no-resgate.md`.
+- [ ] [SQUAD-2] Avisar o frontend e o PDV (issue #70):
+  - etapa nova do portal com `PUT /campaigns/{id}/redemption-targets` (categorias e produtos por id ou código, até 1.000; vazia = alvo da concessão) e `PUT /campaigns/{id}/redemption-windows` (dias e `HH:mm` no fuso da rede, até 14; vazia = sempre; fim antes do início = vira a noite);
+  - `redemptionTargets` e `redemptionWindows` no `CampaignResponse` e em `GET /satellite/campaigns`;
+  - no PDV, o motivo novo `OutsideRedemptionWindow` (`422 REDEMPTION_OUTSIDE_REDEMPTION_WINDOW`), e o desconto com alvos de resgate passa a ser calculado sobre os itens deles.
 - [ ] [SQUAD-2] Avisar o frontend (issue #68):
   - todos os alvos da campanha precisam ter o mesmo desconto, senão `422 CAMPAIGN_BENEFIT_NOT_UNIFORM`, na gravação dos alvos e na submissão;
   - o alvo de produto aceita `productCode` no lugar de `productId`; os códigos recusados vêm em `codes`, com `422 CAMPAIGN_ITEM_PRODUCT_CODE_NOT_FOUND` ou `CAMPAIGN_ITEM_PRODUCT_INACTIVE`;
@@ -77,6 +82,11 @@
 
 ## ✅ Últimas Entregas Concluídas
 
+- **Issue #70: restrições no resgate (ponto 8 do cliente).** Spec `completed/GH-070-restricoes-no-resgate.md` (2026-11-19).
+  - **Já existiam:** só o CPF que ganhou usa o voucher; o mínimo do resgate (`usage-restrictions`) é separado do da concessão (condição `PurchaseTotal`). Agora há testes que prendem as duas regras.
+  - **Alvos de resgate:** `PUT /campaigns/{id}/redemption-targets`; o voucher só serve com item deles na compra, e o desconto é calculado sobre esses itens.
+  - **Janelas de resgate:** `PUT /campaigns/{id}/redemption-windows`, no fuso da rede, com janela que vira a noite; fora delas, `422 REDEMPTION_OUTSIDE_REDEMPTION_WINDOW`.
+  - **Não entrou:** lojas e canais de resgate diferentes (o cliente não quer).
 - **Issue #68: respostas do cliente aos PAs da GH-066.** Spec `completed/GH-068-desconto-unico-e-alvo-por-codigo.md`. Na staging pelo PR #69 (2026-11-19).
   - **Desconto único:** todos os alvos com o mesmo tipo e valor (`422 CAMPAIGN_BENEFIT_NOT_UNIFORM`), na gravação e na submissão.
   - **Alvo por código:** `productCode` no lugar de `productId`; códigos recusados em `codes`; até 1.000 alvos, com o catálogo validado em lote.
