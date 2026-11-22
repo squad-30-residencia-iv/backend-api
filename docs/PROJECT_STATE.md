@@ -86,6 +86,7 @@
 
 ## ✅ Últimas Entregas Concluídas
 
+- **Testes de verificação das Tasks 1 e 2:** adiciona `SystemStatusSecurityTests`, `SeedEnvironmentTests`, `LoginResponseSecurityTests` e `TokenValidationTests` em `tests/VoucherCampaigns.IntegrationTests`, sem alterar código de produção. Cobrem: `/api/v1/system/status` sem credenciais; seed de demonstração executado uma vez e desligado por padrão em Production; login sem senha nem hash nas respostas; token adulterado e esquema não-Bearer retornam 401. Resultado de `dotnet test`: pendente (validação pelo CI do PR). Lacuna registrada: `SeedDemoData=true` ainda semeia em Production.
 - **Issue #71: endurecimento, fatia 1 (achados médios da auditoria).** Spec `completed/GH-071-endurecimento-fatia-1.md` (2026-11-19).
   - **SEC-03:** carimbo da aplicação no token, conferido a cada requisição (cache de 30 s); inativar, trocar o segredo ou mudar os escopos derruba o token na hora.
   - **SEC-05:** limite por IP no `POST /satellite/token`; o bloqueio por segredo errado passa a ser por `clientId` + IP, com teto de entradas.
