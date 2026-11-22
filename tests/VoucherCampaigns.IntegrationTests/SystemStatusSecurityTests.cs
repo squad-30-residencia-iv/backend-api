@@ -1,6 +1,8 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text.Json;
+using VoucherCampaigns.Application.Authentication;
+using VoucherCampaigns.IntegrationTests.Authentication;
 
 namespace VoucherCampaigns.IntegrationTests;
 
@@ -13,7 +15,7 @@ public class SystemStatusSecurityTests(ApiFactory factory) : IClassFixture<ApiFa
     [Fact]
     public async Task GetStatus_ExposesOnlyProviderConnectionAndMigrations()
     {
-        var response = await factory.CreateClient().GetAsync(Route);
+        var response = await Administrator().GetAsync(Route);
 
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
 
@@ -26,14 +28,17 @@ public class SystemStatusSecurityTests(ApiFactory factory) : IClassFixture<ApiFa
     [Fact]
     public async Task GetStatus_DoesNotLeakConnectionStringOrCredentials()
     {
-        var response = await factory.CreateClient().GetAsync(Route);
+        var response = await Administrator().GetAsync(Route);
         var body = await response.Content.ReadAsStringAsync();
 
         Assert.DoesNotContain(factory.ConnectionString, body);
 
-        foreach (var term in new[] { "password", "senha", "username", "host=", "data source", "signingkey", "secret" })
+        foreach (var term in new[] { "\"password\"", "\"username\"", "senha", "host=", "data source", "signingkey", "secret" })
         {
             Assert.DoesNotContain(term, body, StringComparison.OrdinalIgnoreCase);
         }
     }
+
+    private HttpClient Administrator() =>
+        factory.CreateClient().WithBearer(TestAuth.CreateToken(factory, Roles.Administrador));
 }

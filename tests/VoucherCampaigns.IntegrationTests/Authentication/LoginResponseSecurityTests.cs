@@ -12,7 +12,7 @@ public class LoginResponseSecurityTests(ApiFactory factory) : IClassFixture<ApiF
     // Campos permitidos na resposta do login. "profile" foi adicionado pela US-02.5 (PR #39);
     // o teste só exige que nada fora desta lista (senha, hash etc.) apareça, valendo antes e depois dele.
     private static readonly string[] AllowedResponseFields = new[] { "token", "expiresIn", "message", "profile" };
-    private static readonly string[] AllowedProfileFields = new[] { "userId", "email", "role", "networkId" };
+    private static readonly string[] AllowedProfileFields = new[] { "userId", "email", "name", "role", "networkId" };
 
     [Theory]
     [InlineData(TestAuth.AnalistaEmail)]
