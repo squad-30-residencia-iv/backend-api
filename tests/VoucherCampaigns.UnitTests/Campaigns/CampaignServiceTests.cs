@@ -2,6 +2,8 @@ using VoucherCampaigns.Application.Audit;
 using VoucherCampaigns.Application.Authentication;
 using VoucherCampaigns.Application.Campaigns;
 using VoucherCampaigns.Application.Common;
+using VoucherCampaigns.Application.Customers;
+using VoucherCampaigns.Domain.Customers;
 using VoucherCampaigns.Application.Dashboard;
 using VoucherCampaigns.Application.Ports;
 using VoucherCampaigns.Application.Vouchers;
@@ -283,6 +285,8 @@ public class CampaignServiceTests
             _user,
             _audit,
             new NoVoucherCanceller(),
+            new NoCustomerGroups(),
+            new NoCustomerGroupStore(),
             new FixedTimeProvider(now ?? Now));
 
     private sealed class NoVoucherCanceller : ICampaignVoucherCanceller
@@ -458,6 +462,34 @@ public class CampaignServiceTests
         public bool IsPlatformAdmin => false;
 
         public Guid NetworkId => networkId;
+    }
+
+    private sealed class NoCustomerGroups : ICustomerGroupService
+    {
+        public Task<IReadOnlyList<CustomerGroupResponse>> ListAsync(Guid? networkId, bool? activeOnly, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<CustomerGroupResponse> GetAsync(Guid id, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<CustomerGroupResponse> CreateAsync(CreateCustomerGroupRequest request, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<CustomerGroupResponse> UpdateAsync(Guid id, UpdateCustomerGroupRequest request, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task InactivateAsync(Guid id, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<CustomerGroupResponse> ReplaceMembersAsync(Guid id, ReplaceCustomerGroupMembersRequest request, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<CustomerGroupMembersResponse> MembersAsync(Guid id, int? page, int? pageSize, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<PreviewCustomerGroupsResponse> PreviewAsync(PreviewCustomerGroupsRequest request, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<int> CountActiveAsync(Guid networkId, IReadOnlyList<Guid> groupIds, CancellationToken cancellationToken) => Task.FromResult(0);
+    }
+
+    private sealed class NoCustomerGroupStore : ICustomerGroupRepository
+    {
+        public Task<IReadOnlyList<CustomerGroup>> ListAsync(Guid networkId, bool? activeOnly, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<CustomerGroup?> FindAsync(Guid id, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<CustomerGroup?> FindWithMembersAsync(Guid id, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<IReadOnlyList<CustomerGroup>> FindManyAsync(IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<bool> NameExistsAsync(Guid networkId, string name, Guid? exceptId, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task AddAsync(CustomerGroup group, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task SaveChangesAsync(CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<(int Total, IReadOnlyList<string> Documents)> MembersPageAsync(Guid groupId, int skip, int take, CancellationToken cancellationToken) => throw new NotSupportedException();
+        public Task<IReadOnlyDictionary<Guid, int>> CountMembersAsync(IReadOnlyCollection<Guid> groupIds, CancellationToken cancellationToken) => Task.FromResult<IReadOnlyDictionary<Guid, int>>(new Dictionary<Guid, int>());
+        public Task<int> CountDistinctDocumentsAsync(IReadOnlyCollection<Guid> groupIds, CancellationToken cancellationToken) => Task.FromResult(0);
+        public Task<IReadOnlyDictionary<Guid, int>> CountDistinctByCampaignAsync(IReadOnlyCollection<Guid> campaignIds, CancellationToken cancellationToken) => Task.FromResult<IReadOnlyDictionary<Guid, int>>(new Dictionary<Guid, int>());
     }
 
     private sealed class FixedTimeProvider(DateTimeOffset now) : TimeProvider

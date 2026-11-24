@@ -7,14 +7,17 @@
 ## 📌 Contexto Geral
 
 - **Sprint:** Sprint 1
-- **Foco:** EP-01, GH-023, issue #26, escopo e ciclo da campanha (#46), cadastros no portal, motor de concessão (issue #45, PR #53) e GH-028 (aplicações satélite, rate limit e triggers) estão na `staging` e na `main` desde 2026-11-11; o resgate (issue #49, PR #58), o acompanhamento (issue #50, PR #59) o público restrito (issue #47, PR #60) e o cancelamento da campanha (issue #61, PR #63) estão na `staging`; as leituras do portal para o EP-03 (vouchers, relatórios e auditoria, PR #65) estão em PR para a `staging`. O satélite pede a concessão com o carrinho fechado, recebe um voucher provisório com o saldo reservado e confirma ou desfaz depois do pagamento; o administrador cadastra as aplicações satélite em `/api/v1/satellite/apps`. O portal já lê `issuedVouchers` e `reservedVouchers` e lista as aplicações satélite com as redes ativas e os escopos canônicos (US-024, sem mudança de API). A issue #27 foi fatiada em 2026-11-09: #45 concessão (feita), #49 resgate (feita), #47 público restrito (feita), #48 aplicações satélite e operação (GH-028, feita), #50 acompanhamento (feita). Próximo no backend: a edição após o vigor (US-01.7) e a validação dos pontos em aberto do cancelamento (issue #62); ver `docs/ROADMAP.md`, seção 6. As decisões D1 a D9 estão aceitas (`docs/ROADMAP.md`, 2.5); D1, D2, D3, D4, D7 e D9 estão no código da #45.
-- **Última atualização:** 2026-11-18 (PR #65 atualizado com a `staging`: conflitos resolvidos e ajustes da revisão).
+- **Foco:** a `main` e a `staging` estavam iguais desde 2026-11-20 (PR #64). A `staging` local ganhou grupos de clientes (GH-072, `d493767`): cadastro por rede, vínculo no rascunho e teto do lote na submissão. Ainda **não emite** voucher na virada da vigência; o motor do PDV segue automático. Na `main` continuam EP-01, escopo e ciclo (#46), cadastros, motor (#45), satélite (GH-028), resgate (#49), EP-03 (#50, #65), público restrito (#47), cancelamento (#61), GH-066, #68, #70 e endurecimento fatia 1 (#71). Próximo no backend: job de emissão do lote, fatias seguintes do endurecimento (#71), edição após o vigor (US-01.7) e os pontos em aberto do cancelamento (#62) e do motor (#57). As decisões D1 a D9 estão aceitas (`docs/ROADMAP.md`, 2.5).
+- **Última atualização:** 2026-11-23 (GH-072 na `staging` local).
 - **Leitura da memória (2026-11-08):** o `docs/ROADMAP.md` foi alinhado a este arquivo. A spec `GH-023-base-motor-e-decisoes.md` continua em `completed/`, mas o corpo ainda diz Draft e descreve a `CampaignCondition` removida; vale a nota do topo e a spec `GH-023-reconciliar-condicoes-e-corrigir-main.md`. O modelo de condições em vigor é o da US-01.4.
 
 ---
 
 ## 🚧 Tarefas em Andamento
 
+- [x] [SQUAD-2] GH-072 grupos de clientes: CRUD em `/api/v1/customer-groups`, membros, prévia da união, `PUT /campaigns/{id}/customer-groups` e teto no `Submit`. Spec `completed/GH-072-grupos-de-clientes.md`. Commit `d493767` na `staging`. Sem emissão automática nem job de vigência.
+- [ ] [SQUAD-2] Abrir PR de GH-072 (`staging`) para a remota. O portal já consome as rotas (US-030): listar sem `activeOnly`, membros no `PUT`, reativar com `isActive: true`.
+- [ ] [SQUAD-2] Emissão do lote na virada da vigência (fora desta fatia): job + vouchers por CPF dos grupos.
 - [x] [SQUAD-2] Issue #50 / EP-03 (fatias 1–4): consulta de vouchers e histórico no portal, contadores redeemed/expired na campanha, relatórios overview/catalog e leitura de `audit_entries`. Specs em `completed/GH-050-*`, `US-03.1-*`, `US-03.4-*`. Branch `feat/EP-03-acompanhamento-portal` (`8a28bef`).
 - [ ] [SQUAD-2] Abrir PR de `feat/EP-03-acompanhamento-portal` para `staging` e mesclar (entrega do MVP de acompanhamento).
 - [x] [SQUAD-2] Avisar o frontend: novas rotas `GET /api/v1/vouchers`, `GET /api/v1/reports/overview|catalog`, `GET /api/v1/audit-entries`; `CampaignResponse` ganhou `redeemedVouchers` e `expiredVouchers` — portal na US-025 (`feat/integracao-acompanhamento-api`).
@@ -24,6 +27,7 @@
 - [x] [SQUAD-2] Avisar o frontend: `CampaignResponse` ganhou `reservedVouchers`, `issuedVouchers` passou a ser real (confirmados) e `status` pode vir `SoldOut` (esgotada derivada); o fim da vigência agora vale até 23:59:59 (D9); `PUT /conditions` aceita `CustomerPurchaseCount` com `minQuantity`. O portal (US-024) mostra a parcela do limite e os dois contadores. Utilizados e a lista de vouchers passam a ter leitura no portal pelo PR #65 (`redeemedVouchers`, `expiredVouchers`, `GET /vouchers`).
 - [x] [SQUAD-2] Issue #49 (resgate): spec `GH-049-resgate-de-vouchers.md` e implementação na `staging` (PR #58). Encerrada, pausada e esgotada **resgatam** (RN07a); só cancelada não. O provisório resgata na própria compra quando a campanha permite (D-10), e a confirmação o consolida.
 - [x] [SQUAD-2] Issue #68 (respostas do cliente aos PAs da GH-066): spec `completed/GH-068-desconto-unico-e-alvo-por-codigo.md`, na `staging` pelo PR #69 (2026-11-19).
+- [ ] [SQUAD-2] Enviar ao frontend o documento de avisos (fora do repositório; reúne os avisos das issues #47, #61, #66, #68, #70 e #71) e ao PDV o aviso das mudanças do satélite (token novo uma vez depois da migração, `NoCampaignMatched`, limite por IP no token, alias `voucher:read` removido, motivo `OutsideRedemptionWindow` e a data de retirada da `GET` com CPF na URL). Já valem na `main` desde 2026-11-20.
 - [x] [SQUAD-2] Issue #71, fatia 1 do endurecimento: spec `completed/GH-071-endurecimento-fatia-1.md`. Fatias seguintes (baixa e informativa) na issue #71.
 - [ ] [SQUAD-2] Avisar o frontend e o PDV (issue #71):
   - frontend: `GET /campaigns` e `GET /vouchers` aceitam `page` e `pageSize` (1 a 100) e devolvem `X-Total-Count`; sem os parâmetros, a resposta é a mesma de antes;
@@ -86,6 +90,12 @@
 
 ## ✅ Últimas Entregas Concluídas
 
+- **GH-072 grupos de clientes (2026-11-23).** Spec `completed/GH-072-grupos-de-clientes.md`. Commit `d493767` na `staging`.
+  - Tabelas `customer_groups`, `customer_group_members` e `campaign_customer_groups`; migração nos dois bancos.
+  - Administrador cria, altera, inativa e troca CPFs; analista e gestor leem a rede (sem a lista de documentos).
+  - `PUT /campaigns/{id}/customer-groups` no rascunho; duplicar copia os vínculos; `Submit` recusa se união × limite por cliente passa do teto.
+  - Esta fatia **não emite** voucher e não cria job; a concessão automática no PDV não muda.
+- **Testes de verificação das Tasks 1 e 2:** adiciona `SystemStatusSecurityTests`, `SeedEnvironmentTests`, `LoginResponseSecurityTests` e `TokenValidationTests` em `tests/VoucherCampaigns.IntegrationTests`, sem alterar código de produção. Cobrem: `/api/v1/system/status` sem credenciais; seed de demonstração executado uma vez e desligado por padrão em Production; login sem senha nem hash nas respostas; token adulterado e esquema não-Bearer retornam 401. Resultado de `dotnet test`: pendente (validação pelo CI do PR). Lacuna registrada: `SeedDemoData=true` ainda semeia em Production.
 - **Issue #71: endurecimento, fatia 1 (achados médios da auditoria).** Spec `completed/GH-071-endurecimento-fatia-1.md` (2026-11-19).
   - **SEC-03:** carimbo da aplicação no token, conferido a cada requisição (cache de 30 s); inativar, trocar o segredo ou mudar os escopos derruba o token na hora.
   - **SEC-05:** limite por IP no `POST /satellite/token`; o bloqueio por segredo errado passa a ser por `clientId` + IP, com teto de entradas.

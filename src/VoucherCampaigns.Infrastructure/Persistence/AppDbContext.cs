@@ -2,6 +2,7 @@ using Microsoft.EntityFrameworkCore;
 using VoucherCampaigns.Domain.Audit;
 using VoucherCampaigns.Domain.Campaigns;
 using VoucherCampaigns.Domain.Catalog;
+using VoucherCampaigns.Domain.Customers;
 using VoucherCampaigns.Domain.Common;
 using VoucherCampaigns.Domain.Identity;
 using VoucherCampaigns.Domain.Organization;
@@ -34,6 +35,9 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<CampaignEligibleCustomer> CampaignEligibleCustomers => Set<CampaignEligibleCustomer>();
     public DbSet<User> Users => Set<User>();
     public DbSet<SatelliteApp> SatelliteApps => Set<SatelliteApp>();
+    public DbSet<CustomerGroup> CustomerGroups => Set<CustomerGroup>();
+    public DbSet<CustomerGroupMember> CustomerGroupMembers => Set<CustomerGroupMember>();
+    public DbSet<CampaignCustomerGroup> CampaignCustomerGroups => Set<CampaignCustomerGroup>();
 
     public override int SaveChanges(bool acceptAllChangesOnSuccess)
     {

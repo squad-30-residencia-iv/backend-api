@@ -112,6 +112,15 @@ Qualquer assistente que iniciar uma sessão de desenvolvimento deve seguir estri
 - Testes: `tests/VoucherCampaigns.IntegrationTests/Authentication/TestAuth.cs` faz login (`LoginAsync`) ou monta tokens com papel, rede e validade variáveis (`CreateToken`; com `Roles.Administrador` e sem rede, o token sai sem `escopoId`).
 - Aplicações satélites (US-07.5): esquema `Satellite` (audiência `Auth:Satellite:Audience`), separado do JWT de usuário. Rotas de satélite ficam em `/api/v1/satellite` e usam `[Authorize(Policy = AuthorizationPolicies.SatelliteApp)]` ou a policy do escopo (`SatelliteReadCampaigns`, `SatelliteIssueVouchers`, `SatelliteRedeemVouchers`). Para saber qual aplicação chama, injete `ICurrentSatelliteApp`; `ICurrentUser` não vale para satélite. `[ValidateTenantScope]` usa a rede da aplicação. Nos testes, `TestAuth.CreateSatelliteToken` varia escopos, rede, validade e chave; a aplicação `pdv-demo` vem da carga de Development.
 
+### [Skill] Grupos de clientes (GH-072)
+
+- Rotas em `/api/v1/customer-groups`. Leitura `ReadHierarchy`; escrita `ManageHierarchy`. Rede na query ou no corpo, `[ValidateTenantScope]`.
+- `GET` sem `activeOnly` devolve ativos e inativos. `activeOnly=true` só ativos; `activeOnly=false` só inativos. Em query string, boolean omitido vira `false` — para listar todos, **não envie** o parâmetro.
+- `PUT /{id}` atualiza nome e `isActive` (reativar com `true`). `DELETE` inativa. `PUT /{id}/members` substitui a lista (1 a 10.000 CPFs, tudo ou nada). `GET /{id}/members` pagina, só administrador.
+- `POST /customer-groups/preview` conta a união de CPFs dos grupos ativos da rede.
+- `PUT /campaigns/{id}/customer-groups` no rascunho (`ManageCampaigns`). Lista vazia = sem lote. Grupo de outra rede → 403; inativo ou inexistente → 422. Duplicar copia os vínculos. `Submit` recusa se união × `perCustomerVoucherLimit` passa de `totalVoucherLimit`.
+- Resposta da campanha traz id, nome e `uniqueCustomerCount`, nunca os CPFs. Esta fatia não emite voucher.
+
 ### [Skill] CORS do portal
 
 - O portal e a API ficam em origens diferentes. A allowlist é `Cors:AllowedOrigins` (`Api/Cors/PortalCorsOptions.cs`), validada no startup. Em Development: `http://localhost:5173`. Em produção: `Cors__AllowedOrigins__0`, `Cors__AllowedOrigins__1`, etc.
