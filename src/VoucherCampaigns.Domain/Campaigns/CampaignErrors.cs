@@ -118,6 +118,9 @@ public static class CampaignErrors
     public const string SubmitScopeRequiredCode = "CAMPAIGN_SUBMIT_SCOPE_REQUIRED";
     public const string SubmitScopeRequiredMessage = "Defina onde a campanha vale (rede, região ou loja e canais) antes de submetê-la.";
 
+    public const string CustomerGroupsQuotaCode = "CAMPAIGN_CUSTOMER_GROUPS_QUOTA";
+    public const string CustomerGroupsQuantityRequiredMessage = "Informe a quantidade por cliente e o teto da campanha antes de usar grupos.";
+
     public const string ScopeDuplicatedCode = "CAMPAIGN_SCOPE_DUPLICATED";
     public const string ScopeDuplicatedMessage = "O mesmo local foi informado mais de uma vez com o mesmo canal.";
 

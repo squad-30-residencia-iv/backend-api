@@ -1,4 +1,5 @@
 using VoucherCampaigns.Application.Common;
+using VoucherCampaigns.Application.Customers;
 using VoucherCampaigns.Application.Eligibility;
 
 namespace VoucherCampaigns.Application.Campaigns;
@@ -45,6 +46,8 @@ public interface ICampaignService
     Task<CampaignResponse> RejectAsync(Guid id, RejectCampaignRequest? request, CancellationToken cancellationToken);
 
     Task<CampaignResponse> ReplaceScopesAsync(Guid id, ReplaceCampaignScopesRequest request, CancellationToken cancellationToken);
+
+    Task<CampaignResponse> ReplaceCustomerGroupsAsync(Guid id, ReplaceCampaignCustomerGroupsRequest request, CancellationToken cancellationToken);
 
     Task<CampaignResponse> DuplicateAsync(Guid id, DuplicateCampaignRequest? request, CancellationToken cancellationToken);
 

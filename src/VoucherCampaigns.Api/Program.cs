@@ -6,6 +6,7 @@ using VoucherCampaigns.Api.Errors;
 using VoucherCampaigns.Api.Vouchers;
 using VoucherCampaigns.Application.Audit;
 using VoucherCampaigns.Application.Campaigns;
+using VoucherCampaigns.Application.Customers;
 using VoucherCampaigns.Application.Catalog;
 using VoucherCampaigns.Application.Dashboard;
 using VoucherCampaigns.Application.Organization;
@@ -36,6 +37,7 @@ builder.Services.AddExceptionHandler<ApiExceptionHandler>();
 
 builder.Services.AddScoped<ISystemStatusService, SystemStatusService>();
 builder.Services.AddScoped<ICampaignService, CampaignService>();
+builder.Services.AddScoped<ICustomerGroupService, CustomerGroupService>();
 builder.Services.AddScoped<ICategoryService, CategoryService>();
 builder.Services.AddScoped<IProductService, ProductService>();
 builder.Services.AddScoped<INetworkService, NetworkService>();

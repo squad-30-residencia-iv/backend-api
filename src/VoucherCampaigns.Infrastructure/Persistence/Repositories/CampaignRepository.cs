@@ -137,5 +137,6 @@ public class CampaignRepository(AppDbContext context) : ICampaignRepository
             .Include(campaign => campaign.Scopes).ThenInclude(scope => scope.Establishment)
             .Include(campaign => campaign.RedemptionTargets.OrderBy(target => target.Id)).ThenInclude(target => target.Product)
             .Include(campaign => campaign.RedemptionWindows.OrderBy(window => window.Id))
+            .Include(campaign => campaign.CustomerGroups).ThenInclude(link => link.Group)
             .AsSplitQuery();
 }

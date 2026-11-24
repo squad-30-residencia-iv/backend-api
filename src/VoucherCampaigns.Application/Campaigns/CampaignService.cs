@@ -2,6 +2,7 @@ using System.Globalization;
 using VoucherCampaigns.Application.Audit;
 using VoucherCampaigns.Application.Authentication;
 using VoucherCampaigns.Application.Common;
+using VoucherCampaigns.Application.Customers;
 using VoucherCampaigns.Application.Dashboard;
 using VoucherCampaigns.Application.DTOs.Organization;
 using VoucherCampaigns.Application.Eligibility;
@@ -26,6 +27,8 @@ public class CampaignService(
     ICurrentUser currentUser,
     IAuditTrail audit,
     ICampaignVoucherCanceller voucherCanceller,
+    ICustomerGroupService customerGroups,
+    ICustomerGroupRepository customerGroupStore,
     TimeProvider timeProvider) : ICampaignService
 {
     public async Task<CampaignResponse> CreateAsync(CreateCampaignRequest request, CancellationToken cancellationToken)
@@ -80,11 +83,12 @@ public class CampaignService(
         var (total, items) = await campaigns.GetPageByNetworkAsync(
             scopedNetworkId, statusFilter, utcNow, paging?.Skip, paging?.Take, cancellationToken);
         var counters = await LoadCountersAsync(scopedNetworkId, null, utcNow, cancellationToken);
+        var uniques = await customerGroupStore.CountDistinctByCampaignAsync(items.Select(campaign => campaign.Id).ToList(), cancellationToken);
 
         // O filtro olha o status efetivo (PR-04), o mesmo devolvido em "status"; o banco já filtrou pela mesma regra.
         var responses = items
             .Where(campaign => statusFilter is null || campaign.EffectiveStatus(utcNow) == statusFilter)
-            .Select(campaign => Map(campaign, network, utcNow, counters.GetValueOrDefault(campaign.Id)))
+            .Select(campaign => Map(campaign, network, utcNow, counters.GetValueOrDefault(campaign.Id), uniques.GetValueOrDefault(campaign.Id)))
             .ToList();
 
         return new PagedResult<CampaignResponse>(responses, total);
@@ -136,7 +140,9 @@ public class CampaignService(
     {
         var campaign = await RequireExistingAsync(id, cancellationToken);
         var utcNow = timeProvider.GetUtcNow().UtcDateTime;
-        var statusEvent = campaign.Submit(currentUser.UserId, utcNow);
+        var unique = await customerGroupStore.CountDistinctDocumentsAsync(
+            campaign.CustomerGroups.Select(link => link.GroupId).ToList(), cancellationToken);
+        var statusEvent = campaign.Submit(currentUser.UserId, utcNow, unique);
         RecordStatusChange(campaign, statusEvent, AuditEventTypes.CampaignSubmitted);
         await SaveGuardedAsync(campaign, cancellationToken);
         return await RespondAsync(campaign, campaign.Network!, utcNow, cancellationToken);
@@ -259,6 +265,28 @@ public class CampaignService(
         return await MapStoredAsync(campaign.Id, utcNow.UtcDateTime, cancellationToken);
     }
 
+    public async Task<CampaignResponse> ReplaceCustomerGroupsAsync(
+        Guid id, ReplaceCampaignCustomerGroupsRequest request, CancellationToken cancellationToken)
+    {
+        var campaign = await RequireForUpdateAsync(id, cancellationToken);
+        var utcNow = timeProvider.GetUtcNow().UtcDateTime;
+        var groupIds = (request.GroupIds ?? []).Where(groupId => groupId is not null).Select(groupId => groupId!.Value).Distinct().ToList();
+        var unique = groupIds.Count == 0
+            ? 0
+            : await customerGroups.CountActiveAsync(campaign.NetworkId, groupIds, cancellationToken);
+
+        var before = campaign.CustomerGroups.Select(link => link.GroupId).Order().ToList();
+        campaign.ReplaceCustomerGroups(groupIds, utcNow);
+        if (groupIds.Count > 0 && campaign.PerCustomerVoucherLimit is not null && campaign.TotalVoucherLimit is not null)
+        {
+            campaign.EnsureCustomerGroupQuota(unique);
+        }
+
+        AuditSection(campaign, "customerGroups", before, groupIds.Order().ToList(), utcNow);
+        await SaveGuardedAsync(campaign, cancellationToken);
+        return await MapStoredAsync(campaign.Id, utcNow, cancellationToken);
+    }
+
     public async Task<CampaignResponse> DuplicateAsync(Guid id, DuplicateCampaignRequest? request, CancellationToken cancellationToken)
     {
         var source = await campaigns.FindByIdAsync(id, cancellationToken)
@@ -311,6 +339,13 @@ public class CampaignService(
 
         var before = SnapshotQuantities(campaign);
         campaign.SetQuantities(request.TotalVoucherLimit!.Value, request.PerCustomerVoucherLimit, utcNow);
+        if (campaign.CustomerGroups.Count > 0)
+        {
+            var unique = await customerGroupStore.CountDistinctDocumentsAsync(
+                campaign.CustomerGroups.Select(link => link.GroupId).ToList(), cancellationToken);
+            campaign.EnsureCustomerGroupQuota(unique);
+        }
+
         AuditSection(campaign, "quantities", before, SnapshotQuantities(campaign), utcNow);
         await SaveGuardedAsync(campaign, cancellationToken);
 
@@ -1541,13 +1576,14 @@ public class CampaignService(
     private async Task<CampaignResponse> RespondAsync(Campaign campaign, Network network, DateTime utcNow, CancellationToken cancellationToken)
     {
         var counters = await LoadCountersAsync(campaign.NetworkId, campaign.Id, utcNow, cancellationToken);
+        var uniques = await customerGroupStore.CountDistinctByCampaignAsync([campaign.Id], cancellationToken);
 
-        return Map(campaign, network, utcNow, counters.GetValueOrDefault(campaign.Id));
+        return Map(campaign, network, utcNow, counters.GetValueOrDefault(campaign.Id), uniques.GetValueOrDefault(campaign.Id));
     }
 
     // Status efetivo no instante da leitura (PR-04). Contadores de resgate/expiração: GH-050.
     private static CampaignResponse Map(
-        Campaign campaign, Network network, DateTime utcNow, CampaignVoucherCounters counters = default)
+        Campaign campaign, Network network, DateTime utcNow, CampaignVoucherCounters counters = default, int uniqueCustomers = 0)
     {
         var timeZone = NetworkTime.Resolve(network.TimeZone);
 
@@ -1581,7 +1617,12 @@ public class CampaignService(
             counters.Expired,
             MapEligibility(campaign),
             RedemptionRestrictionsMapper.Targets(campaign),
-            RedemptionRestrictionsMapper.Windows(campaign));
+            RedemptionRestrictionsMapper.Windows(campaign),
+            campaign.CustomerGroups
+                .OrderBy(link => link.Id)
+                .Select(link => new CampaignCustomerGroupResponse(link.GroupId, link.Group?.Name ?? string.Empty))
+                .ToList(),
+            uniqueCustomers);
     }
 
     private static CampaignEligibilityResponse? MapEligibility(Campaign campaign) =>

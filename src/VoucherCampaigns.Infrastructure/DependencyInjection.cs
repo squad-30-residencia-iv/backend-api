@@ -5,6 +5,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using VoucherCampaigns.Application.Audit;
 using VoucherCampaigns.Application.Authentication;
 using VoucherCampaigns.Application.Campaigns;
+using VoucherCampaigns.Application.Customers;
 using VoucherCampaigns.Application.Dashboard;
 using VoucherCampaigns.Application.Ports;
 using VoucherCampaigns.Application.Reports;
@@ -56,6 +57,7 @@ public static class DependencyInjection
         services.AddScoped<IDatabaseStatusReader, DatabaseStatusReader>();
         services.AddScoped<INetworkRepository, NetworkRepository>();
         services.AddScoped<ICampaignRepository, CampaignRepository>();
+        services.AddScoped<ICustomerGroupRepository, CustomerGroupRepository>();
         services.AddScoped<ICatalogRepository, CatalogRepository>();
         services.AddScoped<IOrganizationRepository, OrganizationRepository>();
         services.AddScoped<IEstablishmentImportStore, OrganizationRepository>();

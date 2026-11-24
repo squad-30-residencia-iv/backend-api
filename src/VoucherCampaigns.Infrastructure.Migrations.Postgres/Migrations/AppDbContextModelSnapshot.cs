@@ -293,6 +293,33 @@ namespace VoucherCampaigns.Infrastructure.Migrations.Postgres.Migrations
                         });
                 });
 
+            modelBuilder.Entity("VoucherCampaigns.Domain.Campaigns.CampaignCustomerGroup", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("CampaignId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("campaign_id");
+
+                    b.Property<Guid>("GroupId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("group_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_campaign_customer_groups");
+
+                    b.HasIndex("GroupId")
+                        .HasDatabaseName("ix_campaign_customer_groups_group_id");
+
+                    b.HasIndex("CampaignId", "GroupId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_campaign_customer_groups_campaign_id_group_id");
+
+                    b.ToTable("campaign_customer_groups", (string)null);
+                });
+
             modelBuilder.Entity("VoucherCampaigns.Domain.Campaigns.CampaignEligibilityCriterion", b =>
                 {
                     b.Property<Guid>("Id")
@@ -694,6 +721,57 @@ namespace VoucherCampaigns.Infrastructure.Migrations.Postgres.Migrations
                         .HasDatabaseName("ix_products_code");
 
                     b.ToTable("products", (string)null);
+                });
+
+            modelBuilder.Entity("VoucherCampaigns.Domain.Customers.CustomerGroup", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)")
+                        .HasColumnName("name");
+
+                    b.Property<Guid>("NetworkId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("network_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_customer_groups");
+
+                    b.HasIndex("NetworkId", "Name")
+                        .IsUnique()
+                        .HasDatabaseName("ix_customer_groups_network_id_name");
+
+                    b.ToTable("customer_groups", (string)null);
+                });
+
+            modelBuilder.Entity("VoucherCampaigns.Domain.Customers.CustomerGroupMember", b =>
+                {
+                    b.Property<Guid>("GroupId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("group_id");
+
+                    b.Property<string>("Document")
+                        .HasMaxLength(11)
+                        .HasColumnType("character varying(11)")
+                        .HasColumnName("document");
+
+                    b.HasKey("GroupId", "Document")
+                        .HasName("pk_customer_group_members");
+
+                    b.ToTable("customer_group_members", (string)null);
                 });
 
             modelBuilder.Entity("VoucherCampaigns.Domain.Identity.SatelliteApp", b =>
@@ -1344,6 +1422,27 @@ namespace VoucherCampaigns.Infrastructure.Migrations.Postgres.Migrations
                     b.Navigation("Product");
                 });
 
+            modelBuilder.Entity("VoucherCampaigns.Domain.Campaigns.CampaignCustomerGroup", b =>
+                {
+                    b.HasOne("VoucherCampaigns.Domain.Campaigns.Campaign", "Campaign")
+                        .WithMany("CustomerGroups")
+                        .HasForeignKey("CampaignId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_campaign_customer_groups_campaigns_campaign_id");
+
+                    b.HasOne("VoucherCampaigns.Domain.Customers.CustomerGroup", "Group")
+                        .WithMany()
+                        .HasForeignKey("GroupId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_campaign_customer_groups_customer_groups_group_id");
+
+                    b.Navigation("Campaign");
+
+                    b.Navigation("Group");
+                });
+
             modelBuilder.Entity("VoucherCampaigns.Domain.Campaigns.CampaignEligibilityCriterion", b =>
                 {
                     b.HasOne("VoucherCampaigns.Domain.Campaigns.Campaign", "Campaign")
@@ -1492,6 +1591,28 @@ namespace VoucherCampaigns.Infrastructure.Migrations.Postgres.Migrations
                     b.Navigation("Category");
                 });
 
+            modelBuilder.Entity("VoucherCampaigns.Domain.Customers.CustomerGroup", b =>
+                {
+                    b.HasOne("VoucherCampaigns.Domain.Organization.Network", null)
+                        .WithMany()
+                        .HasForeignKey("NetworkId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_customer_groups_networks_network_id");
+                });
+
+            modelBuilder.Entity("VoucherCampaigns.Domain.Customers.CustomerGroupMember", b =>
+                {
+                    b.HasOne("VoucherCampaigns.Domain.Customers.CustomerGroup", "Group")
+                        .WithMany("Members")
+                        .HasForeignKey("GroupId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_customer_group_members_customer_groups_group_id");
+
+                    b.Navigation("Group");
+                });
+
             modelBuilder.Entity("VoucherCampaigns.Domain.Organization.Channel", b =>
                 {
                     b.HasOne("VoucherCampaigns.Domain.Organization.Establishment", "Establishment")
@@ -1610,6 +1731,8 @@ namespace VoucherCampaigns.Infrastructure.Migrations.Postgres.Migrations
                 {
                     b.Navigation("Conditions");
 
+                    b.Navigation("CustomerGroups");
+
                     b.Navigation("EligibilityCriteria");
 
                     b.Navigation("EligibleCustomers");
@@ -1628,6 +1751,11 @@ namespace VoucherCampaigns.Infrastructure.Migrations.Postgres.Migrations
             modelBuilder.Entity("VoucherCampaigns.Domain.Catalog.Category", b =>
                 {
                     b.Navigation("Products");
+                });
+
+            modelBuilder.Entity("VoucherCampaigns.Domain.Customers.CustomerGroup", b =>
+                {
+                    b.Navigation("Members");
                 });
 
             modelBuilder.Entity("VoucherCampaigns.Domain.Organization.Establishment", b =>

@@ -87,6 +87,9 @@ public class Campaign
 
     public ICollection<CampaignScope> Scopes { get; set; } = [];
 
+    /// <summary>Grupos eleitos do lote (spec GH-072). Vazio na geração automática.</summary>
+    public ICollection<CampaignCustomerGroup> CustomerGroups { get; set; } = [];
+
     public ICollection<CampaignCondition> Conditions { get; set; } = [];
 
     public ICollection<CampaignStatusEvent> StatusEvents { get; set; } = [];
@@ -398,7 +401,7 @@ public class Campaign
     /// Envia o rascunho para aprovação (US-01.6). Exige público, alvo, quantidade total, validade e utilizações.
     /// </summary>
     /// <exception cref="BusinessRuleException">Fora de rascunho ou configuração incompleta.</exception>
-    public CampaignStatusEvent Submit(Guid actorUserId, DateTime utcNow)
+    public CampaignStatusEvent Submit(Guid actorUserId, DateTime utcNow, int customerGroupUniqueCount = 0)
     {
         EnsureUtc(utcNow, nameof(utcNow));
 
@@ -434,6 +437,8 @@ public class Campaign
         {
             throw new BusinessRuleException(CampaignErrors.SubmitMaxUsesRequiredCode, CampaignErrors.SubmitMaxUsesRequiredMessage);
         }
+
+        EnsureCustomerGroupQuota(customerGroupUniqueCount);
 
         if (Scopes.Count == 0)
         {
@@ -504,6 +509,53 @@ public class Campaign
         }
 
         UpdatedAt = utcNow;
+    }
+
+    /// <summary>Substitui os grupos do lote (spec GH-072). A rede e o status do grupo são conferidos pelo serviço.</summary>
+    public void ReplaceCustomerGroups(IReadOnlyList<Guid> groupIds, DateTime utcNow)
+    {
+        EnsureDraft();
+        EnsureUtc(utcNow, nameof(utcNow));
+        CustomerGroups.Clear();
+
+        var sequence = 0;
+        foreach (var groupId in groupIds.Distinct())
+        {
+            CustomerGroups.Add(new CampaignCustomerGroup
+            {
+                Id = Guid.CreateVersion7(new DateTimeOffset(utcNow).AddMilliseconds(sequence++)),
+                CampaignId = Id,
+                GroupId = groupId,
+            });
+        }
+
+        UpdatedAt = utcNow;
+    }
+
+    /// <summary>
+    /// União dos grupos × quantidade por cliente não pode passar do teto (spec GH-072).
+    /// Sem grupos, não faz nada. Sem quantidade ou teto, recusa.
+    /// </summary>
+    public void EnsureCustomerGroupQuota(int uniqueCustomers)
+    {
+        if (CustomerGroups.Count == 0)
+        {
+            return;
+        }
+
+        if (PerCustomerVoucherLimit is null || TotalVoucherLimit is null)
+        {
+            throw new BusinessRuleException(
+                CampaignErrors.CustomerGroupsQuotaCode, CampaignErrors.CustomerGroupsQuantityRequiredMessage);
+        }
+
+        var needed = (long)uniqueCustomers * PerCustomerVoucherLimit.Value;
+        if (needed > TotalVoucherLimit)
+        {
+            throw new BusinessRuleException(
+                CampaignErrors.CustomerGroupsQuotaCode,
+                $"A união dos grupos precisa de {needed} vouchers e o teto da campanha é {TotalVoucherLimit}.");
+        }
     }
 
     /// <summary>
@@ -710,6 +762,16 @@ public class Campaign
         foreach (var customer in EligibleCustomers)
         {
             copy.EligibleCustomers.Add(new CampaignEligibleCustomer { CampaignId = copy.Id, Document = customer.Document });
+        }
+
+        foreach (var link in CustomerGroups.OrderBy(link => link.Id))
+        {
+            copy.CustomerGroups.Add(new CampaignCustomerGroup
+            {
+                Id = NextId(),
+                CampaignId = copy.Id,
+                GroupId = link.GroupId,
+            });
         }
 
         foreach (var scope in Scopes.OrderBy(scope => scope.Id))

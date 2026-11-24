@@ -1,3 +1,4 @@
+using VoucherCampaigns.Application.Customers;
 using VoucherCampaigns.Application.Eligibility;
 
 namespace VoucherCampaigns.Application.Campaigns;
@@ -51,7 +52,9 @@ public record CampaignResponse(
     int ExpiredVouchers,
     CampaignEligibilityResponse? Eligibility = null,
     IReadOnlyList<RedemptionTargetResponse>? RedemptionTargets = null,
-    IReadOnlyList<RedemptionWindowResponse>? RedemptionWindows = null);
+    IReadOnlyList<RedemptionWindowResponse>? RedemptionWindows = null,
+    IReadOnlyList<CampaignCustomerGroupResponse>? CustomerGroups = null,
+    int UniqueCustomerCount = 0);
 
 /// <summary>Alvo de resgate (spec GH-070, D-2), com o código do produto quando o alvo é um produto.</summary>
 public record RedemptionTargetResponse(Guid Id, string TargetType, Guid? CategoryId, Guid? ProductId, string? ProductCode);

@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Mvc;
 using VoucherCampaigns.Api.Authentication;
 using VoucherCampaigns.Api.Filters;
 using VoucherCampaigns.Application.Campaigns;
+using VoucherCampaigns.Application.Customers;
 using VoucherCampaigns.Application.Eligibility;
 
 namespace VoucherCampaigns.Api.Controllers;
@@ -238,6 +239,11 @@ public class CampaignsController(ICampaignService campaignService) : ControllerB
         Ok(await campaignService.RejectAsync(id, request, cancellationToken));
 
     /// <summary>Substitui onde a campanha em rascunho vale: rede, regiões ou lojas, com os canais (US-02.3).</summary>
+    [HttpPut("{id:guid}/customer-groups")]
+    public async Task<ActionResult<CampaignResponse>> ReplaceCustomerGroups(
+        Guid id, [FromBody] ReplaceCampaignCustomerGroupsRequest request, CancellationToken cancellationToken) =>
+        Ok(await campaignService.ReplaceCustomerGroupsAsync(id, request, cancellationToken));
+
     [HttpPut("{id:guid}/scopes")]
     [ProducesResponseType<CampaignResponse>(StatusCodes.Status200OK)]
     [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
