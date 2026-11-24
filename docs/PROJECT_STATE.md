@@ -7,14 +7,17 @@
 ## 📌 Contexto Geral
 
 - **Sprint:** Sprint 1
-- **Foco:** a `main` e a `staging` estão iguais desde 2026-11-20 (PR #64, merge commit `d9df871`, CI verde). Estão nas duas: EP-01, escopo e ciclo da campanha (#46), cadastros no portal, motor de concessão (#45), aplicações satélite (GH-028), resgate (#49), acompanhamento e leituras do portal do EP-03 (#50, #65), público restrito (#47), cancelamento da campanha (#61), ajustes do cliente e correções urgentes da auditoria (#66), desconto único e alvo por código (#68), restrições no resgate (#70) e a fatia 1 do endurecimento (#71). A atualização de um banco no estado anterior da `main` para o código atual foi testada no SQLite e no PostgreSQL em 2026-11-19 (6 migrações aplicadas na subida, todos os roteiros de smoke OK). Próximo no backend: as fatias seguintes do endurecimento (issue #71, antes do deploy público), a edição após o vigor (US-01.7) e os pontos em aberto do cancelamento (issue #62) e do motor (issue #57); ver `docs/ROADMAP.md`, seção 6. As decisões D1 a D9 estão aceitas (`docs/ROADMAP.md`, 2.5).
-- **Última atualização:** 2026-11-20 (`staging` → `main` pelo PR #64).
+- **Foco:** a `main` e a `staging` estavam iguais desde 2026-11-20 (PR #64). A `staging` local ganhou grupos de clientes (GH-072, `d493767`): cadastro por rede, vínculo no rascunho e teto do lote na submissão. Ainda **não emite** voucher na virada da vigência; o motor do PDV segue automático. Na `main` continuam EP-01, escopo e ciclo (#46), cadastros, motor (#45), satélite (GH-028), resgate (#49), EP-03 (#50, #65), público restrito (#47), cancelamento (#61), GH-066, #68, #70 e endurecimento fatia 1 (#71). Próximo no backend: job de emissão do lote, fatias seguintes do endurecimento (#71), edição após o vigor (US-01.7) e os pontos em aberto do cancelamento (#62) e do motor (#57). As decisões D1 a D9 estão aceitas (`docs/ROADMAP.md`, 2.5).
+- **Última atualização:** 2026-11-23 (GH-072 na `staging` local).
 - **Leitura da memória (2026-11-08):** o `docs/ROADMAP.md` foi alinhado a este arquivo. A spec `GH-023-base-motor-e-decisoes.md` continua em `completed/`, mas o corpo ainda diz Draft e descreve a `CampaignCondition` removida; vale a nota do topo e a spec `GH-023-reconciliar-condicoes-e-corrigir-main.md`. O modelo de condições em vigor é o da US-01.4.
 
 ---
 
 ## 🚧 Tarefas em Andamento
 
+- [x] [SQUAD-2] GH-072 grupos de clientes: CRUD em `/api/v1/customer-groups`, membros, prévia da união, `PUT /campaigns/{id}/customer-groups` e teto no `Submit`. Spec `completed/GH-072-grupos-de-clientes.md`. Commit `d493767` na `staging`. Sem emissão automática nem job de vigência.
+- [ ] [SQUAD-2] Abrir PR de GH-072 (`staging`) para a remota. O portal já consome as rotas (US-030): listar sem `activeOnly`, membros no `PUT`, reativar com `isActive: true`.
+- [ ] [SQUAD-2] Emissão do lote na virada da vigência (fora desta fatia): job + vouchers por CPF dos grupos.
 - [x] [SQUAD-2] Issue #50 / EP-03 (fatias 1–4): consulta de vouchers e histórico no portal, contadores redeemed/expired na campanha, relatórios overview/catalog e leitura de `audit_entries`. Specs em `completed/GH-050-*`, `US-03.1-*`, `US-03.4-*`. Branch `feat/EP-03-acompanhamento-portal` (`8a28bef`).
 - [ ] [SQUAD-2] Abrir PR de `feat/EP-03-acompanhamento-portal` para `staging` e mesclar (entrega do MVP de acompanhamento).
 - [x] [SQUAD-2] Avisar o frontend: novas rotas `GET /api/v1/vouchers`, `GET /api/v1/reports/overview|catalog`, `GET /api/v1/audit-entries`; `CampaignResponse` ganhou `redeemedVouchers` e `expiredVouchers` — portal na US-025 (`feat/integracao-acompanhamento-api`).
@@ -87,6 +90,11 @@
 
 ## ✅ Últimas Entregas Concluídas
 
+- **GH-072 grupos de clientes (2026-11-23).** Spec `completed/GH-072-grupos-de-clientes.md`. Commit `d493767` na `staging`.
+  - Tabelas `customer_groups`, `customer_group_members` e `campaign_customer_groups`; migração nos dois bancos.
+  - Administrador cria, altera, inativa e troca CPFs; analista e gestor leem a rede (sem a lista de documentos).
+  - `PUT /campaigns/{id}/customer-groups` no rascunho; duplicar copia os vínculos; `Submit` recusa se união × limite por cliente passa do teto.
+  - Esta fatia **não emite** voucher e não cria job; a concessão automática no PDV não muda.
 - **Testes de verificação das Tasks 1 e 2:** adiciona `SystemStatusSecurityTests`, `SeedEnvironmentTests`, `LoginResponseSecurityTests` e `TokenValidationTests` em `tests/VoucherCampaigns.IntegrationTests`, sem alterar código de produção. Cobrem: `/api/v1/system/status` sem credenciais; seed de demonstração executado uma vez e desligado por padrão em Production; login sem senha nem hash nas respostas; token adulterado e esquema não-Bearer retornam 401. Resultado de `dotnet test`: pendente (validação pelo CI do PR). Lacuna registrada: `SeedDemoData=true` ainda semeia em Production.
 - **Issue #71: endurecimento, fatia 1 (achados médios da auditoria).** Spec `completed/GH-071-endurecimento-fatia-1.md` (2026-11-19).
   - **SEC-03:** carimbo da aplicação no token, conferido a cada requisição (cache de 30 s); inativar, trocar o segredo ou mudar os escopos derruba o token na hora.
