@@ -178,6 +178,11 @@ Qualquer assistente que iniciar uma sessão de desenvolvimento deve seguir estri
 - Ação relevante (submeter, aprovar, reprovar, pausar, encerrar, duplicar, emitir, confirmar e desfazer a concessão, resgatar, recusar o resgate e estornar): monte um `AuditEntry` (`Domain/Audit`) e chame `IAuditTrail.Append` antes do `SaveChanges` da operação, que grava os dois juntos. Tipo do evento em `AuditEventTypes`; autor `AuditActorType.User` (`sub` do token) ou `Application` (id da aplicação satélite); payload JSON curto.
 - `AuditEntry`, `CampaignStatusEvent` e `VoucherEvent` implementam `IAppendOnly`: o `AppDbContext` recusa alterar ou apagar esses registros. Não crie rota de alteração para eles.
 
+### [Skill] Público restrito no portal (spec GH-075)
+
+- O catálogo `GET /api/v1/eligibility/criteria` (`EligibilityCatalog`) é montado das constantes de `EligibilityContract`. Critério novo ou limite novo: mude a validação e o catálogo juntos; o teste `Catalog_DescribesEveryCriterionType_...` falha se um tipo do enum ficar de fora.
+- Os atributos que cada critério pede ao satélite estão só em `EligibilityAttributes`, usado pelo catálogo e pelos `requiredAttributes` de `GET /satellite/campaigns`.
+
 ### [Skill] Endurecimento (spec GH-071)
 
 - **Token do satélite:** leva a claim `stamp` (`SatelliteApp.SecurityStamp`), conferida no `OnTokenValidated` por `ISatelliteAppStatus` (cache de `Auth:Satellite:StampCacheSeconds`). Toda mudança que deve derrubar tokens chama `app.RotateStamp()` e, depois do `SaveChanges`, `appStatus.Forget(app.Id)`. Nos testes, `TestAuth.CreateSatelliteToken` usa o id e o carimbo reais do `pdv-demo`.

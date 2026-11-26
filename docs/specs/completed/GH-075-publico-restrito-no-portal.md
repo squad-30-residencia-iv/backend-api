@@ -1,6 +1,6 @@
 # 📋 Especificação Técnica: GH-075 - Público restrito no portal (parte do backend)
 
-> Status: In Progress
+> Status: Completed
 > História de Usuário Relacionada: issue #75 (front + back)
 > Responsável: @iagovrocha
 > Data: 2026-11-26
@@ -78,22 +78,22 @@ Erro novo (`CampaignErrors`):
 
 ## 4. Checklist de Implementação
 
-- [ ] 1. `EligibilityCatalog` estático a partir de `EligibilityContract` e do mapa de atributos do satélite (extrair o mapa de `SatelliteCampaignService.RequiredAttributes` para um lugar só, usado pelos dois).
-- [ ] 2. Rota `GET /api/v1/eligibility/criteria`.
-- [ ] 3. D-1 no `CampaignService` (consulta em lote, 422 com `field`); código em `CampaignErrors`.
-- [ ] 4. Testes: catálogo (todos os tipos do enum, limites iguais às constantes, atributos iguais aos de `requiredAttributes`), categoria inexistente 422, categoria inativa aceita, autorização da rota.
-- [ ] 5. `dotnet test` no SQLite e no PostgreSQL; smoke; `agents.md`, `docs/PROJECT_STATE.md`; aviso ao frontend.
+- [x] 1. `EligibilityCatalog` estático a partir de `EligibilityContract` e do mapa de atributos do satélite (extrair o mapa de `SatelliteCampaignService.RequiredAttributes` para um lugar só, usado pelos dois).
+- [x] 2. Rota `GET /api/v1/eligibility/criteria`.
+- [x] 3. D-1 no `CampaignService` (consulta em lote, 422 com `field`); código em `CampaignErrors`.
+- [x] 4. Testes: catálogo (todos os tipos do enum, limites iguais às constantes, atributos iguais aos de `requiredAttributes`), categoria inexistente 422, categoria inativa aceita, autorização da rota.
+- [x] 5. `dotnet test` no SQLite e no PostgreSQL; smoke; `agents.md`, `docs/PROJECT_STATE.md`; aviso ao frontend.
 
 ---
 
 ## 5. Casos de Teste Essenciais
 
-- [ ] O catálogo tem um item para cada valor de `EligibilityCriterionType`, com os limites de `EligibilityContract` (20 critérios, idade 0 a 130, 100 UFs e municípios, janela 1 a 365, 10.000 CPFs).
-- [ ] Os `satelliteAttributes` de cada tipo batem com os `requiredAttributes` de uma campanha que só tem aquele critério.
-- [ ] `PurchasedCategory` com categoria inexistente → 422 `CAMPAIGN_AUDIENCE_CATEGORY_NOT_FOUND` com `field`; nada é gravado.
-- [ ] `PurchasedCategory` com categoria inativa → 200.
-- [ ] Rota do catálogo: analista e gestor 200; administrador 403; sem token 401.
-- [ ] Aceite da issue, já coberto pela GH-047 e conferido de novo: grava `Restricted` e relê no GET; `AllCustomers` é o padrão; a campanha restrita aparece no satélite com `requiredAttributes` e `historyWindows`.
+- [x] O catálogo tem um item para cada valor de `EligibilityCriterionType`, com os limites de `EligibilityContract` (20 critérios, idade 0 a 130, 100 UFs e municípios, janela 1 a 365, 10.000 CPFs).
+- [x] Os `satelliteAttributes` de cada tipo batem com os `requiredAttributes` de uma campanha que só tem aquele critério.
+- [x] `PurchasedCategory` com categoria inexistente → 422 `CAMPAIGN_AUDIENCE_CATEGORY_NOT_FOUND` com `field`; nada é gravado.
+- [x] `PurchasedCategory` com categoria inativa → 200.
+- [x] Rota do catálogo: analista e gestor 200; administrador 403; sem token 401.
+- [x] Aceite da issue, já coberto pela GH-047 e conferido de novo: grava `Restricted` e relê no GET; `AllCustomers` é o padrão; a campanha restrita aparece no satélite com `requiredAttributes` e `historyWindows`.
 
 ---
 

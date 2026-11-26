@@ -15,6 +15,8 @@
 
 ## 🚧 Tarefas em Andamento
 
+- [x] [SQUAD-2] Issue #75 (público restrito no portal, parte do backend): spec `completed/GH-075-publico-restrito-no-portal.md`.
+- [ ] [SQUAD-2] Avisar o frontend (issue #75): `GET /api/v1/eligibility/criteria` traz os tipos de critério, campos, limites e os atributos do satélite, para montar o formulário do público restrito; categoria inexistente no critério "comprou a categoria" passa de `400` para `422 CAMPAIGN_AUDIENCE_CATEGORY_NOT_FOUND`, com `field`. Levar ao Bruno ou ao PO a diferença entre lista de CPFs do público e grupos de clientes (PA-1 da spec).
 - [x] [SQUAD-2] GH-072 grupos de clientes: CRUD em `/api/v1/customer-groups`, membros, prévia da união, `PUT /campaigns/{id}/customer-groups` e teto no `Submit`. Spec `completed/GH-072-grupos-de-clientes.md`. Commit `d493767` na `staging`. Sem emissão automática nem job de vigência.
 - [ ] [SQUAD-2] Abrir PR de GH-072 (`staging`) para a remota. O portal já consome as rotas (US-030): listar sem `activeOnly`, membros no `PUT`, reativar com `isActive: true`.
 - [ ] [SQUAD-2] Emissão do lote na virada da vigência (fora desta fatia): job + vouchers por CPF dos grupos.
@@ -90,6 +92,10 @@
 
 ## ✅ Últimas Entregas Concluídas
 
+- **Issue #75: público restrito no portal, parte do backend (2026-11-26).** Spec `completed/GH-075-publico-restrito-no-portal.md`.
+  - **Catálogo:** `GET /api/v1/eligibility/criteria` (analista e gestor), com tipo, nome, campos, limites, janela de histórico e os atributos do satélite. Os limites vêm de `EligibilityContract`; os atributos, do mesmo mapa que gera os `requiredAttributes` (`EligibilityAttributes`).
+  - **Categoria do histórico:** inexistente responde `422 CAMPAIGN_AUDIENCE_CATEGORY_NOT_FOUND` com `field`, numa consulta só; inativa continua aceita.
+  - Nada mudou na gravação, na avaliação e no satélite (GH-047).
 - **GH-072 grupos de clientes (2026-11-23).** Spec `completed/GH-072-grupos-de-clientes.md`. Commit `d493767` na `staging`.
   - Tabelas `customer_groups`, `customer_group_members` e `campaign_customer_groups`; migração nos dois bancos.
   - Administrador cria, altera, inativa e troca CPFs; analista e gestor leem a rede (sem a lista de documentos).
