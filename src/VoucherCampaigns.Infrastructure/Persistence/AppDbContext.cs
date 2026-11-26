@@ -22,6 +22,8 @@ public class AppDbContext(DbContextOptions<AppDbContext> options) : DbContext(op
     public DbSet<CampaignItem> CampaignItems => Set<CampaignItem>();
     public DbSet<CampaignScope> CampaignScopes => Set<CampaignScope>();
     public DbSet<CampaignRedemptionTarget> CampaignRedemptionTargets => Set<CampaignRedemptionTarget>();
+    public DbSet<CampaignTag> CampaignTags => Set<CampaignTag>();
+    public DbSet<CampaignTagLink> CampaignTagLinks => Set<CampaignTagLink>();
     public DbSet<CampaignRedemptionWindow> CampaignRedemptionWindows => Set<CampaignRedemptionWindow>();
     public DbSet<CampaignStatusEvent> CampaignStatusEvents => Set<CampaignStatusEvent>();
     

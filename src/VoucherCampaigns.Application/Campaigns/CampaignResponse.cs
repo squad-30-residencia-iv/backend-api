@@ -54,7 +54,8 @@ public record CampaignResponse(
     IReadOnlyList<RedemptionTargetResponse>? RedemptionTargets = null,
     IReadOnlyList<RedemptionWindowResponse>? RedemptionWindows = null,
     IReadOnlyList<CampaignCustomerGroupResponse>? CustomerGroups = null,
-    int UniqueCustomerCount = 0);
+    int UniqueCustomerCount = 0,
+    IReadOnlyList<CampaignTagRefResponse>? Tags = null);
 
 /// <summary>Alvo de resgate (spec GH-070, D-2), com o código do produto quando o alvo é um produto.</summary>
 public record RedemptionTargetResponse(Guid Id, string TargetType, Guid? CategoryId, Guid? ProductId, string? ProductCode);

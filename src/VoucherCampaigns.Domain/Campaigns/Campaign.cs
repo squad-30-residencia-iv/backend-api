@@ -90,6 +90,11 @@ public class Campaign
     /// <summary>Grupos eleitos do lote (spec GH-072). Vazio na geração automática.</summary>
     public ICollection<CampaignCustomerGroup> CustomerGroups { get; set; } = [];
 
+    /// <summary>Tags de agrupamento (spec GH-077); mudam em qualquer status.</summary>
+    public ICollection<CampaignTagLink> TagLinks { get; set; } = [];
+
+    public const int MaxTags = 5;
+
     public ICollection<CampaignCondition> Conditions { get; set; } = [];
 
     public ICollection<CampaignStatusEvent> StatusEvents { get; set; } = [];
@@ -533,6 +538,40 @@ public class Campaign
     }
 
     /// <summary>
+    /// Substitui as tags (spec GH-077, D-2 e D-3). Não segue a regra do rascunho: a tag só agrupa, não muda o que o
+    /// voucher concede. As tags (da rede, existentes e ativas) são conferidas pelo serviço; repetida vira uma.
+    /// </summary>
+    public void ReplaceTags(IReadOnlyList<Guid> tagIds, DateTime utcNow)
+    {
+        EnsureUtc(utcNow, nameof(utcNow));
+        var wanted = tagIds.Distinct().ToList();
+
+        if (wanted.Count > MaxTags)
+        {
+            throw new ArgumentException($"A campanha aceita no máximo {MaxTags} tags.", nameof(tagIds));
+        }
+
+        // Só o que mudou: manter o vínculo existente evita apagar e inserir a mesma tag.
+        foreach (var link in TagLinks.Where(link => !wanted.Contains(link.TagId)).ToList())
+        {
+            TagLinks.Remove(link);
+        }
+
+        var sequence = 0;
+        foreach (var tagId in wanted.Where(tagId => TagLinks.All(link => link.TagId != tagId)).ToList())
+        {
+            TagLinks.Add(new CampaignTagLink
+            {
+                Id = Guid.CreateVersion7(new DateTimeOffset(utcNow).AddMilliseconds(sequence++)),
+                CampaignId = Id,
+                TagId = tagId,
+            });
+        }
+
+        UpdatedAt = utcNow;
+    }
+
+    /// <summary>
     /// União dos grupos × quantidade por cliente não pode passar do teto (spec GH-072).
     /// Sem grupos, não faz nada. Sem quantidade ou teto, recusa.
     /// </summary>
@@ -772,6 +811,12 @@ public class Campaign
                 CampaignId = copy.Id,
                 GroupId = link.GroupId,
             });
+        }
+
+        // Tags ativas (spec GH-077, D-5); sem a tag carregada, copia o vínculo.
+        foreach (var link in TagLinks.Where(link => link.Tag?.IsActive != false).OrderBy(link => link.Id))
+        {
+            copy.TagLinks.Add(new CampaignTagLink { Id = NextId(), CampaignId = copy.Id, TagId = link.TagId });
         }
 
         foreach (var scope in Scopes.OrderBy(scope => scope.Id))

@@ -287,7 +287,20 @@ public class CampaignServiceTests
             new NoVoucherCanceller(),
             new NoCustomerGroups(),
             new NoCustomerGroupStore(),
+            new NoCampaignTags(),
             new FixedTimeProvider(now ?? Now));
+
+    private sealed class NoCampaignTags : ICampaignTagRepository
+    {
+        public Task<IReadOnlyList<CampaignTag>> ListAsync(Guid networkId, bool? activeOnly, CancellationToken cancellationToken) => Task.FromResult<IReadOnlyList<CampaignTag>>([]);
+        public Task<CampaignTag?> FindAsync(Guid id, CancellationToken cancellationToken) => Task.FromResult<CampaignTag?>(null);
+        public Task<IReadOnlyList<CampaignTag>> FindManyAsync(IReadOnlyCollection<Guid> ids, CancellationToken cancellationToken) => Task.FromResult<IReadOnlyList<CampaignTag>>([]);
+        public Task<bool> NameExistsAsync(Guid networkId, string normalizedName, Guid? exceptId, CancellationToken cancellationToken) => Task.FromResult(false);
+        public Task AddAsync(CampaignTag tag, CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task SaveChangesAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+        public Task<IReadOnlyDictionary<Guid, int>> CountCampaignsAsync(IReadOnlyCollection<Guid> tagIds, CancellationToken cancellationToken) =>
+            Task.FromResult<IReadOnlyDictionary<Guid, int>>(new Dictionary<Guid, int>());
+    }
 
     private sealed class NoVoucherCanceller : ICampaignVoucherCanceller
     {
@@ -317,7 +330,7 @@ public class CampaignServiceTests
             Task.FromResult<IReadOnlyList<Campaign>>(Added.Where(campaign => campaign.NetworkId == networkId).ToList());
 
         public Task<(int Total, IReadOnlyList<Campaign> Items)> GetPageByNetworkAsync(
-            Guid networkId, CampaignStatus? status, DateTime utcNow, int? skip, int? take, CancellationToken cancellationToken)
+            Guid networkId, CampaignStatus? status, DateTime utcNow, int? skip, int? take, CancellationToken cancellationToken, Guid? tagId = null)
         {
             var filtered = Added
                 .Where(campaign => campaign.NetworkId == networkId && (status is null || campaign.EffectiveStatus(utcNow) == status))

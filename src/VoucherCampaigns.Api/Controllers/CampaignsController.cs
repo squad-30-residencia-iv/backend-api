@@ -27,10 +27,11 @@ public class CampaignsController(ICampaignService campaignService) : ControllerB
         [FromQuery] string? status,
         [FromQuery] int? page,
         [FromQuery] int? pageSize,
+        [FromQuery] Guid? tagId,
         CancellationToken cancellationToken)
     {
         // Paginação opcional (spec GH-071, D-5): o corpo continua uma lista; o total vai no cabeçalho.
-        var result = await campaignService.ListAsync(networkId, status, page, pageSize, cancellationToken);
+        var result = await campaignService.ListAsync(networkId, status, page, pageSize, cancellationToken, tagId);
         Response.Headers[PagingHeaders.TotalCount] = result.Total.ToString(System.Globalization.CultureInfo.InvariantCulture);
 
         return Ok(result.Items);
@@ -144,6 +145,17 @@ public class CampaignsController(ICampaignService campaignService) : ControllerB
         UpdateUsageRestrictionsRequest request,
         CancellationToken cancellationToken) =>
         Ok(await campaignService.UpdateUsageRestrictionsAsync(id, request, cancellationToken));
+
+    /// <summary>Substitui as tags da campanha, em qualquer status (spec GH-077); lista vazia tira todas.</summary>
+    [HttpPut("{id:guid}/tags")]
+    [ProducesResponseType<CampaignResponse>(StatusCodes.Status200OK)]
+    [ProducesResponseType<ValidationProblemDetails>(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status401Unauthorized)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status403Forbidden)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status404NotFound)]
+    [ProducesResponseType<ProblemDetails>(StatusCodes.Status422UnprocessableEntity)]
+    public async Task<ActionResult<CampaignResponse>> ReplaceTags(Guid id, ReplaceCampaignTagsRequest request, CancellationToken cancellationToken) =>
+        Ok(await campaignService.ReplaceTagsAsync(id, request, cancellationToken));
 
     /// <summary>Substitui os alvos de resgate da campanha em rascunho (spec GH-070, D-2); lista vazia = alvo da concessão.</summary>
     [HttpPut("{id:guid}/redemption-targets")]

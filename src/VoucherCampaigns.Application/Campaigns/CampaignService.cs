@@ -29,6 +29,7 @@ public class CampaignService(
     ICampaignVoucherCanceller voucherCanceller,
     ICustomerGroupService customerGroups,
     ICustomerGroupRepository customerGroupStore,
+    ICampaignTagRepository campaignTags,
     TimeProvider timeProvider) : ICampaignService
 {
     public async Task<CampaignResponse> CreateAsync(CreateCampaignRequest request, CancellationToken cancellationToken)
@@ -65,9 +66,9 @@ public class CampaignService(
     public async Task<IReadOnlyList<CampaignResponse>> GetAllAsync(Guid? networkId, string? status, CancellationToken cancellationToken) =>
         (await ListAsync(networkId, status, null, null, cancellationToken)).Items;
 
-    /// <summary>Listagem com o filtro de status no banco e a página opcional (spec GH-071, D-5).</summary>
+    /// <summary>Listagem com o filtro de status e de tag no banco e a página opcional (specs GH-071 D-5 e GH-077 D-4).</summary>
     public async Task<PagedResult<CampaignResponse>> ListAsync(
-        Guid? networkId, string? status, int? page, int? pageSize, CancellationToken cancellationToken)
+        Guid? networkId, string? status, int? page, int? pageSize, CancellationToken cancellationToken, Guid? tagId = null)
     {
         var scopedNetworkId = InputValues.RequiredId(networkId, "NetworkId", CampaignContract.NetworkRequired);
         NetworkScope.Ensure(currentUser, scopedNetworkId);
@@ -81,7 +82,7 @@ public class CampaignService(
 
         var utcNow = timeProvider.GetUtcNow().UtcDateTime;
         var (total, items) = await campaigns.GetPageByNetworkAsync(
-            scopedNetworkId, statusFilter, utcNow, paging?.Skip, paging?.Take, cancellationToken);
+            scopedNetworkId, statusFilter, utcNow, paging?.Skip, paging?.Take, cancellationToken, tagId);
         var counters = await LoadCountersAsync(scopedNetworkId, null, utcNow, cancellationToken);
         var uniques = await customerGroupStore.CountDistinctByCampaignAsync(items.Select(campaign => campaign.Id).ToList(), cancellationToken);
 
@@ -285,6 +286,56 @@ public class CampaignService(
         AuditSection(campaign, "customerGroups", before, groupIds.Order().ToList(), utcNow);
         await SaveGuardedAsync(campaign, cancellationToken);
         return await MapStoredAsync(campaign.Id, utcNow, cancellationToken);
+    }
+
+    /// <summary>
+    /// Tags da campanha (spec GH-077, D-2 e D-3): em qualquer status, até 5, da rede da campanha e ativas. A tag inativada
+    /// que a campanha já tem pode continuar na lista; só não pode ser aplicada de novo.
+    /// </summary>
+    public async Task<CampaignResponse> ReplaceTagsAsync(Guid id, ReplaceCampaignTagsRequest request, CancellationToken cancellationToken)
+    {
+        if (request.TagIds is not { } informed)
+        {
+            throw new RequestValidationException(nameof(request.TagIds), CampaignTagContract.TagIdsRequired);
+        }
+
+        if (informed.Any(tagId => tagId is null || tagId == Guid.Empty))
+        {
+            throw new RequestValidationException(nameof(request.TagIds), CampaignTagContract.TagIdInvalid);
+        }
+
+        var tagIds = informed.Select(tagId => tagId!.Value).Distinct().ToList();
+
+        if (tagIds.Count > Campaign.MaxTags)
+        {
+            throw new RequestValidationException(nameof(request.TagIds), CampaignTagContract.TagIdsTooMany);
+        }
+
+        var campaign = await RequireExistingAsync(id, cancellationToken);
+        var utcNow = timeProvider.GetUtcNow().UtcDateTime;
+        var found = (await campaignTags.FindManyAsync(tagIds, cancellationToken)).ToDictionary(tag => tag.Id);
+        var current = campaign.TagLinks.Select(link => link.TagId).ToHashSet();
+
+        RefuseTags(tagIds.Where(tagId => !found.ContainsKey(tagId)), CampaignErrors.TagNotFoundCode, CampaignErrors.TagNotFoundMessage);
+        RefuseTags(tagIds.Where(tagId => found[tagId].NetworkId != campaign.NetworkId), CampaignErrors.TagOutsideNetworkCode, CampaignErrors.TagOutsideNetworkMessage);
+        RefuseTags(tagIds.Where(tagId => !found[tagId].IsActive && !current.Contains(tagId)), CampaignErrors.TagInactiveCode, CampaignErrors.TagInactiveMessage);
+
+        var before = campaign.TagLinks.Select(link => link.Tag?.Name ?? link.TagId.ToString()).Order(StringComparer.Ordinal).ToList();
+        campaign.ReplaceTags(tagIds, utcNow);
+        AuditSection(campaign, "tags", before, tagIds.Select(tagId => found[tagId].Name).Order(StringComparer.Ordinal).ToList(), utcNow);
+        await SaveGuardedAsync(campaign, cancellationToken);
+
+        return await MapStoredAsync(campaign.Id, utcNow, cancellationToken);
+    }
+
+    private static void RefuseTags(IEnumerable<Guid> refused, string code, string message)
+    {
+        var ids = refused.ToList();
+
+        if (ids.Count > 0)
+        {
+            throw new BusinessRuleException(code, message, new Dictionary<string, object?> { ["tagIds"] = ids });
+        }
     }
 
     public async Task<CampaignResponse> DuplicateAsync(Guid id, DuplicateCampaignRequest? request, CancellationToken cancellationToken)
@@ -1630,7 +1681,12 @@ public class CampaignService(
                 .OrderBy(link => link.Id)
                 .Select(link => new CampaignCustomerGroupResponse(link.GroupId, link.Group?.Name ?? string.Empty))
                 .ToList(),
-            uniqueCustomers);
+            uniqueCustomers,
+            campaign.TagLinks
+                .Where(link => link.Tag is not null)
+                .OrderBy(link => link.Tag!.NormalizedName, StringComparer.Ordinal)
+                .Select(link => new CampaignTagRefResponse(link.TagId, link.Tag!.Name, link.Tag.IsActive))
+                .ToList());
     }
 
     private static CampaignEligibilityResponse? MapEligibility(Campaign campaign) =>

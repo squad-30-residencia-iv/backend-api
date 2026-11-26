@@ -17,7 +17,7 @@ public interface ICampaignRepository
     /// D-5). O total é o da consulta filtrada inteira.
     /// </summary>
     Task<(int Total, IReadOnlyList<Campaign> Items)> GetPageByNetworkAsync(
-        Guid networkId, CampaignStatus? status, DateTime utcNow, int? skip, int? take, CancellationToken cancellationToken);
+        Guid networkId, CampaignStatus? status, DateTime utcNow, int? skip, int? take, CancellationToken cancellationToken, Guid? tagId = null);
 
     /// <summary>Campanha com a rede (para o fuso) e os itens, ou null. Sem rastreamento.</summary>
     Task<Campaign?> FindByIdAsync(Guid id, CancellationToken cancellationToken);
