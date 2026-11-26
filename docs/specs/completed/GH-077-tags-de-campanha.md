@@ -1,6 +1,6 @@
 # 📋 Especificação Técnica: GH-077 - Tags de campanha
 
-> Status: In Progress
+> Status: Completed
 > História de Usuário Relacionada: issue #77 (front + back)
 > Responsável: @iagovrocha
 > Data: 2026-11-26
@@ -21,7 +21,7 @@ O cliente quer agrupar campanhas por ocasião (Black Friday, Dia das Mães...). 
 | D-4 | **Leitura e filtro.** `CampaignResponse` ganha `tags` (`id`, `name`, `isActive`), na ordem do nome. `GET /api/v1/campaigns` aceita `tagId` (uma tag) e devolve só as campanhas com ela; combina com `status` e com a paginação da GH-071, no banco. Tag inativa continua aparecendo nas campanhas que já a tinham, com `isActive: false`. Campanhas antigas ficam sem tag (`tags: []`). |
 | D-5 | **Trilha e duplicação.** O `PUT` grava `CampaignUpdated` com a seção `tags` (os nomes, antes e depois), só quando a lista muda. Duplicar copia as tags ativas. |
 | D-6 | **Fora do PDV.** O satélite não vê as tags: `GET /satellite/campaigns` não muda. |
-| D-7 | **Persistência.** `campaign_tags` (`id`, `network_id`, `name`, `normalized_name`, `is_active`, `created_at`), com índice único em (`network_id`, `normalized_name`); `campaign_tag_links` (`campaign_id`, `tag_id`), chave composta, cascata a partir da campanha e restrição a partir da tag. Migrações nos dois bancos. |
+| D-7 | **Persistência.** `campaign_tags` (`id`, `network_id`, `name`, `normalized_name`, `is_active`, `created_at`), com índice único em (`network_id`, `normalized_name`); `campaign_tag_links` (`id`, `campaign_id`, `tag_id`), com índice único em (`campaign_id`, `tag_id`), cascata a partir da campanha e restrição a partir da tag. O vínculo tem id próprio, como os grupos da GH-072; a troca de tags mantém os vínculos que continuam e só apaga e cria o que mudou. Migrações nos dois bancos. |
 
 ---
 
@@ -69,22 +69,22 @@ Contrato (400): nome vazio ou com mais de 40 caracteres; mais de 5 tags; `tagIds
 
 ## 4. Checklist de Implementação
 
-- [ ] 1. Domínio: `CampaignTag`, `CampaignTagLink`; `Campaign.ReplaceTags` (até 5, sem a regra do rascunho); duplicação.
-- [ ] 2. Configurações EF, `DbSet`s, migrações SQLite e PostgreSQL.
-- [ ] 3. Serviço e rotas das tags; `PUT /campaigns/{id}/tags`; trilha; `tags` no `CampaignResponse`; filtro `tagId` no banco.
-- [ ] 4. Testes de unidade e integração (seção 5); `dotnet test` no SQLite e no PostgreSQL; smoke.
-- [ ] 5. `agents.md`, `docs/PROJECT_STATE.md`, `docs/ROADMAP.md`; avisos ao frontend num documento fora do repositório.
+- [x] 1. Domínio: `CampaignTag`, `CampaignTagLink`; `Campaign.ReplaceTags` (até 5, sem a regra do rascunho); duplicação.
+- [x] 2. Configurações EF, `DbSet`s, migrações SQLite e PostgreSQL.
+- [x] 3. Serviço e rotas das tags; `PUT /campaigns/{id}/tags`; trilha; `tags` no `CampaignResponse`; filtro `tagId` no banco.
+- [x] 4. Testes de unidade e integração (seção 5); `dotnet test` no SQLite e no PostgreSQL; smoke.
+- [x] 5. `agents.md`, `docs/PROJECT_STATE.md`, `docs/ROADMAP.md`; avisos ao frontend num documento fora do repositório.
 
 ---
 
 ## 5. Casos de Teste Essenciais
 
-- [ ] Administrador cria, renomeia, inativa e reativa; nome repetido na rede (ignorando maiúsculas) → 422; o mesmo nome em outra rede é aceito; analista e gestor leem e não escrevem.
-- [ ] `PUT /campaigns/{id}/tags` com 2 tags → 200 com `tags`; 6 tags → 400; tag inexistente, inativa e de outra rede → 422 com `tagIds`; repetida vira uma; lista vazia tira todas.
-- [ ] Campanha aprovada e ativa aceita a troca de tags (D-3); edição concorrente → 422.
-- [ ] `GET /campaigns?tagId=` filtra, combina com `status` e com `page`/`pageSize`, e o `X-Total-Count` bate.
-- [ ] Tag inativada continua na campanha com `isActive: false` e não pode ser adicionada de novo.
-- [ ] Trilha grava a seção `tags` só quando muda; duplicar copia as tags ativas; o satélite não recebe tags.
+- [x] Administrador cria, renomeia, inativa e reativa; nome repetido na rede (ignorando maiúsculas) → 422; o mesmo nome em outra rede é aceito; analista e gestor leem e não escrevem.
+- [x] `PUT /campaigns/{id}/tags` com 2 tags → 200 com `tags`; 6 tags → 400; tag inexistente, inativa e de outra rede → 422 com `tagIds`; repetida vira uma; lista vazia tira todas.
+- [x] Campanha aprovada e ativa aceita a troca de tags (D-3); edição concorrente → 422.
+- [x] `GET /campaigns?tagId=` filtra, combina com `status` e com `page`/`pageSize`, e o `X-Total-Count` bate.
+- [x] Tag inativada continua na campanha com `isActive: false` e não pode ser adicionada de novo.
+- [x] Trilha grava a seção `tags` só quando muda; duplicar copia as tags ativas; o satélite não recebe tags.
 
 ---
 

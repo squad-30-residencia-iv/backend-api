@@ -72,7 +72,7 @@ Qualquer assistente que iniciar uma sessão de desenvolvimento deve seguir estri
   python scripts/smoke/smoke.py http://localhost:5026
   python scripts/smoke/motor.py http://localhost:5026
   ```
-- Roteiros por entrega: `cancelamento.py` (GH-061), `publico.py` (GH-047), `endurecimento.py` (GH-071), `desconto_unico.py` (GH-068) e `restricoes_resgate.py` (GH-070). Os dois últimos aprovam campanhas de 91% a 98% na loja online, que ganham das outras pelo desconto (D1). Rode-os por último ou numa API nova.
+- Roteiros por entrega: `cancelamento.py` (GH-061), `publico.py` (GH-047), `endurecimento.py` (GH-071), `tags.py` (GH-077), `desconto_unico.py` (GH-068) e `restricoes_resgate.py` (GH-070). Os dois últimos aprovam campanhas de 91% a 98% na loja online, que ganham das outras pelo desconto (D1). Rode-os por último ou numa API nova.
 - No Windows: instale `tzdata` (`py -3 -m pip install tzdata`) e **não** use `python -I` (o `-I` isola o site-packages do usuário e o fuso `America/Sao_Paulo` some).
 - Credenciais demo: `pdv-demo` / segredo em `appsettings.Development.json` (`Auth:Satellite:Apps`). Para repetir no Postman, mude o `transactionId` a cada nova concessão ou compra de resgate.
 
@@ -177,6 +177,12 @@ Qualquer assistente que iniciar uma sessão de desenvolvimento deve seguir estri
 - Escopo da campanha (US-02.3): `campaign_scopes` tem uma linha por local e canal; região e loja nulas = rede inteira, e a campanha vale na união dos locais. Uma coleção da campanha substituída por inteiro (itens, condições, escopo) usa `ValueGeneratedNever` na chave e ids v7 em sequência para manter a ordem informada.
 - Ação relevante (submeter, aprovar, reprovar, pausar, encerrar, duplicar, emitir, confirmar e desfazer a concessão, resgatar, recusar o resgate e estornar): monte um `AuditEntry` (`Domain/Audit`) e chame `IAuditTrail.Append` antes do `SaveChanges` da operação, que grava os dois juntos. Tipo do evento em `AuditEventTypes`; autor `AuditActorType.User` (`sub` do token) ou `Application` (id da aplicação satélite); payload JSON curto.
 - `AuditEntry`, `CampaignStatusEvent` e `VoucherEvent` implementam `IAppendOnly`: o `AppDbContext` recusa alterar ou apagar esses registros. Não crie rota de alteração para eles.
+
+### [Skill] Tags de campanha (spec GH-077)
+
+- Cadastro em `CampaignTagService` (`/api/v1/campaign-tags`), no padrão dos grupos da GH-072: rede no corpo ou na query com `[ValidateTenantScope]`, leitura `ReadHierarchy`, escrita `ManageHierarchy`. O nome único usa `CampaignTag.NormalizedName` (maiúsculas, sem espaços sobrando).
+- `Campaign.ReplaceTags` **não** chama `EnsureDraft` (a tag só agrupa); o serviço usa `RequireExistingAsync`, não `RequireForUpdateAsync`. A troca mantém os vínculos que continuam (não faça `Clear()` e recriar a mesma tag).
+- O filtro `tagId` entra em `CampaignRepository.GetPageByNetworkAsync`, antes da contagem e da página.
 
 ### [Skill] Público restrito no portal (spec GH-075)
 

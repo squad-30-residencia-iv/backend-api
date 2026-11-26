@@ -15,6 +15,8 @@
 
 ## 🚧 Tarefas em Andamento
 
+- [x] [SQUAD-2] Issue #77 (tags de campanha, parte do backend): spec `completed/GH-077-tags-de-campanha.md`. A escolha entre lista fechada e texto livre ainda depende do PO (PA-1); a spec segue a lista fechada por rede.
+- [ ] [SQUAD-2] Avisar o frontend (issue #77): cadastro em `/api/v1/campaign-tags` (administrador), `PUT /campaigns/{id}/tags` (até 5, em qualquer status), `tags` no `CampaignResponse` e o filtro `GET /campaigns?tagId=`.
 - [x] [SQUAD-2] Issue #75 (público restrito no portal, parte do backend): spec `completed/GH-075-publico-restrito-no-portal.md`.
 - [ ] [SQUAD-2] Avisar o frontend (issue #75): `GET /api/v1/eligibility/criteria` traz os tipos de critério, campos, limites e os atributos do satélite, para montar o formulário do público restrito; categoria inexistente no critério "comprou a categoria" passa de `400` para `422 CAMPAIGN_AUDIENCE_CATEGORY_NOT_FOUND`, com `field`. Levar ao Bruno ou ao PO a diferença entre lista de CPFs do público e grupos de clientes (PA-1 da spec).
 - [x] [SQUAD-2] GH-072 grupos de clientes: CRUD em `/api/v1/customer-groups`, membros, prévia da união, `PUT /campaigns/{id}/customer-groups` e teto no `Submit`. Spec `completed/GH-072-grupos-de-clientes.md`. Commit `d493767` na `staging`. Sem emissão automática nem job de vigência.
@@ -92,6 +94,11 @@
 
 ## ✅ Últimas Entregas Concluídas
 
+- **Issue #77: tags de campanha, parte do backend (2026-11-26).** Spec `completed/GH-077-tags-de-campanha.md`.
+  - **Cadastro por rede:** `GET/POST /api/v1/campaign-tags`, `PUT/DELETE /{id}` (o `DELETE` inativa). Nome de 1 a 40 caracteres, único na rede sem diferenciar maiúsculas. Escrita do administrador; leitura de analista e gestor.
+  - **Na campanha:** `PUT /campaigns/{id}/tags`, até 5, **em qualquer status** (a tag só agrupa). A tag inativada continua aparecendo com `isActive: false` e não pode ser aplicada de novo.
+  - **Listagem:** filtro `tagId` no banco, combinado com `status` e com a paginação; `tags` no `CampaignResponse`; trilha (seção `tags`) e duplicação (só as ativas). O satélite não vê tags.
+  - Migração `CampaignTags` nos dois bancos.
 - **Issue #75: público restrito no portal, parte do backend (2026-11-26).** Spec `completed/GH-075-publico-restrito-no-portal.md`.
   - **Catálogo:** `GET /api/v1/eligibility/criteria` (analista e gestor), com tipo, nome, campos, limites, janela de histórico e os atributos do satélite. Os limites vêm de `EligibilityContract`; os atributos, do mesmo mapa que gera os `requiredAttributes` (`EligibilityAttributes`).
   - **Categoria do histórico:** inexistente responde `422 CAMPAIGN_AUDIENCE_CATEGORY_NOT_FOUND` com `field`, numa consulta só; inativa continua aceita.
