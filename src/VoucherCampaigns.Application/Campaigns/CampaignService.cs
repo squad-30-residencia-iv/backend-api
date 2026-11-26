@@ -365,12 +365,20 @@ public class CampaignService(
         var utcNow = now.UtcDateTime;
 
         // Categoria do histórico: existir basta, ativa ou não (o critério olha compras passadas, US-06.2 cenário 3).
+        // Uma consulta só; a que não existe responde 422 com o campo, como alvos e condições (spec GH-075, D-1).
+        var categoryIds = audience.Criteria.Where(criterion => criterion.CategoryId is not null).Select(criterion => criterion.CategoryId!.Value).Distinct().ToList();
+        var known = categoryIds.Count == 0
+            ? new HashSet<Guid>()
+            : (await catalog.GetCategoriesByIdsAsync(categoryIds, cancellationToken)).Select(category => category.Id).ToHashSet();
+
         for (var index = 0; index < audience.Criteria.Count; index++)
         {
-            if (audience.Criteria[index].CategoryId is { } categoryId
-                && await catalog.GetCategoryByIdAsync(categoryId, cancellationToken) is null)
+            if (audience.Criteria[index].CategoryId is { } categoryId && !known.Contains(categoryId))
             {
-                throw new RequestValidationException($"Criteria[{index}].CategoryId", EligibilityContract.CategoryNotFound);
+                throw new BusinessRuleException(
+                    CampaignErrors.AudienceCategoryNotFoundCode,
+                    EligibilityContract.CategoryNotFound,
+                    new Dictionary<string, object?> { ["field"] = $"Criteria[{index}].CategoryId" });
             }
         }
 

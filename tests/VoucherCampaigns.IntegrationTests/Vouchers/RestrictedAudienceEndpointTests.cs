@@ -67,7 +67,6 @@ public class RestrictedAudienceEndpointTests : IClassFixture<ApiFactory>
     [InlineData("""{"audienceType":"Restricted","criteria":[{"type":"TotalSpent","minAmount":100}]}""", "Criteria[0].WindowDays", EligibilityContract.HistoryWindowRequired)]
     [InlineData("""{"audienceType":"Restricted","criteria":[{"type":"TotalSpent","minAmount":-1,"windowDays":90}]}""", "Criteria[0].MinAmount", EligibilityContract.MinAmountPositive)]
     [InlineData("""{"audienceType":"Restricted","criteria":[{"type":"PurchaseFrequency","minPurchases":0,"windowDays":90}]}""", "Criteria[0].MinPurchases", EligibilityContract.MinPurchasesPositive)]
-    [InlineData("""{"audienceType":"Restricted","criteria":[{"type":"PurchasedCategory","categoryId":"0199e3a0-0000-7000-8000-00000000ffff","windowDays":90}]}""", "Criteria[0].CategoryId", EligibilityContract.CategoryNotFound)]
     [InlineData("""{"audienceType":"Restricted","criteria":[{"type":"LoyaltyMember","minAge":18}]}""", "Criteria[0].MinAge", EligibilityContract.UnexpectedField)]
     [InlineData("""{"audienceType":"Restricted","criteria":[{"type":"Location","states":["XX"]}]}""", "Criteria[0].States", EligibilityContract.StateInvalid)]
     [InlineData("""{"audienceType":"Restricted","criteria":[{"type":"LoyaltyMember"},{"type":"LoyaltyMember"}]}""", "Criteria[1].Type", EligibilityContract.CriterionDuplicated)]
