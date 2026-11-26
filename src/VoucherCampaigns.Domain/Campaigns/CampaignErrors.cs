@@ -38,6 +38,9 @@ public static class CampaignErrors
     public const string DuplicatedTargetCode = "CAMPAIGN_ITEM_DUPLICATED_TARGET";
     public const string DuplicatedTargetMessage = "O mesmo alvo foi informado mais de uma vez.";
 
+    /// <summary>Critério "comprou a categoria" com categoria que não existe (spec GH-075, D-1).</summary>
+    public const string AudienceCategoryNotFoundCode = "CAMPAIGN_AUDIENCE_CATEGORY_NOT_FOUND";
+
     public const string RedemptionTargetDuplicatedCode = "CAMPAIGN_REDEMPTION_TARGET_DUPLICATED";
     public const string RedemptionTargetDuplicatedMessage = "O mesmo alvo de resgate foi informado mais de uma vez.";
 

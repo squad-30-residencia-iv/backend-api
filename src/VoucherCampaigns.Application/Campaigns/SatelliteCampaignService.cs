@@ -1,3 +1,4 @@
+using VoucherCampaigns.Application.Eligibility;
 using VoucherCampaigns.Application.Authentication;
 using VoucherCampaigns.Application.Common;
 using VoucherCampaigns.Application.Vouchers;
@@ -117,27 +118,6 @@ public class SatelliteCampaignService(IConcessionRepository concessions, ICurren
     }
 
     /// <summary>Nomes dos campos de <c>customer</c> na concessão (D-15), na ordem do contrato.</summary>
-    private static List<string> RequiredAttributes(Campaign campaign)
-    {
-        var types = campaign.EligibilityCriteria.ToList();
-        var attributes = new List<string>();
-
-        void AddIf(bool condition, string name)
-        {
-            if (condition && !attributes.Contains(name))
-            {
-                attributes.Add(name);
-            }
-        }
-
-        AddIf(types.Any(criterion => criterion.Type == EligibilityCriterionType.AgeRange), "birthDate");
-        AddIf(types.Any(criterion => criterion.Type == EligibilityCriterionType.Location && criterion.States.Count > 0), "state");
-        AddIf(types.Any(criterion => criterion.Type == EligibilityCriterionType.Location && criterion.CityCodes.Count > 0), "cityCode");
-        AddIf(types.Any(criterion => criterion.Type == EligibilityCriterionType.LoyaltyMember), "loyaltyMember");
-        AddIf(types.Any(criterion => criterion.Type == EligibilityCriterionType.TotalSpent), "history.totalSpent");
-        AddIf(types.Any(criterion => criterion.Type == EligibilityCriterionType.PurchaseFrequency), "history.purchaseCount");
-        AddIf(types.Any(criterion => criterion.Type == EligibilityCriterionType.PurchasedCategory), "history.productCodes");
-
-        return attributes;
-    }
+    /// <summary>Atributos que o satélite manda na concessão, pelo mapa único dos critérios (GH-075, D-2).</summary>
+    private static List<string> RequiredAttributes(Campaign campaign) => EligibilityAttributes.Required(campaign.EligibilityCriteria);
 }
