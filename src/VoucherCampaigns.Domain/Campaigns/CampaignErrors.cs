@@ -38,6 +38,16 @@ public static class CampaignErrors
     public const string DuplicatedTargetCode = "CAMPAIGN_ITEM_DUPLICATED_TARGET";
     public const string DuplicatedTargetMessage = "O mesmo alvo foi informado mais de uma vez.";
 
+    // Tags de campanha (spec GH-077).
+    public const string TagNameTakenCode = "CAMPAIGN_TAG_NAME_TAKEN";
+    public const string TagNameTakenMessage = "Já existe uma tag com este nome na rede.";
+    public const string TagNotFoundCode = "CAMPAIGN_TAG_NOT_FOUND";
+    public const string TagNotFoundMessage = "Tag não encontrada.";
+    public const string TagInactiveCode = "CAMPAIGN_TAG_INACTIVE";
+    public const string TagInactiveMessage = "A tag está inativa e não pode ser aplicada.";
+    public const string TagOutsideNetworkCode = "CAMPAIGN_TAG_OUTSIDE_NETWORK";
+    public const string TagOutsideNetworkMessage = "A tag pertence a outra rede.";
+
     /// <summary>Critério "comprou a categoria" com categoria que não existe (spec GH-075, D-1).</summary>
     public const string AudienceCategoryNotFoundCode = "CAMPAIGN_AUDIENCE_CATEGORY_NOT_FOUND";
 

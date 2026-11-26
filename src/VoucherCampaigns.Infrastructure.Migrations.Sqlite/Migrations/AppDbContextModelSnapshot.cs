@@ -643,6 +643,73 @@ namespace VoucherCampaigns.Infrastructure.Migrations.Sqlite.Migrations
                     b.ToTable("campaign_status_events", (string)null);
                 });
 
+            modelBuilder.Entity("VoucherCampaigns.Domain.Campaigns.CampaignTag", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("created_at");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("INTEGER")
+                        .HasColumnName("is_active");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("name");
+
+                    b.Property<Guid>("NetworkId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("network_id");
+
+                    b.Property<string>("NormalizedName")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("TEXT")
+                        .HasColumnName("normalized_name");
+
+                    b.HasKey("Id")
+                        .HasName("pk_campaign_tags");
+
+                    b.HasIndex("NetworkId", "NormalizedName")
+                        .IsUnique()
+                        .HasDatabaseName("ix_campaign_tags_network_id_normalized_name");
+
+                    b.ToTable("campaign_tags", (string)null);
+                });
+
+            modelBuilder.Entity("VoucherCampaigns.Domain.Campaigns.CampaignTagLink", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("CampaignId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("campaign_id");
+
+                    b.Property<Guid>("TagId")
+                        .HasColumnType("TEXT")
+                        .HasColumnName("tag_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_campaign_tag_links");
+
+                    b.HasIndex("TagId")
+                        .HasDatabaseName("ix_campaign_tag_links_tag_id");
+
+                    b.HasIndex("CampaignId", "TagId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_campaign_tag_links_campaign_id_tag_id");
+
+                    b.ToTable("campaign_tag_links", (string)null);
+                });
+
             modelBuilder.Entity("VoucherCampaigns.Domain.Catalog.Category", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1574,6 +1641,37 @@ namespace VoucherCampaigns.Infrastructure.Migrations.Sqlite.Migrations
                     b.Navigation("Campaign");
                 });
 
+            modelBuilder.Entity("VoucherCampaigns.Domain.Campaigns.CampaignTag", b =>
+                {
+                    b.HasOne("VoucherCampaigns.Domain.Organization.Network", null)
+                        .WithMany()
+                        .HasForeignKey("NetworkId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_campaign_tags_networks_network_id");
+                });
+
+            modelBuilder.Entity("VoucherCampaigns.Domain.Campaigns.CampaignTagLink", b =>
+                {
+                    b.HasOne("VoucherCampaigns.Domain.Campaigns.Campaign", "Campaign")
+                        .WithMany("TagLinks")
+                        .HasForeignKey("CampaignId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired()
+                        .HasConstraintName("fk_campaign_tag_links_campaigns_campaign_id");
+
+                    b.HasOne("VoucherCampaigns.Domain.Campaigns.CampaignTag", "Tag")
+                        .WithMany()
+                        .HasForeignKey("TagId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_campaign_tag_links_campaign_tags_tag_id");
+
+                    b.Navigation("Campaign");
+
+                    b.Navigation("Tag");
+                });
+
             modelBuilder.Entity("VoucherCampaigns.Domain.Catalog.Product", b =>
                 {
                     b.HasOne("VoucherCampaigns.Domain.Catalog.Category", "Category")
@@ -1741,6 +1839,8 @@ namespace VoucherCampaigns.Infrastructure.Migrations.Sqlite.Migrations
                     b.Navigation("Scopes");
 
                     b.Navigation("StatusEvents");
+
+                    b.Navigation("TagLinks");
                 });
 
             modelBuilder.Entity("VoucherCampaigns.Domain.Catalog.Category", b =>

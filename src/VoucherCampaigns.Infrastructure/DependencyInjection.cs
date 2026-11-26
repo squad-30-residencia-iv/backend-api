@@ -58,6 +58,7 @@ public static class DependencyInjection
         services.AddScoped<INetworkRepository, NetworkRepository>();
         services.AddScoped<ICampaignRepository, CampaignRepository>();
         services.AddScoped<ICustomerGroupRepository, CustomerGroupRepository>();
+        services.AddScoped<ICampaignTagRepository, CampaignTagRepository>();
         services.AddScoped<ICatalogRepository, CatalogRepository>();
         services.AddScoped<IOrganizationRepository, OrganizationRepository>();
         services.AddScoped<IEstablishmentImportStore, OrganizationRepository>();

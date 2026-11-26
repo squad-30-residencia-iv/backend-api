@@ -38,6 +38,7 @@ builder.Services.AddExceptionHandler<ApiExceptionHandler>();
 builder.Services.AddScoped<ISystemStatusService, SystemStatusService>();
 builder.Services.AddScoped<ICampaignService, CampaignService>();
 builder.Services.AddScoped<ICustomerGroupService, CustomerGroupService>();
+builder.Services.AddScoped<ICampaignTagService, CampaignTagService>();
 builder.Services.AddScoped<ICategoryService, CategoryService>();
 builder.Services.AddScoped<IProductService, ProductService>();
 builder.Services.AddScoped<INetworkService, NetworkService>();

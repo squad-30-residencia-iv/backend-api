@@ -24,9 +24,15 @@ public class CampaignRepository(AppDbContext context) : ICampaignRepository
     }
 
     public async Task<(int Total, IReadOnlyList<Campaign> Items)> GetPageByNetworkAsync(
-        Guid networkId, CampaignStatus? status, DateTime utcNow, int? skip, int? take, CancellationToken cancellationToken)
+        Guid networkId, CampaignStatus? status, DateTime utcNow, int? skip, int? take, CancellationToken cancellationToken, Guid? tagId = null)
     {
         var query = context.Campaigns.AsNoTracking().Where(campaign => campaign.NetworkId == networkId);
+
+        // Filtro por tag (spec GH-077, D-4), no banco, antes da contagem e da página.
+        if (tagId is { } tag)
+        {
+            query = query.Where(campaign => campaign.TagLinks.Any(link => link.TagId == tag));
+        }
 
         if (status is { } effective)
         {
@@ -138,5 +144,6 @@ public class CampaignRepository(AppDbContext context) : ICampaignRepository
             .Include(campaign => campaign.RedemptionTargets.OrderBy(target => target.Id)).ThenInclude(target => target.Product)
             .Include(campaign => campaign.RedemptionWindows.OrderBy(window => window.Id))
             .Include(campaign => campaign.CustomerGroups).ThenInclude(link => link.Group)
+            .Include(campaign => campaign.TagLinks).ThenInclude(link => link.Tag)
             .AsSplitQuery();
 }
